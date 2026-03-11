@@ -1,8 +1,10 @@
-import * as Notifications from "expo-notifications";
+import * as Notifications from 'expo-notifications';
 
 export const initNotifications = async () => {
   const settings = await Notifications.getPermissionsAsync();
-  if (settings.granted || settings.ios?.status === "granted") return;
+  if (settings.granted || settings.ios?.status === Notifications.IosAuthorizationStatus.AUTHORIZED) {
+    return;
+  }
   await Notifications.requestPermissionsAsync();
 };
 
@@ -13,6 +15,6 @@ export const scheduleNotification = async (
 ) => {
   await Notifications.scheduleNotificationAsync({
     content: { title, body, sound: true },
-    trigger: { seconds: inSeconds },
+    trigger: { seconds: inSeconds } as Notifications.NotificationTriggerInput,
   });
 };

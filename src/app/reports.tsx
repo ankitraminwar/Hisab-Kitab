@@ -1,13 +1,12 @@
-import { cacheDirectory, writeAsStringAsync } from 'expo-file-system';
 import React, { useEffect, useState } from 'react';
-import { Alert, Button, ScrollView, StyleSheet } from 'react-native';
+import { Alert, Button, ScrollView, Share, StyleSheet } from 'react-native';
 
-import { getFinancialSummary } from '@/modules/reports/financialService';
-import { getTransactions } from '@/modules/transactions/transactionsService';
-import { asCSV, asJSON } from '@/modules/export/exportService';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { useTheme } from '@/hooks/use-theme';
+import { asCSV, asJSON } from '@/modules/export/exportService';
+import { getFinancialSummary } from '@/modules/reports/financialService';
+import { getTransactions } from '@/modules/transactions/transactionsService';
 
 export default function ReportsScreen() {
   const [summary, setSummary] = useState<any>(null);
@@ -23,16 +22,17 @@ export default function ReportsScreen() {
   const exportAll = async (format: 'csv' | 'json') => {
     const tx = await getTransactions();
     const content = format === 'csv' ? asCSV(tx) : asJSON(tx);
-    const fileUri = `${cacheDirectory}trackbuddy-transactions.${format}`;
-    await writeAsStringAsync(fileUri, content);
-    Alert.alert('Exported', `Saved to ${fileUri}`);
+    await Share.share({
+      title: `hisab-kitab-transactions.${format}`,
+      message: content,
+    });
   };
 
   return (
     <ScrollView style={[styles.container, { backgroundColor: theme.background }]} contentContainerStyle={styles.content}>
       <ThemedText type="title">Reports</ThemedText>
       {summary ? (
-        <ThemedView style={[styles.card, { backgroundColor: theme.backgroundElement }]}>
+        <ThemedView style={[styles.card, { backgroundColor: theme.backgroundElement }]}> 
           <ThemedText>Total Income: ₹{summary.totalIncome.toFixed(2)}</ThemedText>
           <ThemedText>Total Expense: ₹{summary.totalExpense.toFixed(2)}</ThemedText>
           <ThemedText>Net Worth: ₹{summary.netWorth.toFixed(2)}</ThemedText>

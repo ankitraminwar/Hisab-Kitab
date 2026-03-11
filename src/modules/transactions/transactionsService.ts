@@ -1,4 +1,4 @@
-import { executeSql } from "@/database/sqliteClient";
+import { SqlArg, executeSql } from "@/database/sqliteClient";
 import { v4 as uuidv4 } from "uuid";
 
 export type TransactionType = "expense" | "income" | "transfer";
@@ -87,7 +87,7 @@ export const getTransactions = async (filters?: {
   type?: TransactionType;
 }): Promise<TransactionEntity[]> => {
   const clauses: string[] = [];
-  const params: unknown[] = [];
+  const params: SqlArg[] = [];
   if (filters?.search) {
     clauses.push("(merchant LIKE ? OR notes LIKE ? OR tags LIKE ?)");
     const q = `%${filters.search}%`;
