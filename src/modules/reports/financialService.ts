@@ -1,5 +1,7 @@
 import { getAccounts } from "@/modules/accounts/accountsService";
 import { getBudgets } from "@/modules/budgets/budgetsService";
+import { getAssets } from "@/modules/assets/assetsService";
+import { getLiabilities } from "@/modules/liabilities/liabilitiesService";
 import { getGoals } from "@/modules/goals/goalsService";
 import { getTransactions } from "@/modules/transactions/transactionsService";
 
@@ -19,11 +21,13 @@ export type FinancialSummary = {
 };
 
 export const getFinancialSummary = async (): Promise<FinancialSummary> => {
-  const [accounts, transactions, budgets, goals] = await Promise.all([
+  const [accounts, transactions, budgets, goals, assets, liabilities] = await Promise.all([
     getAccounts(),
     getTransactions(),
     getBudgets(),
     getGoals(),
+    getAssets(),
+    getLiabilities(),
   ]);
 
   const totalIncome = transactions
@@ -37,7 +41,10 @@ export const getFinancialSummary = async (): Promise<FinancialSummary> => {
     totalIncome > 0
       ? Math.max(0, (totalIncome - totalExpense) / totalIncome)
       : 0;
-  const netWorth = accounts.reduce((sum, a) => sum + a.balance, 0); // can extend with liability + assets
+  const accountBalance = accounts.reduce((sum, a) => sum + a.balance, 0);
+  const assetsTotal = assets.reduce((sum, a) => sum + a.value, 0);
+  const liabilitiesTotal = liabilities.reduce((sum, l) => sum + l.amount, 0);
+  const netWorth = accountBalance + assetsTotal - liabilitiesTotal;
 
   const budgetByCategory = budgets.map((budget) => {
     const used = transactions

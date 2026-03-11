@@ -4,14 +4,14 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { getFinancialSummary } from '@/modules/reports/financialService';
+import { FinancialSummary, getFinancialSummary } from '@/modules/reports/financialService';
 import { getTransactions } from '@/modules/transactions/transactionsService';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { useTheme } from '@/hooks/use-theme';
 
 export default function DashboardScreen() {
-  const [summary, setSummary] = useState({
+  const [summary, setSummary] = useState<FinancialSummary>({
     totalIncome: 0,
     totalExpense: 0,
     totalBalance: 0,
@@ -84,6 +84,8 @@ export default function DashboardScreen() {
           <Link href="/accounts" style={styles.link}>Accounts</Link>
           <Link href="/budgets" style={styles.link}>Budgets</Link>
           <Link href="/goals" style={styles.link}>Goals</Link>
+          <Link href="/assets" style={styles.link}>Assets</Link>
+          <Link href="/liabilities" style={styles.link}>Liabilities</Link>
           <Link href="/reports" style={styles.link}>Reports</Link>
           <Link href="/settings" style={styles.link}>Settings</Link>
         </View>

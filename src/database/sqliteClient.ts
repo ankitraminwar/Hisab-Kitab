@@ -1,18 +1,36 @@
-import * as SQLite from "expo-sqlite";
+import { Platform } from 'react-native';
+import * as SQLite from 'expo-sqlite';
 
-const DB_NAME = "trackBuddy.db";
+const DB_NAME = 'trackBuddy.db';
 
-export const db = SQLite.openDatabase(DB_NAME);
+let database: SQLite.WebSQLDatabase | null = null;
 
-export function executeSql<T>(
-  sql: string,
-  params: unknown[] = [],
-): Promise<T[]> {
+const getDatabase = () => {
+  if (database) return database;
+  if (Platform.OS === 'web' && typeof window === 'undefined') return null;
+  database = SQLite.openDatabase(DB_NAME);
+  return database;
+};
+
+export type SqlArg = string | number | boolean | null | undefined;
+
+export function executeSql<T>(sql: string, params: SqlArg[] = []): Promise<T[]> {
   return new Promise((resolve, reject) => {
+    const db = getDatabase();
+    if (!db) {
+      resolve([]);
+      return;
+    }
+
+    const normalized = params.map((param) => {
+      if (typeof param === 'boolean') return param ? 1 : 0;
+      return param ?? null;
+    });
+
     db.transaction((tx) => {
       tx.executeSql(
         sql,
-        params,
+        normalized,
         (_, result) => {
           const rows: T[] = [];
           for (let i = 0; i < result.rows.length; i += 1) {
