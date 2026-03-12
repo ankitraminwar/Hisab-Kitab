@@ -10,6 +10,22 @@ Offline-first personal finance manager built with Expo, React Native, TypeScript
 - Expo Notifications, Secure Store, Local Authentication, File System, Sharing
 - Zustand and React Query
 
+## Current App Flow
+
+- App startup route is `/`
+- Unauthenticated users are redirected to `/login`
+- Sign-up / reset flows live under `/auth/*`
+- Local SQLite data is cleared on logout
+- Supabase sync only runs for authenticated users
+- First authenticated session can prompt for biometric unlock
+
+## SMS Import Status
+
+- Android permission requests are wired for SMS access
+- Current code only exposes the permission/import entry point
+- Full inbox reading still requires adding a native Android SMS module
+- iOS does not support full SMS inbox access for third-party apps
+
 ## Local Setup
 
 1. Create `.env`:
@@ -40,6 +56,12 @@ Apply:
 - [supabase/schema.sql](./supabase/schema.sql)
 
 If the schema is not deployed, the app now falls back to local-only mode and reports the sync error instead of crashing.
+
+After applying the schema, restart the app with a clean cache:
+
+```bash
+npx expo start -c
+```
 
 ## Validation Commands
 

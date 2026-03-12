@@ -29,12 +29,14 @@ Core tables:
 ## Sync
 
 Sync orchestration lives in [src/services/syncService.ts](./src/services/syncService.ts).
+Field mapping between local SQLite camelCase records and Supabase snake_case rows lives in [src/services/syncTransform.ts](./src/services/syncTransform.ts).
 
 Behavior:
 
 - pushes pending local queue items
-- pulls remote changes by `updatedAt`
-- resolves conflicts by latest `updatedAt`
+- pulls remote changes by `updated_at`
+- maps local camelCase fields to remote snake_case fields
+- resolves conflicts by latest update timestamp
 - skips remote work when no authenticated user exists
 - degrades to local-only mode if Supabase schema is not deployed
 
@@ -47,10 +49,16 @@ Auth client:
 
 UI routes:
 
-- `/auth`
+- `/login`
 - `/auth/signup`
 - `/auth/forgot-password`
 - `/auth/reset-password`
+
+Behavior:
+
+- root layout redirects unauthenticated users to `/login`
+- logout clears local SQLite data and resets app store state
+- first authenticated session can prompt the user to enable biometrics
 
 ## Settings and Preferences
 
@@ -61,6 +69,11 @@ Relevant files:
 - [src/screens/settings/SettingsScreen.tsx](./src/screens/settings/SettingsScreen.tsx)
 - [src/store/appStore.ts](./src/store/appStore.ts)
 - [src/hooks/use-theme.ts](./src/hooks/use-theme.ts)
+- [src/services/sms.ts](./src/services/sms.ts)
+
+Current caveat:
+
+- SMS import UI and Android permission flow exist, but full inbox reading still requires a native Android SMS reader module
 
 ## Notifications
 

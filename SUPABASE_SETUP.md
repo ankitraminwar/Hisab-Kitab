@@ -23,6 +23,13 @@ Without this, the app will log errors like:
 - `PGRST205`
 - `Could not find the table 'public.accounts' in the schema cache`
 
+The current schema is intentionally idempotent:
+
+- triggers are dropped and recreated
+- RLS policies are dropped and recreated
+- transaction indexes are created only if missing
+- budget uniqueness is enforced per `user_id + category_id + month + year`
+
 ## 3. Edge Function
 
 Deploy:
@@ -42,6 +49,19 @@ Optional:
 - email confirmation
 - password reset redirect to `hisabkitab://reset-password`
 
+Current mobile auth behavior:
+
+- unauthenticated users are redirected to `/login`
+- authenticated users are redirected away from auth screens
+- logout clears local SQLite data before returning to login
+- biometric preference is stored locally and mirrored to `user_profile`
+
 ## 5. After Deployment
 
 Restart the app or trigger sync again from an authenticated session.
+
+Recommended restart command:
+
+```bash
+npx expo start -c
+```

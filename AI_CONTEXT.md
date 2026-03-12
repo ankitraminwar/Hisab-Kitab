@@ -10,15 +10,20 @@ This repo is an Expo mobile finance app with offline-first storage and optional 
 - Only `EXPO_PUBLIC_SUPABASE_URL` and `EXPO_PUBLIC_SUPABASE_ANON_KEY` belong in `.env`.
 - Local SQLite is the source of truth while offline.
 - Remote sync only runs for authenticated users.
+- Remote Supabase tables use snake_case; local SQLite tables use camelCase.
+- Unauthenticated users should be sent to `/login`, not directly into tab routes.
 
 ## Critical Files
 
-- [app/_layout.tsx](./app/_layout.tsx)
+- [app/\_layout.tsx](./app/_layout.tsx)
+- [app/login.tsx](./app/login.tsx)
 - [src/database/index.ts](./src/database/index.ts)
 - [src/services/syncService.ts](./src/services/syncService.ts)
+- [src/services/syncTransform.ts](./src/services/syncTransform.ts)
 - [src/services/transactionService.ts](./src/services/transactionService.ts)
 - [src/services/dataService.ts](./src/services/dataService.ts)
 - [src/services/auth.ts](./src/services/auth.ts)
+- [src/services/sms.ts](./src/services/sms.ts)
 - [src/screens/settings/SettingsScreen.tsx](./src/screens/settings/SettingsScreen.tsx)
 - [supabase/schema.sql](./supabase/schema.sql)
 
@@ -29,3 +34,7 @@ If Supabase migrations are not applied, sync requests return `PGRST205`. The app
 ## Mobile Target
 
 Native Android and iOS are the supported targets. Web export is not the primary target because `expo-sqlite` web support requires extra handling.
+
+## SMS Caveat
+
+Android SMS permission handling is present, but full inbox ingestion still needs a native Android SMS reader library. iOS cannot offer full SMS inbox access for this app category.
