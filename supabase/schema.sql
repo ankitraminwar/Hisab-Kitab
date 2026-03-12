@@ -35,7 +35,7 @@ create table if not exists public.categories (
   icon text not null,
   color text not null,
   is_custom boolean not null default false,
-  parent_id text,
+  parent_id text references public.categories(id),
   created_at timestamptz not null default timezone('utc', now()),
   updated_at timestamptz not null default timezone('utc', now()),
   sync_status text not null default 'synced' check (sync_status in ('synced', 'pending', 'failed')),
@@ -167,6 +167,9 @@ create index if not exists idx_transactions_transaction_date on public.transacti
 create index if not exists idx_transactions_category_id on public.transactions (category_id);
 create index if not exists idx_transactions_account_id on public.transactions (account_id);
 create index if not exists idx_transactions_user_updated_at on public.transactions (user_id, updated_at desc);
+create unique index if not exists idx_budgets_user_category_month_year
+  on public.budgets (user_id, category_id, month, year)
+  where deleted_at is null;
 
 drop trigger if exists set_accounts_updated_at on public.accounts;
 create trigger set_accounts_updated_at before update on public.accounts for each row execute function public.set_updated_at();
@@ -196,6 +199,16 @@ alter table public.assets enable row level security;
 alter table public.liabilities enable row level security;
 alter table public.net_worth_history enable row level security;
 alter table public.user_profile enable row level security;
+
+drop policy if exists "own_accounts" on public.accounts;
+drop policy if exists "own_categories" on public.categories;
+drop policy if exists "own_transactions" on public.transactions;
+drop policy if exists "own_budgets" on public.budgets;
+drop policy if exists "own_goals" on public.goals;
+drop policy if exists "own_assets" on public.assets;
+drop policy if exists "own_liabilities" on public.liabilities;
+drop policy if exists "own_net_worth_history" on public.net_worth_history;
+drop policy if exists "own_user_profile" on public.user_profile;
 
 create policy "own_accounts" on public.accounts for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
 create policy "own_categories" on public.categories for all using (auth.uid() = user_id or user_id is null) with check (auth.uid() = user_id or user_id is null);

@@ -13,7 +13,12 @@ import {
   upsertLocalRecord,
 } from '@/database';
 import { supabase } from '@/lib/supabase';
+import {
+  mapLocalToRemoteRecord,
+  mapRemoteToLocalRecord,
+} from '@/services/syncTransform';
 import { useAppStore } from '@/store/appStore';
+import type { SyncableTable } from '@/utils/constants';
 import type { SyncQueueItem } from '@/utils/types';
 
 class SyncService {
@@ -28,7 +33,9 @@ class SyncService {
     }
 
     this.unsubscribe = NetInfo.addEventListener((state) => {
-      const isOnline = Boolean(state.isConnected && state.isInternetReachable !== false);
+      const isOnline = Boolean(
+        state.isConnected && state.isInternetReachable !== false,
+      );
       useAppStore.getState().setOnline(isOnline);
 
       if (isOnline) {
@@ -48,7 +55,9 @@ class SyncService {
     }
 
     const state = await NetInfo.fetch();
-    const isOnline = Boolean(state.isConnected && state.isInternetReachable !== false);
+    const isOnline = Boolean(
+      state.isConnected && state.isInternetReachable !== false,
+    );
     if (!isOnline) {
       return;
     }
@@ -57,7 +66,9 @@ class SyncService {
     }
 
     this.syncing = true;
-    useAppStore.getState().setSyncState({ syncInProgress: true, lastSyncError: null });
+    useAppStore
+      .getState()
+      .setSyncState({ syncInProgress: true, lastSyncError: null });
 
     try {
       await this.pushPendingChanges();
@@ -76,7 +87,8 @@ class SyncService {
         this.remoteSchemaAvailable = false;
         useAppStore.getState().setSyncState({
           syncInProgress: false,
-          lastSyncError: 'Supabase schema is not deployed yet. Apply supabase/schema.sql and restart sync.',
+          lastSyncError:
+            'Supabase schema is not deployed yet. Apply supabase/schema.sql and restart sync.',
         });
         return;
       }
@@ -124,7 +136,8 @@ class SyncService {
   private async pushQueueItem(item: SyncQueueItem, userId: string | null) {
     try {
       const payload = JSON.parse(item.payload) as Record<string, unknown>;
-      const table = item.entity;
+      const table = item.entity as SyncableTable;
+      const remotePayload = mapLocalToRemoteRecord(table, payload);
       const recordId = String(payload.id ?? item.recordId);
 
       const { data: remoteRecord, error: remoteError } = await supabase
@@ -139,10 +152,20 @@ class SyncService {
 
       if (item.operation === 'delete') {
         const deletedAt = String(payload.deletedAt ?? new Date().toISOString());
-        if (!remoteRecord || new Date(String(remoteRecord.updatedAt ?? 0)).getTime() <= new Date(deletedAt).getTime()) {
-          const { error } = await supabase
-            .from(table)
-            .upsert({ ...payload, userId, syncStatus: 'synced', lastSyncedAt: deletedAt }, { onConflict: 'id' });
+        if (
+          !remoteRecord ||
+          new Date(String(remoteRecord.updated_at ?? 0)).getTime() <=
+            new Date(deletedAt).getTime()
+        ) {
+          const { error } = await supabase.from(table).upsert(
+            {
+              ...remotePayload,
+              user_id: userId,
+              sync_status: 'synced',
+              last_synced_at: deletedAt,
+            },
+            { onConflict: 'id' },
+          );
           if (error) {
             throw error;
           }
@@ -154,10 +177,15 @@ class SyncService {
       }
 
       const localUpdatedAt = new Date(String(payload.updatedAt)).getTime();
-      const remoteUpdatedAt = remoteRecord ? new Date(String(remoteRecord.updatedAt ?? 0)).getTime() : 0;
+      const remoteUpdatedAt = remoteRecord
+        ? new Date(String(remoteRecord.updated_at ?? 0)).getTime()
+        : 0;
       if (remoteRecord && remoteUpdatedAt > localUpdatedAt) {
-        await upsertLocalRecord(table as never, {
-          ...remoteRecord,
+        await upsertLocalRecord(table, {
+          ...mapRemoteToLocalRecord(
+            table,
+            remoteRecord as Record<string, unknown>,
+          ),
           syncStatus: 'synced',
           lastSyncedAt: new Date().toISOString(),
         });
@@ -167,7 +195,12 @@ class SyncService {
 
       const syncedAt = new Date().toISOString();
       const { error } = await supabase.from(table).upsert(
-        { ...payload, userId, syncStatus: 'synced', lastSyncedAt: syncedAt },
+        {
+          ...remotePayload,
+          user_id: userId,
+          sync_status: 'synced',
+          last_synced_at: syncedAt,
+        },
         { onConflict: 'id' },
       );
       if (error) {
@@ -177,7 +210,10 @@ class SyncService {
       await markRecordSyncStatus(table as never, recordId, 'synced', syncedAt);
       await removeFromSyncQueue(item.id);
     } catch (error) {
-      await incrementSyncRetry(item.id, error instanceof Error ? error.message : 'Push failed');
+      await incrementSyncRetry(
+        item.id,
+        error instanceof Error ? error.message : 'Push failed',
+      );
       throw error;
     }
   }
@@ -191,9 +227,12 @@ class SyncService {
     const lastSyncAt = await getLastSyncTimestamp();
 
     for (const table of getSyncableTables()) {
-      let query = supabase.from(table).select('*').order('updatedAt', { ascending: true });
+      let query = supabase
+        .from(table)
+        .select('*')
+        .order('updated_at', { ascending: true });
       if (lastSyncAt) {
-        query = query.gte('updatedAt', lastSyncAt);
+        query = query.gte('updated_at', lastSyncAt);
       }
 
       const { data, error } = await query;
@@ -202,19 +241,36 @@ class SyncService {
       }
 
       for (const record of data ?? []) {
-        if (record.deletedAt) {
-          await softDeleteLocalRecord(table, String(record.id), String(record.deletedAt));
+        const localRecordData = mapRemoteToLocalRecord(
+          table,
+          record as Record<string, unknown>,
+        );
+
+        if (localRecordData.deletedAt) {
+          await softDeleteLocalRecord(
+            table,
+            String(localRecordData.id),
+            String(localRecordData.deletedAt),
+          );
           continue;
         }
 
-        const localRows = await fetchTableRows<Record<string, unknown>>(table, 'id = ?', [record.id]);
+        const localRows = await fetchTableRows<Record<string, unknown>>(
+          table,
+          'id = ?',
+          [String(localRecordData.id)],
+        );
         const localRecord = localRows[0];
-        const remoteUpdatedAt = new Date(String(record.updatedAt)).getTime();
-        const localUpdatedAt = localRecord?.updatedAt ? new Date(String(localRecord.updatedAt)).getTime() : 0;
+        const remoteUpdatedAt = new Date(
+          String(localRecordData.updatedAt),
+        ).getTime();
+        const localUpdatedAt = localRecord?.updatedAt
+          ? new Date(String(localRecord.updatedAt)).getTime()
+          : 0;
 
         if (!localRecord || remoteUpdatedAt >= localUpdatedAt) {
           await upsertLocalRecord(table, {
-            ...record,
+            ...localRecordData,
             syncStatus: 'synced',
             lastSyncedAt: new Date().toISOString(),
           });

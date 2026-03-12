@@ -23,6 +23,7 @@ interface SyncStateUpdate {
 interface AppState {
   isLocked: boolean;
   biometricsEnabled: boolean;
+  biometricsPrompted: boolean;
   pinEnabled: boolean;
   isOnline: boolean;
   syncInProgress: boolean;
@@ -43,6 +44,7 @@ interface AppState {
   selectedMonth: string;
   setLocked: (locked: boolean) => void;
   setBiometrics: (enabled: boolean) => void;
+  setBiometricsPrompted: (prompted: boolean) => void;
   setOnline: (online: boolean) => void;
   setSyncState: (state: SyncStateUpdate) => void;
   setAccounts: (accounts: Account[]) => void;
@@ -58,11 +60,36 @@ interface AppState {
   setUserProfile: (profile: UserProfile | null) => void;
   setNotificationPreferences: (preferences: NotificationPreferences) => void;
   setSelectedMonth: (month: string) => void;
+  resetAppState: () => void;
 }
 
-export const useAppStore = create<AppState>((set) => ({
+const initialState: Pick<
+  AppState,
+  | 'isLocked'
+  | 'biometricsEnabled'
+  | 'biometricsPrompted'
+  | 'pinEnabled'
+  | 'isOnline'
+  | 'syncInProgress'
+  | 'lastSyncAt'
+  | 'lastSyncError'
+  | 'accounts'
+  | 'categories'
+  | 'recentTransactions'
+  | 'budgets'
+  | 'goals'
+  | 'assets'
+  | 'liabilities'
+  | 'dashboardStats'
+  | 'isLoading'
+  | 'theme'
+  | 'userProfile'
+  | 'notificationPreferences'
+  | 'selectedMonth'
+> = {
   isLocked: true,
   biometricsEnabled: false,
+  biometricsPrompted: false,
   pinEnabled: false,
   isOnline: true,
   syncInProgress: false,
@@ -92,8 +119,13 @@ export const useAppStore = create<AppState>((set) => ({
     monthlyReportReminder: true,
   },
   selectedMonth: new Date().toISOString().slice(0, 7),
+};
+
+export const useAppStore = create<AppState>((set) => ({
+  ...initialState,
   setLocked: (locked) => set({ isLocked: locked }),
   setBiometrics: (enabled) => set({ biometricsEnabled: enabled }),
+  setBiometricsPrompted: (prompted) => set({ biometricsPrompted: prompted }),
   setOnline: (isOnline) => set({ isOnline }),
   setSyncState: (syncState) => set(syncState),
   setAccounts: (accounts) => set({ accounts }),
@@ -107,6 +139,8 @@ export const useAppStore = create<AppState>((set) => ({
   setLoading: (isLoading) => set({ isLoading }),
   setTheme: (theme) => set({ theme }),
   setUserProfile: (userProfile) => set({ userProfile }),
-  setNotificationPreferences: (notificationPreferences) => set({ notificationPreferences }),
+  setNotificationPreferences: (notificationPreferences) =>
+    set({ notificationPreferences }),
   setSelectedMonth: (selectedMonth) => set({ selectedMonth }),
+  resetAppState: () => set({ ...initialState }),
 }));

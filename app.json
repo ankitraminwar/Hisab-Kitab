@@ -28,6 +28,8 @@
       "permissions": [
         "USE_BIOMETRIC",
         "USE_FINGERPRINT",
+        "READ_SMS",
+        "RECEIVE_SMS",
         "RECEIVE_BOOT_COMPLETED",
         "VIBRATE"
       ]

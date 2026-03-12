@@ -6,6 +6,7 @@ import type { AuthCredentials } from '@/utils/types';
 
 const PIN_KEY = 'hisabkitab.pin';
 const BIOMETRIC_KEY = 'hisabkitab.biometrics';
+const BIOMETRIC_PROMPT_KEY = 'hisabkitab.biometrics.prompted';
 
 export const setPin = async (pin: string): Promise<void> => {
   await SecureStore.setItemAsync(PIN_KEY, pin, {
@@ -13,7 +14,8 @@ export const setPin = async (pin: string): Promise<void> => {
   });
 };
 
-export const getPin = async (): Promise<string | null> => SecureStore.getItemAsync(PIN_KEY);
+export const getPin = async (): Promise<string | null> =>
+  SecureStore.getItemAsync(PIN_KEY);
 
 export const removePin = async (): Promise<void> => {
   await SecureStore.deleteItemAsync(PIN_KEY);
@@ -30,6 +32,22 @@ export const setBiometricPreference = async (enabled: boolean) => {
 
 export const getBiometricPreference = async (): Promise<boolean> => {
   const value = await SecureStore.getItemAsync(BIOMETRIC_KEY);
+  return value === 'true';
+};
+
+export const setBiometricPrompted = async (
+  prompted: boolean,
+): Promise<void> => {
+  if (prompted) {
+    await SecureStore.setItemAsync(BIOMETRIC_PROMPT_KEY, 'true');
+    return;
+  }
+
+  await SecureStore.deleteItemAsync(BIOMETRIC_PROMPT_KEY);
+};
+
+export const getBiometricPrompted = async (): Promise<boolean> => {
+  const value = await SecureStore.getItemAsync(BIOMETRIC_PROMPT_KEY);
   return value === 'true';
 };
 
@@ -54,8 +72,10 @@ export const authService = {
     supabase.auth.signUp({ email, password }),
   signIn: async ({ email, password }: AuthCredentials) =>
     supabase.auth.signInWithPassword({ email, password }),
-  signInWithOtp: async (email: string) => supabase.auth.signInWithOtp({ email }),
-  verifyOtp: async (email: string, token: string) => supabase.auth.verifyOtp({ email, token, type: 'email' }),
+  signInWithOtp: async (email: string) =>
+    supabase.auth.signInWithOtp({ email }),
+  verifyOtp: async (email: string, token: string) =>
+    supabase.auth.verifyOtp({ email, token, type: 'email' }),
   requestPasswordReset: async (email: string) =>
     supabase.auth.resetPasswordForEmail(email, {
       redirectTo: 'hisabkitab://reset-password',
@@ -66,6 +86,7 @@ export const authService = {
     }),
   signOut: async () => supabase.auth.signOut(),
   getSession: async () => supabase.auth.getSession(),
-  onAuthStateChange: (callback: Parameters<typeof supabase.auth.onAuthStateChange>[0]) =>
-    supabase.auth.onAuthStateChange(callback),
+  onAuthStateChange: (
+    callback: Parameters<typeof supabase.auth.onAuthStateChange>[0],
+  ) => supabase.auth.onAuthStateChange(callback),
 };

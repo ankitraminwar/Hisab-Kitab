@@ -1,6 +1,10 @@
 import * as SQLite from 'expo-sqlite';
 
-import { generateId, SYNCABLE_TABLES, type SyncableTable } from '@/utils/constants';
+import {
+  generateId,
+  SYNCABLE_TABLES,
+  type SyncableTable,
+} from '@/utils/constants';
 import type { SyncQueueItem, SyncStatus } from '@/utils/types';
 
 let db: SQLite.SQLiteDatabase | null = null;
@@ -200,18 +204,98 @@ const indexes = [
 ];
 
 const defaultCategories = [
-  { id: 'cat_food', name: 'Food & Dining', type: 'expense', icon: 'restaurant', color: '#F97316' },
-  { id: 'cat_groceries', name: 'Groceries', type: 'expense', icon: 'cart', color: '#22C55E' },
-  { id: 'cat_transport', name: 'Transport', type: 'expense', icon: 'car', color: '#3B82F6' },
-  { id: 'cat_shopping', name: 'Shopping', type: 'expense', icon: 'bag', color: '#EC4899' },
-  { id: 'cat_rent', name: 'Rent', type: 'expense', icon: 'home', color: '#8B5CF6' },
-  { id: 'cat_utilities', name: 'Utilities', type: 'expense', icon: 'flash', color: '#EAB308' },
-  { id: 'cat_salary', name: 'Salary', type: 'income', icon: 'briefcase', color: '#22C55E' },
-  { id: 'cat_freelance', name: 'Freelance', type: 'income', icon: 'laptop', color: '#3B82F6' },
-  { id: 'cat_business', name: 'Business', type: 'income', icon: 'business', color: '#F97316' },
-  { id: 'cat_transfer', name: 'Transfer', type: 'both', icon: 'swap-horizontal', color: '#3B82F6' },
-  { id: 'cat_other', name: 'Other', type: 'both', icon: 'ellipsis-horizontal', color: '#6B7280' },
+  {
+    id: 'cat_food',
+    name: 'Food & Dining',
+    type: 'expense',
+    icon: 'restaurant',
+    color: '#F97316',
+  },
+  {
+    id: 'cat_groceries',
+    name: 'Groceries',
+    type: 'expense',
+    icon: 'cart',
+    color: '#22C55E',
+  },
+  {
+    id: 'cat_transport',
+    name: 'Transport',
+    type: 'expense',
+    icon: 'car',
+    color: '#3B82F6',
+  },
+  {
+    id: 'cat_shopping',
+    name: 'Shopping',
+    type: 'expense',
+    icon: 'bag',
+    color: '#EC4899',
+  },
+  {
+    id: 'cat_rent',
+    name: 'Rent',
+    type: 'expense',
+    icon: 'home',
+    color: '#8B5CF6',
+  },
+  {
+    id: 'cat_utilities',
+    name: 'Utilities',
+    type: 'expense',
+    icon: 'flash',
+    color: '#EAB308',
+  },
+  {
+    id: 'cat_salary',
+    name: 'Salary',
+    type: 'income',
+    icon: 'briefcase',
+    color: '#22C55E',
+  },
+  {
+    id: 'cat_freelance',
+    name: 'Freelance',
+    type: 'income',
+    icon: 'laptop',
+    color: '#3B82F6',
+  },
+  {
+    id: 'cat_business',
+    name: 'Business',
+    type: 'income',
+    icon: 'business',
+    color: '#F97316',
+  },
+  {
+    id: 'cat_transfer',
+    name: 'Transfer',
+    type: 'both',
+    icon: 'swap-horizontal',
+    color: '#3B82F6',
+  },
+  {
+    id: 'cat_other',
+    name: 'Other',
+    type: 'both',
+    icon: 'ellipsis-horizontal',
+    color: '#6B7280',
+  },
 ];
+
+const localTablesToClear = [
+  'transactions',
+  'budgets',
+  'goals',
+  'assets',
+  'liabilities',
+  'net_worth_history',
+  'accounts',
+  'categories',
+  'user_profile',
+  'sync_queue',
+  'sync_state',
+] as const;
 
 export const getDatabase = (): SQLite.SQLiteDatabase => {
   if (!db) {
@@ -226,7 +310,9 @@ export const initializeDatabase = async (): Promise<void> => {
   }
 
   const database = getDatabase();
-  await database.execAsync('PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON; PRAGMA synchronous = NORMAL;');
+  await database.execAsync(
+    'PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON; PRAGMA synchronous = NORMAL;',
+  );
 
   for (const statement of transactionalTables) {
     await database.execAsync(statement);
@@ -252,53 +338,18 @@ const seedDefaultData = async (database: SQLite.SQLiteDatabase) => {
         `INSERT INTO categories
           (id, name, type, icon, color, isCustom, parentId, createdAt, updatedAt, userId, syncStatus, lastSyncedAt, deletedAt)
          VALUES (?, ?, ?, ?, ?, 0, NULL, ?, ?, NULL, 'synced', ?, NULL)`,
-        [category.id, category.name, category.type, category.icon, category.color, now, now, now],
+        [
+          category.id,
+          category.name,
+          category.type,
+          category.icon,
+          category.color,
+          now,
+          now,
+          now,
+        ],
       );
     }
-  }
-
-  const accountCount = await database.getFirstAsync<{ count: number }>(
-    'SELECT COUNT(*) as count FROM accounts WHERE deletedAt IS NULL',
-  );
-
-  if ((accountCount?.count ?? 0) === 0) {
-    const now = new Date().toISOString();
-    await database.runAsync(
-      `INSERT INTO accounts
-        (id, name, type, balance, currency, color, icon, isDefault, createdAt, updatedAt, userId, syncStatus, lastSyncedAt, deletedAt)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, 'pending', NULL, NULL)`,
-      ['acc_default_cash', 'Cash Wallet', 'cash', 0, 'INR', '#22C55E', 'wallet', 1, now, now],
-    );
-    await enqueueSync('accounts', 'acc_default_cash', 'upsert', {
-      id: 'acc_default_cash',
-      name: 'Cash Wallet',
-      type: 'cash',
-      balance: 0,
-      currency: 'INR',
-      color: '#22C55E',
-      icon: 'wallet',
-      isDefault: 1,
-      createdAt: now,
-      updatedAt: now,
-      syncStatus: 'pending',
-      deletedAt: null,
-      lastSyncedAt: null,
-      userId: null,
-    });
-  }
-
-  const profileCount = await database.getFirstAsync<{ count: number }>(
-    'SELECT COUNT(*) as count FROM user_profile',
-  );
-
-  if ((profileCount?.count ?? 0) === 0) {
-    const now = new Date().toISOString();
-    await database.runAsync(
-      `INSERT INTO user_profile
-        (id, name, email, phone, currency, monthlyBudget, themePreference, notificationsEnabled, biometricEnabled, createdAt, updatedAt, userId, syncStatus, lastSyncedAt, deletedAt)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      ['profile_local', 'Hisab Kitab User', '', null, 'INR', 0, 'dark', 0, 0, now, now, null, 'pending', null, null],
-    );
   }
 };
 
@@ -348,7 +399,9 @@ export const markRecordSyncStatus = async (
 };
 
 export const removeFromSyncQueue = async (queueId: string) => {
-  await getDatabase().runAsync('DELETE FROM sync_queue WHERE id = ?', [queueId]);
+  await getDatabase().runAsync('DELETE FROM sync_queue WHERE id = ?', [
+    queueId,
+  ]);
 };
 
 export const listPendingSyncItems = async (): Promise<SyncQueueItem[]> =>
@@ -358,7 +411,10 @@ export const listPendingSyncItems = async (): Promise<SyncQueueItem[]> =>
      ORDER BY createdAt ASC`,
   );
 
-export const incrementSyncRetry = async (queueId: string, errorMessage: string) => {
+export const incrementSyncRetry = async (
+  queueId: string,
+  errorMessage: string,
+) => {
   const now = new Date().toISOString();
   await getDatabase().runAsync(
     `UPDATE sync_queue
@@ -386,7 +442,11 @@ export const getSyncState = async (key: string) => {
   return row?.value ?? null;
 };
 
-export const fetchTableRows = async <T>(table: SyncableTable, where = 'deletedAt IS NULL', params: SQLite.SQLiteBindParams = []) =>
+export const fetchTableRows = async <T>(
+  table: SyncableTable,
+  where = 'deletedAt IS NULL',
+  params: SQLite.SQLiteBindParams = [],
+) =>
   getDatabase().getAllAsync<T>(`SELECT * FROM ${table} WHERE ${where}`, params);
 
 export const upsertLocalRecord = async (
@@ -409,7 +469,11 @@ export const upsertLocalRecord = async (
   );
 };
 
-export const softDeleteLocalRecord = async (table: SyncableTable, id: string, deletedAt: string) => {
+export const softDeleteLocalRecord = async (
+  table: SyncableTable,
+  id: string,
+  deletedAt: string,
+) => {
   await getDatabase().runAsync(
     `UPDATE ${table}
      SET deletedAt = ?, updatedAt = ?, syncStatus = 'synced', lastSyncedAt = ?
@@ -418,8 +482,27 @@ export const softDeleteLocalRecord = async (table: SyncableTable, id: string, de
   );
 };
 
-export const getLastSyncTimestamp = async () => getSyncState('lastSuccessfulSyncAt');
+export const getLastSyncTimestamp = async () =>
+  getSyncState('lastSuccessfulSyncAt');
 
-export const setLastSyncTimestamp = async (timestamp: string) => setSyncState('lastSuccessfulSyncAt', timestamp);
+export const setLastSyncTimestamp = async (timestamp: string) =>
+  setSyncState('lastSuccessfulSyncAt', timestamp);
 
-export const getSyncableTables = (): readonly SyncableTable[] => SYNCABLE_TABLES;
+export const getSyncableTables = (): readonly SyncableTable[] =>
+  SYNCABLE_TABLES;
+
+export const clearLocalData = async (): Promise<void> => {
+  const database = getDatabase();
+  await database.execAsync('BEGIN IMMEDIATE TRANSACTION;');
+
+  try {
+    for (const table of localTablesToClear) {
+      await database.execAsync(`DELETE FROM ${table};`);
+    }
+    await database.execAsync('COMMIT;');
+    await seedDefaultData(database);
+  } catch (error) {
+    await database.execAsync('ROLLBACK;');
+    throw error;
+  }
+};

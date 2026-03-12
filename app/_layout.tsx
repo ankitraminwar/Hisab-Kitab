@@ -1,32 +1,52 @@
-import { useEffect, useState } from 'react';
-import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { Stack } from 'expo-router';
+import { useEffect, useRef, useState } from 'react';
+import {
+  ActivityIndicator,
+  Alert,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from 'react-native';
+import { Stack, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { Ionicons } from '@expo/vector-icons';
 import type { Session } from '@supabase/supabase-js';
 
-import { initializeDatabase } from '@/database';
+import { clearLocalData, initializeDatabase } from '@/database';
 import { queryClient } from '@/lib/queryClient';
-import { authService, authenticateBiometric, getBiometricPreference } from '@/services/auth';
+import {
+  authService,
+  authenticateBiometric,
+  getBiometricPreference,
+  getBiometricPrompted,
+  setBiometricPreference,
+  setBiometricPrompted,
+} from '@/services/auth';
 import { applyNotificationPreferences } from '@/services/notifications';
-import { requestInitialPermissions } from '@/services/permissions';
 import { syncService } from '@/services/syncService';
 import { UserProfileService } from '@/services/dataServices';
 import { useAppStore } from '@/store/appStore';
 import { COLORS, SPACING, TYPOGRAPHY } from '@/utils/constants';
 
 export default function RootLayout() {
+  const router = useRouter();
+  const segments = useSegments();
+  const previousSessionRef = useRef<Session | null>(null);
+  const biometricPromptVisibleRef = useRef(false);
   const {
     isLocked,
     setLocked,
     biometricsEnabled,
     setBiometrics,
+    biometricsPrompted,
+    setBiometricsPrompted: setBiometricsPromptedState,
     theme,
     setTheme,
     setUserProfile,
     setNotificationPreferences,
+    resetAppState,
   } = useAppStore();
   const [initializing, setInitializing] = useState(true);
   const [session, setSession] = useState<Session | null>(null);
@@ -35,11 +55,17 @@ export default function RootLayout() {
     const bootstrap = async () => {
       try {
         await initializeDatabase();
-        await requestInitialPermissions();
         const currentSession = await authService.getSession();
-        setSession(currentSession.data.session ?? null);
-        const biometricPreference = await getBiometricPreference();
-        const profile = await UserProfileService.getProfile();
+        const nextSession = currentSession.data.session ?? null;
+        setSession(nextSession);
+        previousSessionRef.current = nextSession;
+
+        const [biometricPreference, prompted, profile] = await Promise.all([
+          getBiometricPreference(),
+          getBiometricPrompted(),
+          UserProfileService.getProfile(),
+        ]);
+
         if (profile) {
           setTheme(profile.themePreference);
           setUserProfile(profile);
@@ -55,11 +81,18 @@ export default function RootLayout() {
             budgetAlerts: true,
             monthlyReportReminder: true,
           });
+        } else {
+          setTheme('dark');
         }
+
         setBiometrics(biometricPreference);
-        setLocked(biometricPreference);
+        setBiometricsPromptedState(prompted);
+        setLocked(Boolean(nextSession) && biometricPreference);
         syncService.start();
-        void syncService.requestSync('app-start');
+
+        if (nextSession) {
+          void syncService.requestSync('app-start');
+        }
       } catch (error) {
         console.error('Initialization failed', error);
         setLocked(false);
@@ -70,18 +103,117 @@ export default function RootLayout() {
 
     void bootstrap();
 
-    const subscription = authService.onAuthStateChange(async (_event, nextSession) => {
-      setSession(nextSession);
-      if (nextSession) {
-        void syncService.requestSync('auth-state-change');
-      }
-    });
+    const subscription = authService.onAuthStateChange(
+      async (_event, nextSession) => {
+        const previousSession = previousSessionRef.current;
+        previousSessionRef.current = nextSession;
+        setSession(nextSession);
+
+        if (!nextSession && previousSession) {
+          await clearLocalData();
+          queryClient.clear();
+          resetAppState();
+          setLocked(false);
+          router.replace('/login');
+          return;
+        }
+
+        if (nextSession) {
+          setLocked(useAppStore.getState().biometricsEnabled);
+          void syncService.requestSync('auth-state-change');
+        }
+      },
+    );
 
     return () => {
       subscription.data.subscription.unsubscribe();
       syncService.stop();
     };
-  }, [setBiometrics, setLocked, setNotificationPreferences, setTheme, setUserProfile]);
+  }, [
+    resetAppState,
+    router,
+    setBiometrics,
+    setBiometricsPromptedState,
+    setLocked,
+    setNotificationPreferences,
+    setTheme,
+    setUserProfile,
+  ]);
+
+  useEffect(() => {
+    if (initializing) {
+      return;
+    }
+
+    const inAuthFlow = segments[0] === 'auth' || segments[0] === 'login';
+    if (!session && !inAuthFlow) {
+      router.replace('/login');
+      return;
+    }
+
+    if (session && inAuthFlow) {
+      router.replace('/');
+    }
+  }, [initializing, router, segments, session]);
+
+  useEffect(() => {
+    if (
+      initializing ||
+      !session ||
+      biometricsEnabled ||
+      biometricsPrompted ||
+      biometricPromptVisibleRef.current
+    ) {
+      return;
+    }
+
+    biometricPromptVisibleRef.current = true;
+
+    Alert.alert(
+      'Enable biometrics?',
+      'Use your device fingerprint or face unlock each time you open the app.',
+      [
+        {
+          text: 'Not now',
+          style: 'cancel',
+          onPress: () => {
+            biometricPromptVisibleRef.current = false;
+            void setBiometricPrompted(true).then(() =>
+              setBiometricsPromptedState(true),
+            );
+          },
+        },
+        {
+          text: 'Enable',
+          onPress: async () => {
+            biometricPromptVisibleRef.current = false;
+            const success = await authenticateBiometric();
+            if (success) {
+              await setBiometricPreference(true);
+              setBiometrics(true);
+              setLocked(true);
+              const updatedProfile = await UserProfileService.upsertProfile({
+                biometricEnabled: true,
+              });
+              setUserProfile(updatedProfile);
+            }
+            await setBiometricPrompted(true);
+            setBiometricsPromptedState(true);
+          },
+        },
+      ],
+      { cancelable: false },
+    );
+  }, [
+    biometricsEnabled,
+    biometricsPrompted,
+    initializing,
+    session,
+    setBiometrics,
+    setBiometricsPromptedState,
+    setLocked,
+    setUserProfile,
+  ]);
 
   const handleAuthenticate = async () => {
     try {
@@ -103,7 +235,7 @@ export default function RootLayout() {
     );
   }
 
-  if (isLocked && biometricsEnabled) {
+  if (session && isLocked && biometricsEnabled) {
     return (
       <View style={styles.lockContainer}>
         <View style={styles.iconContainer}>
@@ -111,7 +243,10 @@ export default function RootLayout() {
         </View>
         <Text style={styles.title}>Hisab Kitab</Text>
         <Text style={styles.subtitle}>Your finances are locked</Text>
-        <TouchableOpacity style={styles.unlockButton} onPress={handleAuthenticate}>
+        <TouchableOpacity
+          style={styles.unlockButton}
+          onPress={handleAuthenticate}
+        >
           <Ionicons name="finger-print" size={24} color="#ffffff" />
           <Text style={styles.unlockText}>Unlock</Text>
         </TouchableOpacity>
@@ -121,15 +256,33 @@ export default function RootLayout() {
 
   return (
     <GestureHandlerRootView style={styles.root}>
-        <QueryClientProvider client={queryClient}>
-        <StatusBar style={theme === 'dark' ? 'light' : 'dark'} backgroundColor={COLORS.bg} />
-        <Stack screenOptions={{ headerShown: false, animation: 'slide_from_right' }}>
-          {!session ? <Stack.Screen name="auth" options={{ headerShown: false }} /> : null}
-          {session ? <Stack.Screen name="(tabs)" options={{ headerShown: false }} /> : null}
-          <Stack.Screen name="transactions/add" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
-          <Stack.Screen name="transactions/[id]" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
-          <Stack.Screen name="accounts/index" options={{ animation: 'slide_from_right' }} />
-          <Stack.Screen name="settings/index" options={{ animation: 'slide_from_right' }} />
+      <QueryClientProvider client={queryClient}>
+        <StatusBar
+          style={theme === 'dark' ? 'light' : 'dark'}
+          backgroundColor={COLORS.bg}
+        />
+        <Stack
+          screenOptions={{ headerShown: false, animation: 'slide_from_right' }}
+        >
+          <Stack.Screen name="login" options={{ headerShown: false }} />
+          <Stack.Screen name="auth" options={{ headerShown: false }} />
+          <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+          <Stack.Screen
+            name="transactions/add"
+            options={{ presentation: 'modal', animation: 'slide_from_bottom' }}
+          />
+          <Stack.Screen
+            name="transactions/[id]"
+            options={{ presentation: 'modal', animation: 'slide_from_bottom' }}
+          />
+          <Stack.Screen
+            name="accounts/index"
+            options={{ animation: 'slide_from_right' }}
+          />
+          <Stack.Screen
+            name="settings/index"
+            options={{ animation: 'slide_from_right' }}
+          />
         </Stack>
       </QueryClientProvider>
     </GestureHandlerRootView>

@@ -19,11 +19,19 @@ import { exportService } from '@/services/exportService';
 import { authService, setBiometricPreference } from '@/services/auth';
 import { UserProfileService } from '@/services/dataServices';
 import { applyNotificationPreferences } from '@/services/notifications';
+import { importSmsTransactions } from '@/services/sms';
 import { useAppStore } from '@/store/appStore';
 import { COLORS, RADIUS, SPACING, TYPOGRAPHY } from '@/utils/constants';
-import type { NotificationPreferences, ThemePreference, UserProfile } from '@/utils/types';
+import type {
+  NotificationPreferences,
+  ThemePreference,
+  UserProfile,
+} from '@/utils/types';
 
-const buildNotificationPreferences = (enabled: boolean, current: NotificationPreferences): NotificationPreferences => ({
+const buildNotificationPreferences = (
+  enabled: boolean,
+  current: NotificationPreferences,
+): NotificationPreferences => ({
   enabled,
   dailyReminder: enabled ? current.dailyReminder : false,
   budgetAlerts: enabled ? current.budgetAlerts : false,
@@ -47,7 +55,9 @@ export default function SettingsScreen() {
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    LocalAuthentication.hasHardwareAsync().then(setBiometricsAvailable).catch(() => setBiometricsAvailable(false));
+    LocalAuthentication.hasHardwareAsync()
+      .then(setBiometricsAvailable)
+      .catch(() => setBiometricsAvailable(false));
   }, []);
 
   useEffect(() => {
@@ -102,11 +112,18 @@ export default function SettingsScreen() {
   };
 
   const handleNotificationsToggle = async (enabled: boolean) => {
-    const nextPreferences = buildNotificationPreferences(enabled, notificationPreferences);
+    const nextPreferences = buildNotificationPreferences(
+      enabled,
+      notificationPreferences,
+    );
     const granted = await applyNotificationPreferences(nextPreferences);
-    const resolved = granted ? nextPreferences : buildNotificationPreferences(false, notificationPreferences);
+    const resolved = granted
+      ? nextPreferences
+      : buildNotificationPreferences(false, notificationPreferences);
     setNotificationPreferences(resolved);
-    const updated = await persistProfile({ notificationsEnabled: resolved.enabled });
+    const updated = await persistProfile({
+      notificationsEnabled: resolved.enabled,
+    });
     setDraftProfile(updated);
   };
 
@@ -120,9 +137,19 @@ export default function SettingsScreen() {
       [key]: enabled,
     };
     const granted = await applyNotificationPreferences(next);
-    const resolved = granted ? next : { ...next, enabled: false, dailyReminder: false, budgetAlerts: false, monthlyReportReminder: false };
+    const resolved = granted
+      ? next
+      : {
+          ...next,
+          enabled: false,
+          dailyReminder: false,
+          budgetAlerts: false,
+          monthlyReportReminder: false,
+        };
     setNotificationPreferences(resolved);
-    const updated = await persistProfile({ notificationsEnabled: resolved.enabled });
+    const updated = await persistProfile({
+      notificationsEnabled: resolved.enabled,
+    });
     setDraftProfile(updated);
   };
 
@@ -136,7 +163,9 @@ export default function SettingsScreen() {
       email: draftProfile.email,
       phone: draftProfile.phone,
       currency: draftProfile.currency,
-      monthlyBudget: Number.isFinite(draftProfile.monthlyBudget) ? draftProfile.monthlyBudget : 0,
+      monthlyBudget: Number.isFinite(draftProfile.monthlyBudget)
+        ? draftProfile.monthlyBudget
+        : 0,
     });
     setDraftProfile(updated);
     setProfileModalVisible(false);
@@ -150,7 +179,22 @@ export default function SettingsScreen() {
         await exportService.exportFullBackupJson();
       }
     } catch (error) {
-      Alert.alert('Export failed', error instanceof Error ? error.message : 'Unable to export data');
+      Alert.alert(
+        'Export failed',
+        error instanceof Error ? error.message : 'Unable to export data',
+      );
+    }
+  };
+
+  const handleSmsImport = async () => {
+    try {
+      const result = await importSmsTransactions();
+      Alert.alert('SMS Import', result.message);
+    } catch (error) {
+      Alert.alert(
+        'SMS Import Failed',
+        error instanceof Error ? error.message : 'Unable to import SMS data',
+      );
     }
   };
 
@@ -162,16 +206,26 @@ export default function SettingsScreen() {
         <Text style={styles.title}>Settings</Text>
       </View>
 
-      <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        contentContainerStyle={styles.scroll}
+        showsVerticalScrollIndicator={false}
+      >
         <Card style={styles.profileCard} glow>
           <View style={styles.profileIcon}>
             <Ionicons name="person" size={28} color={COLORS.primary} />
           </View>
           <View style={styles.profileContent}>
-            <Text style={styles.profileName}>{profile?.name ?? 'Hisab Kitab User'}</Text>
-            <Text style={styles.profileSub}>{profile?.email || 'Set up your synced profile'}</Text>
+            <Text style={styles.profileName}>
+              {profile?.name ?? 'Hisab Kitab User'}
+            </Text>
+            <Text style={styles.profileSub}>
+              {profile?.email || 'Set up your synced profile'}
+            </Text>
           </View>
-          <TouchableOpacity onPress={() => setProfileModalVisible(true)} style={styles.actionChip}>
+          <TouchableOpacity
+            onPress={() => setProfileModalVisible(true)}
+            style={styles.actionChip}
+          >
             <Text style={styles.actionChipText}>Edit</Text>
           </TouchableOpacity>
         </Card>
@@ -181,11 +235,21 @@ export default function SettingsScreen() {
             icon="contrast-outline"
             iconColor="#8B5CF6"
             label="Theme"
-            subtitle={theme === 'dark' ? 'Dark mode active' : 'Light mode active'}
+            subtitle={
+              theme === 'dark' ? 'Dark mode active' : 'Light mode active'
+            }
             right={
               <View style={styles.themeToggle}>
-                <ThemeChip label="Dark" active={theme === 'dark'} onPress={() => void handleThemeChange('dark')} />
-                <ThemeChip label="Light" active={theme === 'light'} onPress={() => void handleThemeChange('light')} />
+                <ThemeChip
+                  label="Dark"
+                  active={theme === 'dark'}
+                  onPress={() => void handleThemeChange('dark')}
+                />
+                <ThemeChip
+                  label="Light"
+                  active={theme === 'light'}
+                  onPress={() => void handleThemeChange('light')}
+                />
               </View>
             }
           />
@@ -230,7 +294,9 @@ export default function SettingsScreen() {
             right={
               <Switch
                 value={notificationPreferences.dailyReminder}
-                onValueChange={(value) => void updateNotificationChannel('dailyReminder', value)}
+                onValueChange={(value) =>
+                  void updateNotificationChannel('dailyReminder', value)
+                }
                 disabled={!notificationPreferences.enabled}
                 trackColor={{ true: COLORS.primary }}
               />
@@ -243,7 +309,9 @@ export default function SettingsScreen() {
             right={
               <Switch
                 value={notificationPreferences.budgetAlerts}
-                onValueChange={(value) => void updateNotificationChannel('budgetAlerts', value)}
+                onValueChange={(value) =>
+                  void updateNotificationChannel('budgetAlerts', value)
+                }
                 disabled={!notificationPreferences.enabled}
                 trackColor={{ true: COLORS.primary }}
               />
@@ -256,7 +324,9 @@ export default function SettingsScreen() {
             right={
               <Switch
                 value={notificationPreferences.monthlyReportReminder}
-                onValueChange={(value) => void updateNotificationChannel('monthlyReportReminder', value)}
+                onValueChange={(value) =>
+                  void updateNotificationChannel('monthlyReportReminder', value)
+                }
                 disabled={!notificationPreferences.enabled}
                 trackColor={{ true: COLORS.primary }}
               />
@@ -265,6 +335,14 @@ export default function SettingsScreen() {
         </SettingsSection>
 
         <SettingsSection title="Data & Backup">
+          <SettingsRow
+            icon="chatbox-ellipses-outline"
+            iconColor="#8B5CF6"
+            label="Import Bank SMS"
+            subtitle="Requests SMS read permission on Android. Native inbox parsing is not available in this build yet."
+            onPress={() => void handleSmsImport()}
+            showChevron
+          />
           <SettingsRow
             icon="download-outline"
             iconColor="#22C55E"
@@ -288,30 +366,87 @@ export default function SettingsScreen() {
             icon="log-out-outline"
             iconColor="#F43F5E"
             label="Logout"
-            subtitle="Keep local SQLite data and disconnect the current Supabase session"
+            subtitle="Sign out, block app access, and clear all local cached data"
             onPress={() => void authService.signOut()}
             showChevron
           />
         </SettingsSection>
       </ScrollView>
 
-      <Modal visible={profileModalVisible} transparent animationType="slide" onRequestClose={() => setProfileModalVisible(false)}>
+      <Modal
+        visible={profileModalVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setProfileModalVisible(false)}
+      >
         <View style={modalStyles.overlay}>
           <View style={modalStyles.sheet}>
             <Text style={modalStyles.title}>Profile</Text>
-            <ProfileInput label="Name" value={profile?.name ?? ''} onChangeText={(value) => setDraftProfile((current) => current ? { ...current, name: value } : current)} />
-            <ProfileInput label="Email" value={profile?.email ?? ''} onChangeText={(value) => setDraftProfile((current) => current ? { ...current, email: value } : current)} keyboardType="email-address" />
-            <ProfileInput label="Phone" value={profile?.phone ?? ''} onChangeText={(value) => setDraftProfile((current) => current ? { ...current, phone: value } : current)} keyboardType="phone-pad" />
-            <ProfileInput label="Currency" value={profile?.currency ?? 'INR'} onChangeText={(value) => setDraftProfile((current) => current ? { ...current, currency: value.toUpperCase() } : current)} />
+            <ProfileInput
+              label="Name"
+              value={profile?.name ?? ''}
+              onChangeText={(value) =>
+                setDraftProfile((current) =>
+                  current ? { ...current, name: value } : current,
+                )
+              }
+            />
+            <ProfileInput
+              label="Email"
+              value={profile?.email ?? ''}
+              onChangeText={(value) =>
+                setDraftProfile((current) =>
+                  current ? { ...current, email: value } : current,
+                )
+              }
+              keyboardType="email-address"
+            />
+            <ProfileInput
+              label="Phone"
+              value={profile?.phone ?? ''}
+              onChangeText={(value) =>
+                setDraftProfile((current) =>
+                  current ? { ...current, phone: value } : current,
+                )
+              }
+              keyboardType="phone-pad"
+            />
+            <ProfileInput
+              label="Currency"
+              value={profile?.currency ?? 'INR'}
+              onChangeText={(value) =>
+                setDraftProfile((current) =>
+                  current
+                    ? { ...current, currency: value.toUpperCase() }
+                    : current,
+                )
+              }
+            />
             <ProfileInput
               label="Monthly Budget"
               value={String(profile?.monthlyBudget ?? 0)}
-              onChangeText={(value) => setDraftProfile((current) => current ? { ...current, monthlyBudget: Number(value) || 0 } : current)}
+              onChangeText={(value) =>
+                setDraftProfile((current) =>
+                  current
+                    ? { ...current, monthlyBudget: Number(value) || 0 }
+                    : current,
+                )
+              }
               keyboardType="numeric"
             />
             <View style={modalStyles.actions}>
-              <Button title="Cancel" onPress={() => setProfileModalVisible(false)} variant="ghost" style={{ flex: 1 }} />
-              <Button title="Save" onPress={() => void saveProfileChanges()} loading={saving} style={{ flex: 1 }} />
+              <Button
+                title="Cancel"
+                onPress={() => setProfileModalVisible(false)}
+                variant="ghost"
+                style={{ flex: 1 }}
+              />
+              <Button
+                title="Save"
+                onPress={() => void saveProfileChanges()}
+                loading={saving}
+                style={{ flex: 1 }}
+              />
             </View>
           </View>
         </View>
@@ -320,13 +455,32 @@ export default function SettingsScreen() {
   );
 }
 
-const ThemeChip = ({ label, active, onPress }: { label: string; active: boolean; onPress: () => void }) => (
-  <TouchableOpacity onPress={onPress} style={[styles.themeChip, active && styles.themeChipActive]}>
-    <Text style={[styles.themeChipText, active && styles.themeChipTextActive]}>{label}</Text>
+const ThemeChip = ({
+  label,
+  active,
+  onPress,
+}: {
+  label: string;
+  active: boolean;
+  onPress: () => void;
+}) => (
+  <TouchableOpacity
+    onPress={onPress}
+    style={[styles.themeChip, active && styles.themeChipActive]}
+  >
+    <Text style={[styles.themeChipText, active && styles.themeChipTextActive]}>
+      {label}
+    </Text>
   </TouchableOpacity>
 );
 
-const SettingsSection = ({ title, children }: { title: string; children: React.ReactNode }) => (
+const SettingsSection = ({
+  title,
+  children,
+}: {
+  title: string;
+  children: React.ReactNode;
+}) => (
   <View style={styles.section}>
     <Text style={styles.sectionTitle}>{title}</Text>
     <Card style={styles.sectionCard}>{children}</Card>
@@ -350,7 +504,12 @@ const SettingsRow = ({
   right?: React.ReactNode;
   showChevron?: boolean;
 }) => (
-  <TouchableOpacity style={styles.row} onPress={onPress} disabled={!onPress} activeOpacity={onPress ? 0.7 : 1}>
+  <TouchableOpacity
+    style={styles.row}
+    onPress={onPress}
+    disabled={!onPress}
+    activeOpacity={onPress ? 0.7 : 1}
+  >
     <View style={[styles.rowIcon, { backgroundColor: `${iconColor}20` }]}>
       <Ionicons name={icon as never} size={18} color={iconColor} />
     </View>
@@ -358,7 +517,10 @@ const SettingsRow = ({
       <Text style={styles.rowLabel}>{label}</Text>
       {subtitle ? <Text style={styles.rowSub}>{subtitle}</Text> : null}
     </View>
-    {right ?? (showChevron ? <Ionicons name="chevron-forward" size={16} color={COLORS.textMuted} /> : null)}
+    {right ??
+      (showChevron ? (
+        <Ionicons name="chevron-forward" size={16} color={COLORS.textMuted} />
+      ) : null)}
   </TouchableOpacity>
 );
 
@@ -416,7 +578,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 8,
   },
-  actionChipText: { ...TYPOGRAPHY.caption, color: COLORS.primary, fontWeight: '600' },
+  actionChipText: {
+    ...TYPOGRAPHY.caption,
+    color: COLORS.primary,
+    fontWeight: '600',
+  },
   section: { marginBottom: SPACING.md },
   sectionTitle: {
     ...TYPOGRAPHY.label,
@@ -475,7 +641,11 @@ const modalStyles = StyleSheet.create({
     borderWidth: 1,
     borderColor: COLORS.border,
   },
-  title: { ...TYPOGRAPHY.h3, color: COLORS.textPrimary, marginBottom: SPACING.md },
+  title: {
+    ...TYPOGRAPHY.h3,
+    color: COLORS.textPrimary,
+    marginBottom: SPACING.md,
+  },
   inputGroup: { marginBottom: SPACING.sm },
   label: { ...TYPOGRAPHY.caption, color: COLORS.textMuted, marginBottom: 6 },
   input: {
