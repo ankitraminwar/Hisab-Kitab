@@ -10,8 +10,10 @@ This repo is an Expo mobile finance app with offline-first storage and optional 
 - Only `EXPO_PUBLIC_SUPABASE_URL` and `EXPO_PUBLIC_SUPABASE_ANON_KEY` belong in `.env`.
 - Local SQLite is the source of truth while offline.
 - Remote sync only runs for authenticated users.
+- Local writes should not wait for Supabase; they must queue and sync later.
 - Remote Supabase tables use snake_case; local SQLite tables use camelCase.
 - Unauthenticated users should be sent to `/login`, not directly into tab routes.
+- Logged-in users should always have a `user_profile` row locally and remotely.
 
 ## Critical Files
 
@@ -26,6 +28,7 @@ This repo is an Expo mobile finance app with offline-first storage and optional 
 - [src/services/sms.ts](./src/services/sms.ts)
 - [src/screens/settings/SettingsScreen.tsx](./src/screens/settings/SettingsScreen.tsx)
 - [supabase/schema.sql](./supabase/schema.sql)
+- [supabase/migrations/20260312_221818_bank_sms_auto_sync_profile_bootstrap.sql](./supabase/migrations/20260312_221818_bank_sms_auto_sync_profile_bootstrap.sql)
 
 ## Known Operational Caveat
 
@@ -37,4 +40,4 @@ Native Android and iOS are the supported targets. Web export is not the primary 
 
 ## SMS Caveat
 
-Android SMS permission handling is present, but full inbox ingestion still needs a native Android SMS reader library. iOS cannot offer full SMS inbox access for this app category.
+Android SMS ingestion uses `react-native-get-sms-android`, so it requires a native Android build and will not work in Expo Go. iOS cannot offer full SMS inbox access for this app category.

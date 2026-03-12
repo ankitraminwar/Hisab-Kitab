@@ -16,6 +16,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { EmptyState, FAB } from '@/components/common';
 import TransactionItem from '@/components/TransactionItem';
+import { useAppStore } from '@/store/appStore';
 import { TransactionService } from '@/services/transactionService';
 import { COLORS, RADIUS, SPACING, TYPOGRAPHY } from '@/utils/constants';
 import type {
@@ -36,6 +37,7 @@ const SEARCH_DEBOUNCE_MS = 300;
 
 export default function TransactionsScreen() {
   const router = useRouter();
+  const dataRevision = useAppStore((state) => state.dataRevision);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
@@ -105,7 +107,7 @@ export default function TransactionsScreen() {
 
   useEffect(() => {
     void loadTransactions(true);
-  }, [loadTransactions]);
+  }, [dataRevision, loadTransactions]);
 
   const handleLoadMore = useCallback(() => {
     if (hasMore && !loadingRef.current) {

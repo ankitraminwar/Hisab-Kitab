@@ -268,6 +268,7 @@ class SyncService {
     }
 
     const lastSyncAt = await getLastSyncTimestamp();
+    let changed = false;
 
     for (const table of getSyncableTables()) {
       let query = supabase
@@ -300,6 +301,7 @@ class SyncService {
             String(localRecordData.id),
             String(localRecordData.deletedAt),
           );
+          changed = true;
           continue;
         }
 
@@ -322,8 +324,13 @@ class SyncService {
             syncStatus: 'synced',
             lastSyncedAt: new Date().toISOString(),
           });
+          changed = true;
         }
       }
+    }
+
+    if (changed) {
+      useAppStore.getState().bumpDataRevision();
     }
   }
 }

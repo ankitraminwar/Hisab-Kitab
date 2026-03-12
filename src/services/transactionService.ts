@@ -1,8 +1,13 @@
 import { getDatabase, enqueueSync } from '@/database';
 import type { SQLiteBindValue } from 'expo-sqlite';
 import { triggerBackgroundSync } from '@/services/syncService';
+import { useAppStore } from '@/store/appStore';
 import { generateId } from '@/utils/constants';
-import type { Transaction, TransactionFilters, TransactionType } from '@/utils/types';
+import type {
+  Transaction,
+  TransactionFilters,
+  TransactionType,
+} from '@/utils/types';
 
 const bindValue = (value: unknown): SQLiteBindValue => {
   if (
@@ -19,12 +24,16 @@ const bindValue = (value: unknown): SQLiteBindValue => {
   return JSON.stringify(value);
 };
 
-const parseTransaction = (row: Transaction & { tags: string | string[]; isRecurring: number | boolean }): Transaction => ({
+const parseTransaction = (
+  row: Transaction & { tags: string | string[]; isRecurring: number | boolean },
+): Transaction => ({
   ...row,
   tags: Array.isArray(row.tags) ? row.tags : JSON.parse(row.tags || '[]'),
   paymentMethod: row.paymentMethod ?? 'other',
   isRecurring: Boolean(row.isRecurring),
 });
+
+const SMS_TAG_PREFIX = 'sms:';
 
 const applyBalanceEffect = async (
   type: TransactionType,
@@ -66,7 +75,11 @@ const applyBalanceEffect = async (
 };
 
 export const TransactionService = {
-  async getAll(filters?: TransactionFilters, limit = 50, offset = 0): Promise<Transaction[]> {
+  async getAll(
+    filters?: TransactionFilters,
+    limit = 50,
+    offset = 0,
+  ): Promise<Transaction[]> {
     let query = `
       SELECT t.*,
              c.name as categoryName,
@@ -121,12 +134,16 @@ export const TransactionService = {
     query += ' ORDER BY t.date DESC, t.createdAt DESC LIMIT ? OFFSET ?';
     params.push(limit, offset);
 
-    const rows = await getDatabase().getAllAsync<Transaction & { tags: string; isRecurring: number }>(query, params);
+    const rows = await getDatabase().getAllAsync<
+      Transaction & { tags: string; isRecurring: number }
+    >(query, params);
     return rows.map(parseTransaction);
   },
 
   async getById(id: string): Promise<Transaction | null> {
-    const row = await getDatabase().getFirstAsync<Transaction & { tags: string; isRecurring: number }>(
+    const row = await getDatabase().getFirstAsync<
+      Transaction & { tags: string; isRecurring: number }
+    >(
       `SELECT t.*,
               c.name as categoryName,
               c.icon as categoryIcon,
@@ -142,7 +159,18 @@ export const TransactionService = {
     return row ? parseTransaction(row) : null;
   },
 
-  async create(data: Omit<Transaction, 'id' | 'createdAt' | 'updatedAt' | 'userId' | 'syncStatus' | 'lastSyncedAt' | 'deletedAt'>): Promise<Transaction> {
+  async create(
+    data: Omit<
+      Transaction,
+      | 'id'
+      | 'createdAt'
+      | 'updatedAt'
+      | 'userId'
+      | 'syncStatus'
+      | 'lastSyncedAt'
+      | 'deletedAt'
+    >,
+  ): Promise<Transaction> {
     const now = new Date().toISOString();
     const transaction: Transaction = {
       ...data,
@@ -182,12 +210,18 @@ export const TransactionService = {
       ],
     );
 
-    await applyBalanceEffect(transaction.type, transaction.amount, transaction.accountId, transaction.toAccountId);
+    await applyBalanceEffect(
+      transaction.type,
+      transaction.amount,
+      transaction.accountId,
+      transaction.toAccountId,
+    );
     await enqueueSync('transactions', transaction.id, 'upsert', {
       ...transaction,
       tags: JSON.stringify(transaction.tags ?? []),
       isRecurring: transaction.isRecurring ? 1 : 0,
     });
+    useAppStore.getState().bumpDataRevision();
     void triggerBackgroundSync('transaction-created');
 
     const created = await this.getById(transaction.id);
@@ -203,7 +237,13 @@ export const TransactionService = {
       throw new Error('Transaction not found');
     }
 
-    await applyBalanceEffect(existing.type, existing.amount, existing.accountId, existing.toAccountId, true);
+    await applyBalanceEffect(
+      existing.type,
+      existing.amount,
+      existing.accountId,
+      existing.toAccountId,
+      true,
+    );
 
     const updatedAt = new Date().toISOString();
     const updated: Transaction = {
@@ -235,12 +275,18 @@ export const TransactionService = {
       ],
     );
 
-    await applyBalanceEffect(updated.type, updated.amount, updated.accountId, updated.toAccountId);
+    await applyBalanceEffect(
+      updated.type,
+      updated.amount,
+      updated.accountId,
+      updated.toAccountId,
+    );
     await enqueueSync('transactions', id, 'upsert', {
       ...updated,
       tags: JSON.stringify(updated.tags ?? []),
       isRecurring: updated.isRecurring ? 1 : 0,
     });
+    useAppStore.getState().bumpDataRevision();
     void triggerBackgroundSync('transaction-updated');
   },
 
@@ -251,18 +297,46 @@ export const TransactionService = {
     }
 
     const deletedAt = new Date().toISOString();
-    await applyBalanceEffect(existing.type, existing.amount, existing.accountId, existing.toAccountId, true);
+    await applyBalanceEffect(
+      existing.type,
+      existing.amount,
+      existing.accountId,
+      existing.toAccountId,
+      true,
+    );
     await getDatabase().runAsync(
       `UPDATE transactions
        SET deletedAt = ?, updatedAt = ?, syncStatus = 'pending'
        WHERE id = ?`,
       [deletedAt, deletedAt, id],
     );
-    await enqueueSync('transactions', id, 'delete', { id, deletedAt, updatedAt: deletedAt });
+    await enqueueSync('transactions', id, 'delete', {
+      id,
+      deletedAt,
+      updatedAt: deletedAt,
+    });
+    useAppStore.getState().bumpDataRevision();
+    void triggerBackgroundSync('transaction-deleted');
   },
 
-  async getMonthlyStats(year: number, month: string): Promise<{ income: number; expense: number }> {
-    const rows = await getDatabase().getAllAsync<{ type: string; total: number }>(
+  async hasImportedSms(messageId: string): Promise<boolean> {
+    const row = await getDatabase().getFirstAsync<{ count: number }>(
+      `SELECT COUNT(*) as count
+       FROM transactions
+       WHERE deletedAt IS NULL AND tags LIKE ?`,
+      [`%${SMS_TAG_PREFIX}${messageId}%`],
+    );
+    return (row?.count ?? 0) > 0;
+  },
+
+  async getMonthlyStats(
+    year: number,
+    month: string,
+  ): Promise<{ income: number; expense: number }> {
+    const rows = await getDatabase().getAllAsync<{
+      type: string;
+      total: number;
+    }>(
       `SELECT type, COALESCE(SUM(amount), 0) as total
        FROM transactions
        WHERE deletedAt IS NULL AND strftime('%Y', date) = ? AND strftime('%m', date) = ? AND type != 'transfer'
@@ -284,7 +358,11 @@ export const TransactionService = {
     );
   },
 
-  async getCategoryBreakdown(year: number, month: string, type: TransactionType = 'expense') {
+  async getCategoryBreakdown(
+    year: number,
+    month: string,
+    type: TransactionType = 'expense',
+  ) {
     return getDatabase().getAllAsync<{
       categoryId: string;
       categoryName: string;
@@ -302,7 +380,11 @@ export const TransactionService = {
   },
 
   async getMonthlyTrend(months = 6) {
-    return getDatabase().getAllAsync<{ month: string; income: number; expense: number }>(
+    return getDatabase().getAllAsync<{
+      month: string;
+      income: number;
+      expense: number;
+    }>(
       `SELECT strftime('%Y-%m', date) as month,
               COALESCE(SUM(CASE WHEN type = 'income' THEN amount ELSE 0 END), 0) as income,
               COALESCE(SUM(CASE WHEN type = 'expense' THEN amount ELSE 0 END), 0) as expense
@@ -316,7 +398,8 @@ export const TransactionService = {
 
   async exportToCSV(): Promise<string> {
     const transactions = await this.getAll(undefined, 100000, 0);
-    const header = 'Date,Type,Amount,Category,Account,Payment Method,Merchant,Notes,Tags';
+    const header =
+      'Date,Type,Amount,Category,Account,Payment Method,Merchant,Notes,Tags';
     const rows = transactions.map((transaction) =>
       [
         transaction.date,

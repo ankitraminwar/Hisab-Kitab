@@ -54,6 +54,7 @@ export default function DashboardScreen() {
     setAccounts,
     budgets,
     setBudgets,
+    dataRevision,
   } = useAppStore();
   const [refreshing, setRefreshing] = useState(false);
   const [netWorth, setNetWorth] = useState({
@@ -100,7 +101,7 @@ export default function DashboardScreen() {
 
   useEffect(() => {
     void loadData();
-  }, [loadData]);
+  }, [dataRevision, loadData]);
 
   const onRefresh = async () => {
     setRefreshing(true);

@@ -17,14 +17,21 @@ Offline-first personal finance manager built with Expo, React Native, TypeScript
 - Sign-up / reset flows live under `/auth/*`
 - Local SQLite data is cleared on logout
 - Supabase sync only runs for authenticated users
+- Local changes are written first and then queued for background sync
+- When internet returns, queued changes are pushed to Supabase automatically
 - First authenticated session can prompt for biometric unlock
+- If a logged-in user has no local `user_profile`, one is created automatically
 
 ## SMS Import Status
 
-- Android permission requests are wired for SMS access
-- Current code only exposes the permission/import entry point
-- Full inbox reading still requires adding a native Android SMS module
+- Android uses `react-native-get-sms-android` to read inbox SMS in native builds
+- Bank/payment SMS messages are parsed into local expense or income transactions
+- Imported SMS transactions are tagged to prevent duplicates
+- Background SMS polling runs roughly every 60 seconds on Android
+- If the device is online, imported SMS transactions are synced to Supabase automatically
+- The app remains offline-first: SMS imports are stored locally even when offline
 - iOS does not support full SMS inbox access for third-party apps
+- Expo Go cannot use this feature because the package requires a native Android build
 
 ## Local Setup
 
@@ -47,6 +54,8 @@ npm install
 npm run start
 ```
 
+For Android SMS import, use a native Android build or dev client instead of Expo Go.
+
 ## Required Backend Step
 
 The mobile app will not sync until the Supabase schema is deployed.
@@ -54,6 +63,7 @@ The mobile app will not sync until the Supabase schema is deployed.
 Apply:
 
 - [supabase/schema.sql](./supabase/schema.sql)
+- [supabase/migrations/20260312_221818_bank_sms_auto_sync_profile_bootstrap.sql](./supabase/migrations/20260312_221818_bank_sms_auto_sync_profile_bootstrap.sql)
 
 If the schema is not deployed, the app now falls back to local-only mode and reports the sync error instead of crashing.
 

@@ -21,6 +21,7 @@ import { useTheme } from '../../hooks/useTheme';
 import { AccountService } from '../../services/dataServices';
 import { Account, AccountType } from '../../utils/types';
 import { Card, Button } from '../../components/common';
+import { useAppStore } from '../../store/appStore';
 
 const ACCOUNT_TYPES: {
   key: AccountType;
@@ -54,13 +55,14 @@ const ACCOUNT_COLORS = [
 
 export default function AccountsScreen() {
   const { colors } = useTheme();
+  const dataRevision = useAppStore((state) => state.dataRevision);
   const styles = useMemo(() => createStyles(colors), [colors]);
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [showAdd, setShowAdd] = useState(false);
 
   useEffect(() => {
     loadAccounts();
-  }, []);
+  }, [dataRevision]);
 
   const loadAccounts = async () => {
     const data = await AccountService.getAll();

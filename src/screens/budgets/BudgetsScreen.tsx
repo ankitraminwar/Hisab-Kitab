@@ -20,6 +20,7 @@ import {
 } from '../../utils/constants';
 import { BudgetService, CategoryService } from '../../services/dataServices';
 import { Budget, Category } from '../../utils/types';
+import { useAppStore } from '../../store/appStore';
 import {
   Card,
   ProgressBar,
@@ -30,6 +31,7 @@ import {
 import { format } from 'date-fns';
 
 export default function BudgetsScreen() {
+  const dataRevision = useAppStore((state) => state.dataRevision);
   const now = new Date();
   const [year, setYear] = useState(now.getFullYear());
   const [month, setMonth] = useState(
@@ -52,7 +54,7 @@ export default function BudgetsScreen() {
 
   useEffect(() => {
     void loadData();
-  }, [loadData]);
+  }, [dataRevision, loadData]);
 
   const totalBudget = budgets.reduce((s, b) => s + b.limit_amount, 0);
   const totalSpent = budgets.reduce((s, b) => s + b.spent, 0);

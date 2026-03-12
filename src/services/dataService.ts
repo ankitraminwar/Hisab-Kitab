@@ -1,6 +1,8 @@
 import { getDatabase, enqueueSync } from '@/database';
 import { supabase } from '@/lib/supabase';
 import type { SQLiteBindValue } from 'expo-sqlite';
+import { triggerBackgroundSync } from '@/services/syncService';
+import { useAppStore } from '@/store/appStore';
 import { generateId } from '@/utils/constants';
 import type {
   Account,
@@ -40,7 +42,11 @@ const queueEntitySync = async (
   id: string,
   payload: Record<string, unknown>,
   operation: 'upsert' | 'delete' = 'upsert',
-) => enqueueSync(table, id, operation, payload);
+) => {
+  await enqueueSync(table, id, operation, payload);
+  useAppStore.getState().bumpDataRevision();
+  void triggerBackgroundSync(`${table}-${operation}`);
+};
 
 export const AccountService = {
   async getAll(): Promise<Account[]> {

@@ -25,6 +25,7 @@ import {
   setBiometricPrompted,
 } from '@/services/auth';
 import { applyNotificationPreferences } from '@/services/notifications';
+import { smsImportService } from '@/services/sms';
 import { syncService } from '@/services/syncService';
 import { UserProfileService } from '@/services/dataServices';
 import { useAppStore } from '@/store/appStore';
@@ -86,6 +87,13 @@ export default function RootLayout() {
             monthlyReportReminder: true,
           });
         } else {
+          if (nextSession) {
+            const createdProfile = await UserProfileService.upsertProfile({
+              userId: nextSession.user.id,
+              email: nextSession.user.email ?? '',
+            });
+            setUserProfile(createdProfile);
+          }
           setTheme('dark');
         }
 
@@ -93,9 +101,11 @@ export default function RootLayout() {
         setBiometricsPromptedState(prompted);
         setLocked(Boolean(nextSession) && biometricPreference);
         syncService.start();
+        smsImportService.start();
 
         if (nextSession) {
           void syncService.requestSync('app-start');
+          void smsImportService.run();
         }
       } catch (error) {
         console.error('Initialization failed', error);
@@ -114,6 +124,7 @@ export default function RootLayout() {
         setSession(nextSession);
 
         if (!nextSession && previousSession) {
+          smsImportService.stop();
           await clearLocalData();
           queryClient.clear();
           resetAppState();
@@ -125,6 +136,8 @@ export default function RootLayout() {
         if (nextSession) {
           setLocked(useAppStore.getState().biometricsEnabled);
           void syncService.requestSync('auth-state-change');
+          smsImportService.start();
+          void smsImportService.run();
         }
       },
     );
@@ -132,6 +145,7 @@ export default function RootLayout() {
     return () => {
       subscription.data.subscription.unsubscribe();
       syncService.stop();
+      smsImportService.stop();
     };
   }, [
     resetAppState,

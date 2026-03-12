@@ -33,7 +33,10 @@ Field mapping between local SQLite camelCase records and Supabase snake_case row
 
 Behavior:
 
+- uses SQLite as the write path first
 - pushes pending local queue items
+- auto-starts on app boot and on network reconnect
+- triggers background sync after local writes while online
 - pulls remote changes by `updated_at`
 - maps local camelCase fields to remote snake_case fields
 - resolves conflicts by latest update timestamp
@@ -59,6 +62,7 @@ Behavior:
 - root layout redirects unauthenticated users to `/login`
 - logout clears local SQLite data and resets app store state
 - first authenticated session can prompt the user to enable biometrics
+- if a logged-in user is missing a local profile row, the app creates one and queues it for sync
 
 ## Settings and Preferences
 
@@ -71,9 +75,14 @@ Relevant files:
 - [src/hooks/use-theme.ts](./src/hooks/use-theme.ts)
 - [src/services/sms.ts](./src/services/sms.ts)
 
-Current caveat:
+SMS behavior:
 
-- SMS import UI and Android permission flow exist, but full inbox reading still requires a native Android SMS reader module
+- Android inbox SMS reading uses `react-native-get-sms-android`
+- bank/payment SMS messages are parsed into transactions and stored locally first
+- imported messages are deduplicated using SMS-derived tags
+- background polling runs on Android while the app is active
+- Expo Go cannot use this because the SMS package requires a native build
+- iOS cannot expose full inbox SMS reading for this app
 
 ## Notifications
 

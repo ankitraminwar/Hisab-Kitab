@@ -1,5 +1,11 @@
 import React, { useEffect, useState } from 'react';
-import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import {
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Bar, CartesianChart, Line } from 'victory-native';
@@ -8,7 +14,14 @@ import { format } from 'date-fns';
 
 import { Card, SectionHeader } from '@/components/common';
 import { TransactionService } from '@/services/transactionService';
-import { COLORS, SPACING, TYPOGRAPHY, formatCompact, formatCurrency } from '@/utils/constants';
+import { useAppStore } from '@/store/appStore';
+import {
+  COLORS,
+  SPACING,
+  TYPOGRAPHY,
+  formatCompact,
+  formatCurrency,
+} from '@/utils/constants';
 
 type TrendDatum = {
   month: string;
@@ -25,9 +38,12 @@ type CategoryDatum = {
 
 export default function ReportsScreen() {
   const now = new Date();
+  const dataRevision = useAppStore((state) => state.dataRevision);
   const font = useFont(undefined, 12);
   const [year, setYear] = useState(now.getFullYear());
-  const [month, setMonth] = useState(String(now.getMonth() + 1).padStart(2, '0'));
+  const [month, setMonth] = useState(
+    String(now.getMonth() + 1).padStart(2, '0'),
+  );
   const [expenseBreakdown, setExpenseBreakdown] = useState<CategoryDatum[]>([]);
   const [monthlyTrend, setMonthlyTrend] = useState<TrendDatum[]>([]);
   const [stats, setStats] = useState({ income: 0, expense: 0 });
@@ -46,9 +62,12 @@ export default function ReportsScreen() {
     };
 
     void loadData();
-  }, [month, year]);
+  }, [dataRevision, month, year]);
 
-  const savingsRate = stats.income > 0 ? ((stats.income - stats.expense) / stats.income) * 100 : 0;
+  const savingsRate =
+    stats.income > 0
+      ? ((stats.income - stats.expense) / stats.income) * 100
+      : 0;
   const topExpenseData = expenseBreakdown.slice(0, 5).map((item) => ({
     label: item.categoryName,
     total: item.total,
@@ -74,27 +93,49 @@ export default function ReportsScreen() {
 
       <View style={styles.monthPicker}>
         <TouchableOpacity onPress={prevMonth} style={styles.monthButton}>
-          <Ionicons name="chevron-back" size={20} color={COLORS.textSecondary} />
+          <Ionicons
+            name="chevron-back"
+            size={20}
+            color={COLORS.textSecondary}
+          />
         </TouchableOpacity>
-        <Text style={styles.monthLabel}>{format(new Date(year, Number(month) - 1), 'MMMM yyyy')}</Text>
+        <Text style={styles.monthLabel}>
+          {format(new Date(year, Number(month) - 1), 'MMMM yyyy')}
+        </Text>
         <TouchableOpacity onPress={nextMonth} style={styles.monthButton}>
-          <Ionicons name="chevron-forward" size={20} color={COLORS.textSecondary} />
+          <Ionicons
+            name="chevron-forward"
+            size={20}
+            color={COLORS.textSecondary}
+          />
         </TouchableOpacity>
       </View>
 
-      <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        contentContainerStyle={styles.scroll}
+        showsVerticalScrollIndicator={false}
+      >
         <View style={styles.statsRow}>
           <Card style={styles.statCard}>
             <Text style={styles.statLabel}>Income</Text>
-            <Text style={[styles.statValue, { color: COLORS.income }]}>{formatCompact(stats.income)}</Text>
+            <Text style={[styles.statValue, { color: COLORS.income }]}>
+              {formatCompact(stats.income)}
+            </Text>
           </Card>
           <Card style={styles.statCard}>
             <Text style={styles.statLabel}>Expense</Text>
-            <Text style={[styles.statValue, { color: COLORS.expense }]}>{formatCompact(stats.expense)}</Text>
+            <Text style={[styles.statValue, { color: COLORS.expense }]}>
+              {formatCompact(stats.expense)}
+            </Text>
           </Card>
           <Card style={styles.statCard}>
             <Text style={styles.statLabel}>Savings</Text>
-            <Text style={[styles.statValue, { color: savingsRate >= 0 ? COLORS.income : COLORS.expense }]}>
+            <Text
+              style={[
+                styles.statValue,
+                { color: savingsRate >= 0 ? COLORS.income : COLORS.expense },
+              ]}
+            >
               {savingsRate.toFixed(1)}%
             </Text>
           </Card>
@@ -116,8 +157,16 @@ export default function ReportsScreen() {
             >
               {({ points, chartBounds }) => (
                 <>
-                  <Bar points={points.income} chartBounds={chartBounds} color={`${COLORS.income}99`} />
-                  <Line points={points.expense} color={COLORS.expense} strokeWidth={3} />
+                  <Bar
+                    points={points.income}
+                    chartBounds={chartBounds}
+                    color={`${COLORS.income}99`}
+                  />
+                  <Line
+                    points={points.expense}
+                    color={COLORS.expense}
+                    strokeWidth={3}
+                  />
                 </>
               )}
             </CartesianChart>
@@ -139,7 +188,11 @@ export default function ReportsScreen() {
               domainPadding={{ left: 24, right: 24, top: 24 }}
             >
               {({ points, chartBounds }) => (
-                <Bar points={points.total} chartBounds={chartBounds} color={`${COLORS.primary}CC`} />
+                <Bar
+                  points={points.total}
+                  chartBounds={chartBounds}
+                  color={`${COLORS.primary}CC`}
+                />
               )}
             </CartesianChart>
           </Card>
@@ -149,15 +202,25 @@ export default function ReportsScreen() {
           <Card style={styles.chartCard}>
             <SectionHeader title="Expense Breakdown" />
             {expenseBreakdown.slice(0, 8).map((item) => {
-              const percentage = stats.expense > 0 ? (item.total / stats.expense) * 100 : 0;
+              const percentage =
+                stats.expense > 0 ? (item.total / stats.expense) * 100 : 0;
               return (
                 <View key={item.categoryId} style={styles.breakdownRow}>
-                  <View style={[styles.dot, { backgroundColor: item.categoryColor || COLORS.primary }]} />
+                  <View
+                    style={[
+                      styles.dot,
+                      { backgroundColor: item.categoryColor || COLORS.primary },
+                    ]}
+                  />
                   <Text style={styles.breakdownName} numberOfLines={1}>
                     {item.categoryName}
                   </Text>
-                  <Text style={styles.breakdownPercent}>{percentage.toFixed(1)}%</Text>
-                  <Text style={styles.breakdownAmount}>{formatCurrency(item.total)}</Text>
+                  <Text style={styles.breakdownPercent}>
+                    {percentage.toFixed(1)}%
+                  </Text>
+                  <Text style={styles.breakdownAmount}>
+                    {formatCurrency(item.total)}
+                  </Text>
                 </View>
               );
             })}
@@ -213,7 +276,17 @@ const styles = StyleSheet.create({
   },
   dot: { width: 8, height: 8, borderRadius: 4 },
   breakdownName: { ...TYPOGRAPHY.body, color: COLORS.textPrimary, flex: 1 },
-  breakdownPercent: { ...TYPOGRAPHY.caption, color: COLORS.textMuted, width: 44, textAlign: 'right' },
-  breakdownAmount: { ...TYPOGRAPHY.bodyMedium, color: COLORS.textPrimary, width: 88, textAlign: 'right' },
+  breakdownPercent: {
+    ...TYPOGRAPHY.caption,
+    color: COLORS.textMuted,
+    width: 44,
+    textAlign: 'right',
+  },
+  breakdownAmount: {
+    ...TYPOGRAPHY.bodyMedium,
+    color: COLORS.textPrimary,
+    width: 88,
+    textAlign: 'right',
+  },
   bottomSpacer: { height: 80 },
 });

@@ -237,6 +237,37 @@ create trigger set_user_profile_updated_at before update on public.user_profile 
 drop trigger if exists on_auth_user_created on auth.users;
 create trigger on_auth_user_created after insert on auth.users for each row execute function public.handle_new_user();
 
+insert into public.user_profile (
+  id,
+  user_id,
+  name,
+  email,
+  currency,
+  monthly_budget,
+  theme_preference,
+  notifications_enabled,
+  biometric_enabled,
+  created_at,
+  updated_at,
+  sync_status
+)
+select
+  u.id::text,
+  u.id,
+  coalesce(u.raw_user_meta_data ->> 'name', 'Hisab Kitab User'),
+  coalesce(u.email, ''),
+  'INR',
+  0,
+  'dark',
+  false,
+  false,
+  timezone('utc', now()),
+  timezone('utc', now()),
+  'synced'
+from auth.users u
+left join public.user_profile p on p.user_id = u.id
+where p.user_id is null;
+
 alter table public.accounts enable row level security;
 alter table public.categories enable row level security;
 alter table public.transactions enable row level security;

@@ -22,6 +22,7 @@ import { GoalService } from '../../services/dataServices';
 import { Goal } from '../../utils/types';
 import { Card, ProgressBar, EmptyState, Button } from '../../components/common';
 import { differenceInDays } from 'date-fns';
+import { useAppStore } from '../../store/appStore';
 
 const GOAL_COLORS = [
   '#7C3AED',
@@ -46,6 +47,7 @@ const GOAL_ICONS = [
 ];
 
 export default function GoalsScreen() {
+  const dataRevision = useAppStore((state) => state.dataRevision);
   const [goals, setGoals] = useState<Goal[]>([]);
   const [showAdd, setShowAdd] = useState(false);
   const [selectedGoal, setSelectedGoal] = useState<Goal | null>(null);
@@ -53,7 +55,7 @@ export default function GoalsScreen() {
 
   useEffect(() => {
     loadGoals();
-  }, []);
+  }, [dataRevision]);
 
   const loadGoals = async () => {
     const data = await GoalService.getAll();

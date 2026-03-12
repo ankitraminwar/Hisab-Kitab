@@ -42,6 +42,7 @@ interface AppState {
   userProfile: UserProfile | null;
   notificationPreferences: NotificationPreferences;
   selectedMonth: string;
+  dataRevision: number;
   setLocked: (locked: boolean) => void;
   setBiometrics: (enabled: boolean) => void;
   setBiometricsPrompted: (prompted: boolean) => void;
@@ -60,6 +61,7 @@ interface AppState {
   setUserProfile: (profile: UserProfile | null) => void;
   setNotificationPreferences: (preferences: NotificationPreferences) => void;
   setSelectedMonth: (month: string) => void;
+  bumpDataRevision: () => void;
   resetAppState: () => void;
 }
 
@@ -86,6 +88,7 @@ const initialState: Pick<
   | 'userProfile'
   | 'notificationPreferences'
   | 'selectedMonth'
+  | 'dataRevision'
 > = {
   isLocked: true,
   biometricsEnabled: false,
@@ -119,6 +122,7 @@ const initialState: Pick<
     monthlyReportReminder: true,
   },
   selectedMonth: new Date().toISOString().slice(0, 7),
+  dataRevision: 0,
 };
 
 export const useAppStore = create<AppState>((set) => ({
@@ -142,5 +146,7 @@ export const useAppStore = create<AppState>((set) => ({
   setNotificationPreferences: (notificationPreferences) =>
     set({ notificationPreferences }),
   setSelectedMonth: (selectedMonth) => set({ selectedMonth }),
+  bumpDataRevision: () =>
+    set((state) => ({ dataRevision: state.dataRevision + 1 })),
   resetAppState: () => set({ ...initialState }),
 }));
