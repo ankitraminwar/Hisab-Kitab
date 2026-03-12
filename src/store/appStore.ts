@@ -1,13 +1,21 @@
 import { create } from 'zustand';
-import { Account, Category, Transaction, Budget, Goal, Asset, Liability, DashboardStats } from '../utils/types';
+
+import type { Account, Asset, Budget, Category, DashboardStats, Goal, Liability, Transaction } from '@/utils/types';
+
+interface SyncStateUpdate {
+  syncInProgress?: boolean;
+  lastSyncAt?: string | null;
+  lastSyncError?: string | null;
+}
 
 interface AppState {
-  // Auth
   isLocked: boolean;
   biometricsEnabled: boolean;
   pinEnabled: boolean;
-
-  // Data
+  isOnline: boolean;
+  syncInProgress: boolean;
+  lastSyncAt: string | null;
+  lastSyncError: string | null;
   accounts: Account[];
   categories: Category[];
   recentTransactions: Transaction[];
@@ -16,15 +24,13 @@ interface AppState {
   assets: Asset[];
   liabilities: Liability[];
   dashboardStats: DashboardStats;
-
-  // UI
   isLoading: boolean;
   theme: 'dark' | 'light';
-  selectedMonth: string; // 'YYYY-MM'
-
-  // Actions
+  selectedMonth: string;
   setLocked: (locked: boolean) => void;
   setBiometrics: (enabled: boolean) => void;
+  setOnline: (online: boolean) => void;
+  setSyncState: (state: SyncStateUpdate) => void;
   setAccounts: (accounts: Account[]) => void;
   setCategories: (categories: Category[]) => void;
   setRecentTransactions: (transactions: Transaction[]) => void;
@@ -35,13 +41,16 @@ interface AppState {
   setDashboardStats: (stats: DashboardStats) => void;
   setLoading: (loading: boolean) => void;
   setSelectedMonth: (month: string) => void;
-  updateAccountBalance: (accountId: string, delta: number) => void;
 }
 
 export const useAppStore = create<AppState>((set) => ({
   isLocked: true,
   biometricsEnabled: false,
   pinEnabled: false,
+  isOnline: true,
+  syncInProgress: false,
+  lastSyncAt: null,
+  lastSyncError: null,
   accounts: [],
   categories: [],
   recentTransactions: [],
@@ -59,9 +68,10 @@ export const useAppStore = create<AppState>((set) => ({
   isLoading: false,
   theme: 'dark',
   selectedMonth: new Date().toISOString().slice(0, 7),
-
   setLocked: (locked) => set({ isLocked: locked }),
   setBiometrics: (enabled) => set({ biometricsEnabled: enabled }),
+  setOnline: (isOnline) => set({ isOnline }),
+  setSyncState: (syncState) => set(syncState),
   setAccounts: (accounts) => set({ accounts }),
   setCategories: (categories) => set({ categories }),
   setRecentTransactions: (recentTransactions) => set({ recentTransactions }),
@@ -72,10 +82,4 @@ export const useAppStore = create<AppState>((set) => ({
   setDashboardStats: (dashboardStats) => set({ dashboardStats }),
   setLoading: (isLoading) => set({ isLoading }),
   setSelectedMonth: (selectedMonth) => set({ selectedMonth }),
-  updateAccountBalance: (accountId, delta) =>
-    set((state) => ({
-      accounts: state.accounts.map((acc) =>
-        acc.id === accountId ? { ...acc, balance: acc.balance + delta } : acc
-      ),
-    })),
 }));

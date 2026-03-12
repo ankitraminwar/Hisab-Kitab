@@ -4,8 +4,16 @@ export type AssetType = 'bank' | 'cash' | 'stocks' | 'mutual_funds' | 'crypto' |
 export type LiabilityType = 'credit_card' | 'loan' | 'mortgage' | 'other';
 export type RecurringFrequency = 'daily' | 'weekly' | 'monthly' | 'yearly';
 export type CategoryType = 'expense' | 'income' | 'both';
+export type SyncStatus = 'synced' | 'pending' | 'failed';
 
-export interface Account {
+export interface SyncMetadata {
+  userId?: string | null;
+  syncStatus: SyncStatus;
+  lastSyncedAt?: string | null;
+  deletedAt?: string | null;
+}
+
+export interface Account extends SyncMetadata {
   id: string;
   name: string;
   type: AccountType;
@@ -18,7 +26,7 @@ export interface Account {
   updatedAt: string;
 }
 
-export interface Category {
+export interface Category extends SyncMetadata {
   id: string;
   name: string;
   type: CategoryType;
@@ -27,9 +35,10 @@ export interface Category {
   isCustom: boolean;
   parentId?: string;
   createdAt: string;
+  updatedAt: string;
 }
 
-export interface Transaction {
+export interface Transaction extends SyncMetadata {
   id: string;
   amount: number;
   type: TransactionType;
@@ -51,7 +60,7 @@ export interface Transaction {
   accountName?: string;
 }
 
-export interface Budget {
+export interface Budget extends SyncMetadata {
   id: string;
   categoryId: string;
   limit_amount: number;
@@ -67,7 +76,7 @@ export interface Budget {
   categoryColor?: string;
 }
 
-export interface Goal {
+export interface Goal extends SyncMetadata {
   id: string;
   name: string;
   targetAmount: number;
@@ -81,7 +90,7 @@ export interface Goal {
   updatedAt: string;
 }
 
-export interface Asset {
+export interface Asset extends SyncMetadata {
   id: string;
   name: string;
   type: AssetType;
@@ -89,9 +98,10 @@ export interface Asset {
   notes?: string;
   lastUpdated: string;
   createdAt: string;
+  updatedAt: string;
 }
 
-export interface Liability {
+export interface Liability extends SyncMetadata {
   id: string;
   name: string;
   type: LiabilityType;
@@ -101,9 +111,10 @@ export interface Liability {
   notes?: string;
   lastUpdated: string;
   createdAt: string;
+  updatedAt: string;
 }
 
-export interface RecurringTemplate {
+export interface RecurringTemplate extends SyncMetadata {
   id: string;
   amount: number;
   type: TransactionType;
@@ -120,12 +131,14 @@ export interface RecurringTemplate {
   updatedAt: string;
 }
 
-export interface NetWorthHistory {
+export interface NetWorthHistory extends SyncMetadata {
   id: string;
   totalAssets: number;
   totalLiabilities: number;
   netWorth: number;
   date: string;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface DashboardStats {
@@ -141,9 +154,28 @@ export interface TransactionFilters {
   type?: TransactionType;
   categoryId?: string;
   accountId?: string;
+  toAccountId?: string;
   dateFrom?: string;
   dateTo?: string;
   minAmount?: number;
   maxAmount?: number;
   tags?: string[];
+}
+
+export interface PaginatedResult<T> {
+  data: T[];
+  hasMore: boolean;
+  nextOffset: number;
+}
+
+export interface SyncQueueItem {
+  id: string;
+  entity: string;
+  recordId: string;
+  operation: 'upsert' | 'delete';
+  payload: string;
+  retryCount: number;
+  lastError?: string | null;
+  createdAt: string;
+  updatedAt: string;
 }

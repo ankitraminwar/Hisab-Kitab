@@ -1,13 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import {
-  View, Text, StyleSheet, ScrollView, TouchableOpacity, Modal, TextInput, Alert,
+  View, Text, StyleSheet, ScrollView, TouchableOpacity, Modal, TextInput,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS, SPACING, RADIUS, TYPOGRAPHY, formatCurrency, formatCompact } from '../../utils/constants';
 import { NetWorthService } from '../../services/dataServices';
 import { Asset, Liability, AssetType, LiabilityType } from '../../utils/types';
-import { Card, SectionHeader, Button } from '../../components/common';
+import { Card, Button } from '../../components/common';
 
 const ASSET_TYPES: { key: AssetType; label: string; icon: string; color: string }[] = [
   { key: 'bank', label: 'Bank', icon: 'business', color: '#3B82F6' },

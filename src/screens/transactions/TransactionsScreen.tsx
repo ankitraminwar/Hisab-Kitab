@@ -50,7 +50,7 @@ export default function TransactionsScreen() {
     setLoading(false);
   }, [search, typeFilter, page, loading]);
 
-  useEffect(() => { loadTransactions(true); }, [search, typeFilter]);
+  useEffect(() => { void loadTransactions(true); }, [loadTransactions]);
 
   const handleDelete = (tx: Transaction) => {
     Alert.alert('Delete Transaction', `Delete ₹${tx.amount} transaction?`, [
@@ -134,7 +134,6 @@ export default function TransactionsScreen() {
           data={listData}
           renderItem={renderItem}
           keyExtractor={(item) => typeof item === 'string' ? `header-${item}` : item.id}
-          estimatedItemSize={64}
           getItemType={(item) => typeof item === 'string' ? 'header' : 'row'}
           onEndReached={() => { if (hasMore) loadTransactions(false); }}
           onEndReachedThreshold={0.3}

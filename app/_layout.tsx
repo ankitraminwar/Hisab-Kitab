@@ -1,45 +1,52 @@
 import { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator } from 'react-native';
+import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
-import * as LocalAuthentication from 'expo-local-authentication';
+import { QueryClientProvider } from '@tanstack/react-query';
 import { Ionicons } from '@expo/vector-icons';
-import { initializeDatabase } from '../src/database';
-import { useAppStore } from '../src/store/appStore';
-import { COLORS, SPACING, TYPOGRAPHY } from '../src/utils/constants';
+
+import { initializeDatabase } from '@/database';
+import { queryClient } from '@/lib/queryClient';
+import { authenticateBiometric, getBiometricPreference } from '@/services/auth';
+import { syncService } from '@/services/syncService';
+import { useAppStore } from '@/store/appStore';
+import { COLORS, SPACING, TYPOGRAPHY } from '@/utils/constants';
 
 export default function RootLayout() {
-  const { isLocked, setLocked, biometricsEnabled } = useAppStore();
-  const [dbReady, setDbReady] = useState(false);
+  const { isLocked, setLocked, biometricsEnabled, setBiometrics } = useAppStore();
   const [initializing, setInitializing] = useState(true);
 
   useEffect(() => {
-    const init = async () => {
+    const bootstrap = async () => {
       try {
         await initializeDatabase();
-        setDbReady(true);
-        if (!biometricsEnabled) {
-          setLocked(false);
-        }
+        const biometricPreference = await getBiometricPreference();
+        setBiometrics(biometricPreference);
+        setLocked(biometricPreference);
+        syncService.start();
+        void syncService.sync('app-start');
       } catch (error) {
-        console.error('DB init error:', error);
-        setDbReady(true);
+        console.error('Initialization failed', error);
         setLocked(false);
       } finally {
         setInitializing(false);
       }
     };
-    init();
-  }, []);
+
+    void bootstrap();
+
+    return () => {
+      syncService.stop();
+    };
+  }, [setBiometrics, setLocked]);
 
   const handleAuthenticate = async () => {
     try {
-      const result = await LocalAuthentication.authenticateAsync({
-        promptMessage: 'Unlock Hisab Kitab',
-        fallbackLabel: 'Use PIN',
-      });
-      if (result.success) setLocked(false);
+      const success = await authenticateBiometric();
+      if (success || !biometricsEnabled) {
+        setLocked(false);
+      }
     } catch {
       setLocked(false);
     }
@@ -47,43 +54,50 @@ export default function RootLayout() {
 
   if (initializing) {
     return (
-      <View style={lockStyles.container}>
+      <View style={styles.lockContainer}>
         <ActivityIndicator size="large" color={COLORS.primary} />
-        <Text style={lockStyles.loadingText}>Loading Hisab Kitab...</Text>
+        <Text style={styles.loadingText}>Loading Hisab Kitab...</Text>
       </View>
     );
   }
 
   if (isLocked && biometricsEnabled) {
     return (
-      <View style={lockStyles.container}>
-        <View style={lockStyles.iconContainer}>
+      <View style={styles.lockContainer}>
+        <View style={styles.iconContainer}>
           <Ionicons name="lock-closed" size={40} color={COLORS.primary} />
         </View>
-        <Text style={lockStyles.title}>Hisab Kitab</Text>
-        <Text style={lockStyles.subtitle}>Your finances are locked</Text>
-        <TouchableOpacity style={lockStyles.unlockBtn} onPress={handleAuthenticate}>
-          <Ionicons name="finger-print" size={24} color="#fff" />
-          <Text style={lockStyles.unlockText}>Unlock</Text>
+        <Text style={styles.title}>Hisab Kitab</Text>
+        <Text style={styles.subtitle}>Your finances are locked</Text>
+        <TouchableOpacity style={styles.unlockButton} onPress={handleAuthenticate}>
+          <Ionicons name="finger-print" size={24} color="#ffffff" />
+          <Text style={styles.unlockText}>Unlock</Text>
         </TouchableOpacity>
       </View>
     );
   }
 
   return (
-    <GestureHandlerRootView style={{ flex: 1 }}>
-      <StatusBar style="light" backgroundColor={COLORS.bg} />
-      <Stack screenOptions={{ headerShown: false, animation: 'slide_from_right' }}>
-        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-        <Stack.Screen name="transactions/add" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
-        <Stack.Screen name="transactions/[id]" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
-      </Stack>
+    <GestureHandlerRootView style={styles.root}>
+      <QueryClientProvider client={queryClient}>
+        <StatusBar style="light" backgroundColor={COLORS.bg} />
+        <Stack screenOptions={{ headerShown: false, animation: 'slide_from_right' }}>
+          <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+          <Stack.Screen name="transactions/add" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
+          <Stack.Screen name="transactions/[id]" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
+          <Stack.Screen name="accounts/index" options={{ animation: 'slide_from_right' }} />
+          <Stack.Screen name="settings/index" options={{ animation: 'slide_from_right' }} />
+        </Stack>
+      </QueryClientProvider>
     </GestureHandlerRootView>
   );
 }
 
-const lockStyles = StyleSheet.create({
-  container: {
+const styles = StyleSheet.create({
+  root: {
+    flex: 1,
+  },
+  lockContainer: {
     flex: 1,
     backgroundColor: COLORS.bg,
     alignItems: 'center',
@@ -94,29 +108,38 @@ const lockStyles = StyleSheet.create({
     width: 80,
     height: 80,
     borderRadius: 40,
-    backgroundColor: COLORS.primary + '20',
+    backgroundColor: `${COLORS.primary}20`,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 2,
-    borderColor: COLORS.primary + '40',
+    borderColor: `${COLORS.primary}40`,
     marginBottom: SPACING.sm,
   },
-  title: { ...TYPOGRAPHY.h1, color: COLORS.textPrimary },
-  subtitle: { ...TYPOGRAPHY.body, color: COLORS.textSecondary },
-  loadingText: { ...TYPOGRAPHY.body, color: COLORS.textSecondary, marginTop: SPACING.md },
-  unlockBtn: {
+  title: {
+    ...TYPOGRAPHY.h1,
+    color: COLORS.textPrimary,
+  },
+  subtitle: {
+    ...TYPOGRAPHY.body,
+    color: COLORS.textSecondary,
+  },
+  loadingText: {
+    ...TYPOGRAPHY.body,
+    color: COLORS.textSecondary,
+    marginTop: SPACING.md,
+  },
+  unlockButton: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: SPACING.sm,
     backgroundColor: COLORS.primary,
     paddingHorizontal: SPACING.xl,
     paddingVertical: SPACING.md,
-    borderRadius: 50,
+    borderRadius: 48,
     marginTop: SPACING.lg,
   },
   unlockText: {
     ...TYPOGRAPHY.bodyMedium,
-    color: '#fff',
-    fontWeight: '700',
+    color: '#ffffff',
   },
 });

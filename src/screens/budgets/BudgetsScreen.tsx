@@ -1,11 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
-  TextInput, Alert, Modal,
+  TextInput, Modal,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
 import { COLORS, SPACING, RADIUS, TYPOGRAPHY, formatCurrency } from '../../utils/constants';
 import { BudgetService, CategoryService } from '../../services/dataServices';
 import { Budget, Category } from '../../utils/types';
@@ -13,7 +12,6 @@ import { Card, ProgressBar, SectionHeader, EmptyState, Button } from '../../comp
 import { format } from 'date-fns';
 
 export default function BudgetsScreen() {
-  const router = useRouter();
   const now = new Date();
   const [year, setYear] = useState(now.getFullYear());
   const [month, setMonth] = useState(String(now.getMonth() + 1).padStart(2, '0'));
@@ -21,16 +19,16 @@ export default function BudgetsScreen() {
   const [showAdd, setShowAdd] = useState(false);
   const [categories, setCategories] = useState<Category[]>([]);
 
-  useEffect(() => { loadData(); }, [year, month]);
-
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     const [b, c] = await Promise.all([
       BudgetService.getForMonth(year, month),
       CategoryService.getAll(),
     ]);
     setBudgets(b);
     setCategories(c.filter(cat => cat.type === 'expense' || cat.type === 'both'));
-  };
+  }, [month, year]);
+
+  useEffect(() => { void loadData(); }, [loadData]);
 
   const totalBudget = budgets.reduce((s, b) => s + b.limit_amount, 0);
   const totalSpent = budgets.reduce((s, b) => s + b.spent, 0);

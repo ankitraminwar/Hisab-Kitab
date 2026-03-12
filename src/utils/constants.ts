@@ -1,31 +1,22 @@
 export const COLORS = {
-  // Brand
   primary: '#7C3AED',
   primaryLight: '#8B5CF6',
   primaryDark: '#6D28D9',
   secondary: '#06B6D4',
-
-  // Semantic
   income: '#22C55E',
   expense: '#F43F5E',
   transfer: '#3B82F6',
   warning: '#F59E0B',
-
-  // Dark theme
   bg: '#0A0A0F',
   bgCard: '#12121A',
   bgElevated: '#1A1A26',
   bgInput: '#1E1E2E',
   border: '#2A2A3E',
   borderLight: '#3A3A52',
-
-  // Text
   textPrimary: '#F1F0FF',
   textSecondary: '#9890B8',
   textMuted: '#5C567A',
   textInverse: '#0A0A0F',
-
-  // Chart colors
   chart: ['#7C3AED', '#06B6D4', '#22C55E', '#F97316', '#F43F5E', '#EAB308', '#EC4899', '#14B8A6'],
 } as const;
 
@@ -73,7 +64,7 @@ export const SHADOWS = {
     elevation: 6,
   },
   lg: {
-    shadowColor: '#000',
+    shadowColor: '#000000',
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.4,
     shadowRadius: 24,
@@ -82,10 +73,23 @@ export const SHADOWS = {
 } as const;
 
 export const CURRENCY = {
-  symbol: '₹',
+  symbol: 'Rs',
   code: 'INR',
   locale: 'en-IN',
 } as const;
+
+export const SYNCABLE_TABLES = [
+  'accounts',
+  'categories',
+  'transactions',
+  'budgets',
+  'goals',
+  'assets',
+  'liabilities',
+  'net_worth_history',
+] as const;
+
+export type SyncableTable = (typeof SYNCABLE_TABLES)[number];
 
 export const formatCurrency = (amount: number, showSign = false): string => {
   const formatted = new Intl.NumberFormat(CURRENCY.locale, {
@@ -95,18 +99,28 @@ export const formatCurrency = (amount: number, showSign = false): string => {
     maximumFractionDigits: 2,
   }).format(Math.abs(amount));
 
-  if (showSign && amount > 0) return `+${formatted}`;
-  if (amount < 0) return `-${formatted}`;
+  if (showSign && amount > 0) {
+    return `+${formatted}`;
+  }
+  if (amount < 0) {
+    return `-${formatted}`;
+  }
   return formatted;
 };
 
 export const formatCompact = (amount: number): string => {
-  if (Math.abs(amount) >= 10000000) return `₹${(amount / 10000000).toFixed(1)}Cr`;
-  if (Math.abs(amount) >= 100000) return `₹${(amount / 100000).toFixed(1)}L`;
-  if (Math.abs(amount) >= 1000) return `₹${(amount / 1000).toFixed(1)}K`;
-  return `₹${amount.toFixed(0)}`;
+  const absoluteAmount = Math.abs(amount);
+  if (absoluteAmount >= 10000000) {
+    return `${CURRENCY.symbol}${(amount / 10000000).toFixed(1)}Cr`;
+  }
+  if (absoluteAmount >= 100000) {
+    return `${CURRENCY.symbol}${(amount / 100000).toFixed(1)}L`;
+  }
+  if (absoluteAmount >= 1000) {
+    return `${CURRENCY.symbol}${(amount / 1000).toFixed(1)}K`;
+  }
+  return `${CURRENCY.symbol}${amount.toFixed(0)}`;
 };
 
-export const generateId = (): string => {
-  return Date.now().toString(36) + Math.random().toString(36).substr(2, 9);
-};
+export const generateId = (): string =>
+  `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 10)}`;

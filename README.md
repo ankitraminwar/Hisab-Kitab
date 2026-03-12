@@ -1,57 +1,139 @@
-# Welcome to your Expo app 👋
+# Hisab Kitab v2.0 — Upgrade Guide
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
-
-## Get started
-
-1. Install dependencies
-
-   ```bash
-   npm install
-   ```
-
-2. Start the app
-
-   ```bash
-   npx expo start
-   ```
-
-In the output, you'll find options to open the app in a
-
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
-
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
-
-## Get a fresh project
-
-When you're ready, run:
+## How to Apply the Patch
 
 ```bash
-npm run reset-project
+# 1. Clone the original repo
+git clone https://github.com/ankitraminwar/Hisab-Kitab.git
+cd Hisab-Kitab
+
+# 2. Apply the patch
+git apply hisab-kitab-upgrade.patch
+
+# 3. Install dependencies
+npm install
+
+# 4. Start the app
+npx expo start
 ```
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+---
 
-### Other setup steps
+## What's New in v2.0
 
-- To set up ESLint for linting, run `npx expo lint`, or follow our guide on ["Using ESLint and Prettier"](https://docs.expo.dev/guides/using-eslint/)
-- If you'd like to set up unit testing, follow our guide on ["Unit Testing with Jest"](https://docs.expo.dev/develop/unit-testing/)
-- Learn more about the TypeScript setup in this template in our guide on ["Using TypeScript"](https://docs.expo.dev/guides/typescript/)
+### Architecture
 
-## Learn more
+- Full modular `src/` folder with modules for transactions, accounts, budgets, goals, reports
+- TypeScript strict mode throughout
+- Zustand global state management
+- SQLite offline-first database with WAL mode for performance
 
-To learn more about developing your project with Expo, look at the following resources:
+### Screens Added
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
+| Screen          | Features                                                                               |
+| --------------- | -------------------------------------------------------------------------------------- |
+| Dashboard       | Net worth hero card, savings rate, account cards, budget overview, recent transactions |
+| Transactions    | FlashList with 50K+ support, search, filters by type/category/account/date             |
+| Add Transaction | Income / Expense / Transfer, category picker, account selector, tags, notes            |
+| Budgets         | Monthly budget tracking, category-wise progress bars, alerts                           |
+| Goals           | Savings goals with progress, fund tracking, deadlines                                  |
+| Reports         | Victory Native pie charts, bar charts, category breakdown table                        |
+| Net Worth       | Assets & liabilities tracker, net worth calculation                                    |
+| Accounts        | Multi-account support (cash, bank, UPI, credit card, wallet)                           |
+| Settings        | Biometric lock, CSV/JSON export, notification toggles                                  |
 
-## Join the community
+### Database Schema
 
-Join our community of developers creating universal apps.
+- **transactions** — Full CRUD with automatic account balance sync and budget tracking
+- **accounts** — Multi-currency, typed accounts
+- **categories** — 17 default + custom categories
+- **budgets** — Monthly per-category budgets with auto-spent calculation
+- **goals** — Savings goals with fund tracking
+- **assets** — 8 asset types (bank, cash, stocks, mutual funds, crypto, gold, real estate, other)
+- **liabilities** — Credit card, loans, mortgage
+- **net_worth_history** — Trend snapshots
 
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
-# Hisab-Kitab
+### Performance
+
+- FlashList for 60 FPS scrolling with 50,000+ transactions
+- SQLite WAL mode + indexes on date, category, account
+- Search < 100ms via SQL LIKE queries with indexes
+- Paginated transaction loading (30 per page)
+
+### Security
+
+- Biometric authentication (Face ID / Fingerprint)
+- App lock screen with unlock flow
+- expo-secure-store for sensitive data
+- No analytics, no ads, no tracking
+
+### Export / Backup
+
+- CSV export of all transactions
+- JSON full backup
+- Shareable via native share sheet
+
+### UI Design
+
+- Dark-first design with purple (#7C3AED) primary accent
+- Income = green (#22C55E), Expense = red (#F43F5E), Transfer = blue
+- Cards with subtle glow borders
+- Bottom sheet modals for forms
+- Smooth tab bar with active indicator
+
+---
+
+## Tech Stack
+
+```
+expo ~51.0.0
+expo-router ~3.5.0
+expo-sqlite ~14.0.3
+@shopify/flash-list ^1.6.3
+victory-native ^41.1.0
+zustand ^4.5.2
+date-fns ^3.6.0
+expo-local-authentication ~14.0.1
+expo-file-system ~17.0.1
+expo-sharing ~12.0.1
+```
+
+## Folder Structure
+
+```
+app/
+  _layout.tsx          # Root layout with DB init + auth lock
+  (tabs)/
+    _layout.tsx        # Bottom tab navigator
+    index.tsx          # Dashboard
+    transactions.tsx   # Transactions list
+    budgets.tsx        # Budget tracker
+    goals.tsx          # Savings goals
+    reports.tsx        # Analytics
+  transactions/
+    add.tsx            # Add/Edit transaction
+    [id].tsx           # Transaction detail
+  accounts/index.tsx   # Accounts manager
+  settings/index.tsx   # Settings
+
+src/
+  database/index.ts    # SQLite schema + seed
+  utils/
+    types.ts           # All TypeScript interfaces
+    constants.ts       # Colors, typography, formatters
+  store/appStore.ts    # Zustand global state
+  services/
+    transactionService.ts   # Transaction CRUD + stats
+    dataServices.ts         # Accounts, Budgets, Goals, Net Worth
+  components/
+    common/index.tsx        # Card, Button, FAB, SearchBar, etc.
+    TransactionItem.tsx     # Optimized FlashList row
+  screens/
+    dashboard/
+    transactions/
+    budgets/
+    goals/
+    reports/
+    accounts/
+    settings/
+```

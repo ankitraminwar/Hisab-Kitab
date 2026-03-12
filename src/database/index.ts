@@ -1,8 +1,201 @@
 import * as SQLite from 'expo-sqlite';
 
-let db: SQLite.SQLiteDatabase;
+import { generateId, SYNCABLE_TABLES, type SyncableTable } from '@/utils/constants';
+import type { SyncQueueItem, SyncStatus } from '@/utils/types';
 
-export const getDatabase = () => {
+let db: SQLite.SQLiteDatabase | null = null;
+let initialized = false;
+
+const normalizeBindValue = (value: unknown): SQLite.SQLiteBindValue => {
+  if (
+    value === null ||
+    value === undefined ||
+    typeof value === 'string' ||
+    typeof value === 'number' ||
+    typeof value === 'boolean' ||
+    value instanceof Uint8Array
+  ) {
+    return value ?? null;
+  }
+
+  return JSON.stringify(value);
+};
+
+const baseSyncColumns = `
+  userId TEXT,
+  syncStatus TEXT NOT NULL DEFAULT 'pending' CHECK(syncStatus IN ('synced', 'pending', 'failed')),
+  lastSyncedAt TEXT,
+  deletedAt TEXT
+`;
+
+const transactionalTables = [
+  `CREATE TABLE IF NOT EXISTS accounts (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    type TEXT NOT NULL CHECK(type IN ('cash','bank','upi','credit_card','wallet','investment')),
+    balance REAL NOT NULL DEFAULT 0,
+    currency TEXT NOT NULL DEFAULT 'INR',
+    color TEXT DEFAULT '#7C3AED',
+    icon TEXT DEFAULT 'wallet',
+    isDefault INTEGER DEFAULT 0,
+    createdAt TEXT NOT NULL,
+    updatedAt TEXT NOT NULL,
+    ${baseSyncColumns}
+  )`,
+  `CREATE TABLE IF NOT EXISTS categories (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    type TEXT NOT NULL CHECK(type IN ('expense','income','both')),
+    icon TEXT NOT NULL,
+    color TEXT NOT NULL,
+    isCustom INTEGER DEFAULT 0,
+    parentId TEXT,
+    createdAt TEXT NOT NULL,
+    updatedAt TEXT NOT NULL,
+    ${baseSyncColumns}
+  )`,
+  `CREATE TABLE IF NOT EXISTS transactions (
+    id TEXT PRIMARY KEY,
+    amount REAL NOT NULL,
+    type TEXT NOT NULL CHECK(type IN ('expense','income','transfer')),
+    categoryId TEXT NOT NULL,
+    accountId TEXT NOT NULL,
+    toAccountId TEXT,
+    merchant TEXT,
+    notes TEXT,
+    tags TEXT DEFAULT '[]',
+    date TEXT NOT NULL,
+    isRecurring INTEGER DEFAULT 0,
+    recurringId TEXT,
+    createdAt TEXT NOT NULL,
+    updatedAt TEXT NOT NULL,
+    ${baseSyncColumns},
+    FOREIGN KEY (categoryId) REFERENCES categories(id),
+    FOREIGN KEY (accountId) REFERENCES accounts(id)
+  )`,
+  `CREATE TABLE IF NOT EXISTS budgets (
+    id TEXT PRIMARY KEY,
+    categoryId TEXT NOT NULL,
+    limit_amount REAL NOT NULL,
+    spent REAL NOT NULL DEFAULT 0,
+    month TEXT NOT NULL,
+    year INTEGER NOT NULL,
+    alertAt INTEGER DEFAULT 80,
+    createdAt TEXT NOT NULL,
+    updatedAt TEXT NOT NULL,
+    ${baseSyncColumns},
+    FOREIGN KEY (categoryId) REFERENCES categories(id)
+  )`,
+  `CREATE TABLE IF NOT EXISTS goals (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    targetAmount REAL NOT NULL,
+    currentAmount REAL NOT NULL DEFAULT 0,
+    deadline TEXT,
+    icon TEXT DEFAULT 'flag',
+    color TEXT DEFAULT '#7C3AED',
+    accountId TEXT,
+    isCompleted INTEGER DEFAULT 0,
+    createdAt TEXT NOT NULL,
+    updatedAt TEXT NOT NULL,
+    ${baseSyncColumns}
+  )`,
+  `CREATE TABLE IF NOT EXISTS assets (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    type TEXT NOT NULL CHECK(type IN ('bank','cash','stocks','mutual_funds','crypto','gold','real_estate','other')),
+    value REAL NOT NULL,
+    notes TEXT,
+    lastUpdated TEXT NOT NULL,
+    createdAt TEXT NOT NULL,
+    updatedAt TEXT NOT NULL,
+    ${baseSyncColumns}
+  )`,
+  `CREATE TABLE IF NOT EXISTS liabilities (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    type TEXT NOT NULL CHECK(type IN ('credit_card','loan','mortgage','other')),
+    amount REAL NOT NULL,
+    interestRate REAL DEFAULT 0,
+    dueDate TEXT,
+    notes TEXT,
+    lastUpdated TEXT NOT NULL,
+    createdAt TEXT NOT NULL,
+    updatedAt TEXT NOT NULL,
+    ${baseSyncColumns}
+  )`,
+  `CREATE TABLE IF NOT EXISTS recurring_templates (
+    id TEXT PRIMARY KEY,
+    amount REAL NOT NULL,
+    type TEXT NOT NULL,
+    categoryId TEXT NOT NULL,
+    accountId TEXT NOT NULL,
+    merchant TEXT,
+    notes TEXT,
+    tags TEXT DEFAULT '[]',
+    frequency TEXT NOT NULL CHECK(frequency IN ('daily','weekly','monthly','yearly')),
+    startDate TEXT NOT NULL,
+    nextDue TEXT NOT NULL,
+    isActive INTEGER DEFAULT 1,
+    createdAt TEXT NOT NULL,
+    updatedAt TEXT NOT NULL,
+    ${baseSyncColumns}
+  )`,
+  `CREATE TABLE IF NOT EXISTS net_worth_history (
+    id TEXT PRIMARY KEY,
+    totalAssets REAL NOT NULL,
+    totalLiabilities REAL NOT NULL,
+    netWorth REAL NOT NULL,
+    date TEXT NOT NULL,
+    createdAt TEXT NOT NULL,
+    updatedAt TEXT NOT NULL,
+    ${baseSyncColumns}
+  )`,
+  `CREATE TABLE IF NOT EXISTS sync_queue (
+    id TEXT PRIMARY KEY,
+    entity TEXT NOT NULL,
+    recordId TEXT NOT NULL,
+    operation TEXT NOT NULL CHECK(operation IN ('upsert', 'delete')),
+    payload TEXT NOT NULL,
+    retryCount INTEGER NOT NULL DEFAULT 0,
+    lastError TEXT,
+    createdAt TEXT NOT NULL,
+    updatedAt TEXT NOT NULL
+  )`,
+  `CREATE TABLE IF NOT EXISTS sync_state (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL,
+    updatedAt TEXT NOT NULL
+  )`,
+];
+
+const indexes = [
+  `CREATE INDEX IF NOT EXISTS idx_transactions_date ON transactions(date DESC, createdAt DESC)`,
+  `CREATE INDEX IF NOT EXISTS idx_transactions_category_account ON transactions(categoryId, accountId)`,
+  `CREATE INDEX IF NOT EXISTS idx_transactions_type ON transactions(type)`,
+  `CREATE INDEX IF NOT EXISTS idx_transactions_updatedAt ON transactions(updatedAt DESC)`,
+  `CREATE INDEX IF NOT EXISTS idx_transactions_deletedAt ON transactions(deletedAt)`,
+  `CREATE INDEX IF NOT EXISTS idx_transactions_search ON transactions(merchant, notes, date)`,
+  `CREATE INDEX IF NOT EXISTS idx_budgets_month_year ON budgets(month, year)`,
+  `CREATE INDEX IF NOT EXISTS idx_sync_queue_entity_record ON sync_queue(entity, recordId)`,
+  `CREATE INDEX IF NOT EXISTS idx_sync_queue_retryCount ON sync_queue(retryCount, updatedAt)`,
+];
+
+const defaultCategories = [
+  { id: 'cat_food', name: 'Food & Dining', type: 'expense', icon: 'restaurant', color: '#F97316' },
+  { id: 'cat_groceries', name: 'Groceries', type: 'expense', icon: 'cart', color: '#22C55E' },
+  { id: 'cat_transport', name: 'Transport', type: 'expense', icon: 'car', color: '#3B82F6' },
+  { id: 'cat_shopping', name: 'Shopping', type: 'expense', icon: 'bag', color: '#EC4899' },
+  { id: 'cat_rent', name: 'Rent', type: 'expense', icon: 'home', color: '#8B5CF6' },
+  { id: 'cat_utilities', name: 'Utilities', type: 'expense', icon: 'flash', color: '#EAB308' },
+  { id: 'cat_salary', name: 'Salary', type: 'income', icon: 'briefcase', color: '#22C55E' },
+  { id: 'cat_freelance', name: 'Freelance', type: 'income', icon: 'laptop', color: '#3B82F6' },
+  { id: 'cat_business', name: 'Business', type: 'income', icon: 'business', color: '#F97316' },
+  { id: 'cat_transfer', name: 'Transfer', type: 'both', icon: 'swap-horizontal', color: '#3B82F6' },
+  { id: 'cat_other', name: 'Other', type: 'both', icon: 'ellipsis-horizontal', color: '#6B7280' },
+];
+
+export const getDatabase = (): SQLite.SQLiteDatabase => {
   if (!db) {
     db = SQLite.openDatabaseSync('hisabkitab.db');
   }
@@ -10,178 +203,191 @@ export const getDatabase = () => {
 };
 
 export const initializeDatabase = async (): Promise<void> => {
+  if (initialized) {
+    return;
+  }
+
   const database = getDatabase();
+  await database.execAsync('PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON; PRAGMA synchronous = NORMAL;');
 
-  await database.execAsync(`
-    PRAGMA journal_mode = WAL;
-    PRAGMA foreign_keys = ON;
+  for (const statement of transactionalTables) {
+    await database.execAsync(statement);
+  }
 
-    CREATE TABLE IF NOT EXISTS accounts (
-      id TEXT PRIMARY KEY,
-      name TEXT NOT NULL,
-      type TEXT NOT NULL CHECK(type IN ('cash','bank','upi','credit_card','wallet','investment')),
-      balance REAL NOT NULL DEFAULT 0,
-      currency TEXT NOT NULL DEFAULT 'INR',
-      color TEXT DEFAULT '#7C3AED',
-      icon TEXT DEFAULT 'wallet',
-      isDefault INTEGER DEFAULT 0,
-      createdAt TEXT NOT NULL,
-      updatedAt TEXT NOT NULL
-    );
-
-    CREATE TABLE IF NOT EXISTS categories (
-      id TEXT PRIMARY KEY,
-      name TEXT NOT NULL,
-      type TEXT NOT NULL CHECK(type IN ('expense','income','both')),
-      icon TEXT NOT NULL,
-      color TEXT NOT NULL,
-      isCustom INTEGER DEFAULT 0,
-      parentId TEXT,
-      createdAt TEXT NOT NULL
-    );
-
-    CREATE TABLE IF NOT EXISTS transactions (
-      id TEXT PRIMARY KEY,
-      amount REAL NOT NULL,
-      type TEXT NOT NULL CHECK(type IN ('expense','income','transfer')),
-      categoryId TEXT NOT NULL,
-      accountId TEXT NOT NULL,
-      toAccountId TEXT,
-      merchant TEXT,
-      notes TEXT,
-      tags TEXT DEFAULT '[]',
-      date TEXT NOT NULL,
-      isRecurring INTEGER DEFAULT 0,
-      recurringId TEXT,
-      createdAt TEXT NOT NULL,
-      updatedAt TEXT NOT NULL,
-      FOREIGN KEY (categoryId) REFERENCES categories(id),
-      FOREIGN KEY (accountId) REFERENCES accounts(id)
-    );
-
-    CREATE TABLE IF NOT EXISTS budgets (
-      id TEXT PRIMARY KEY,
-      categoryId TEXT NOT NULL,
-      limit_amount REAL NOT NULL,
-      spent REAL NOT NULL DEFAULT 0,
-      month TEXT NOT NULL,
-      year INTEGER NOT NULL,
-      alertAt INTEGER DEFAULT 80,
-      createdAt TEXT NOT NULL,
-      updatedAt TEXT NOT NULL,
-      FOREIGN KEY (categoryId) REFERENCES categories(id)
-    );
-
-    CREATE TABLE IF NOT EXISTS goals (
-      id TEXT PRIMARY KEY,
-      name TEXT NOT NULL,
-      targetAmount REAL NOT NULL,
-      currentAmount REAL NOT NULL DEFAULT 0,
-      deadline TEXT,
-      icon TEXT DEFAULT 'flag',
-      color TEXT DEFAULT '#7C3AED',
-      accountId TEXT,
-      isCompleted INTEGER DEFAULT 0,
-      createdAt TEXT NOT NULL,
-      updatedAt TEXT NOT NULL
-    );
-
-    CREATE TABLE IF NOT EXISTS assets (
-      id TEXT PRIMARY KEY,
-      name TEXT NOT NULL,
-      type TEXT NOT NULL CHECK(type IN ('bank','cash','stocks','mutual_funds','crypto','gold','real_estate','other')),
-      value REAL NOT NULL,
-      notes TEXT,
-      lastUpdated TEXT NOT NULL,
-      createdAt TEXT NOT NULL
-    );
-
-    CREATE TABLE IF NOT EXISTS liabilities (
-      id TEXT PRIMARY KEY,
-      name TEXT NOT NULL,
-      type TEXT NOT NULL CHECK(type IN ('credit_card','loan','mortgage','other')),
-      amount REAL NOT NULL,
-      interestRate REAL DEFAULT 0,
-      dueDate TEXT,
-      notes TEXT,
-      lastUpdated TEXT NOT NULL,
-      createdAt TEXT NOT NULL
-    );
-
-    CREATE TABLE IF NOT EXISTS recurring_templates (
-      id TEXT PRIMARY KEY,
-      amount REAL NOT NULL,
-      type TEXT NOT NULL,
-      categoryId TEXT NOT NULL,
-      accountId TEXT NOT NULL,
-      merchant TEXT,
-      notes TEXT,
-      tags TEXT DEFAULT '[]',
-      frequency TEXT NOT NULL CHECK(frequency IN ('daily','weekly','monthly','yearly')),
-      startDate TEXT NOT NULL,
-      nextDue TEXT NOT NULL,
-      isActive INTEGER DEFAULT 1,
-      createdAt TEXT NOT NULL,
-      updatedAt TEXT NOT NULL
-    );
-
-    CREATE TABLE IF NOT EXISTS net_worth_history (
-      id TEXT PRIMARY KEY,
-      totalAssets REAL NOT NULL,
-      totalLiabilities REAL NOT NULL,
-      netWorth REAL NOT NULL,
-      date TEXT NOT NULL
-    );
-
-    CREATE INDEX IF NOT EXISTS idx_transactions_date ON transactions(date);
-    CREATE INDEX IF NOT EXISTS idx_transactions_categoryId ON transactions(categoryId);
-    CREATE INDEX IF NOT EXISTS idx_transactions_accountId ON transactions(accountId);
-    CREATE INDEX IF NOT EXISTS idx_transactions_type ON transactions(type);
-    CREATE INDEX IF NOT EXISTS idx_budgets_month_year ON budgets(month, year);
-  `);
+  for (const statement of indexes) {
+    await database.execAsync(statement);
+  }
 
   await seedDefaultData(database);
+  initialized = true;
 };
 
 const seedDefaultData = async (database: SQLite.SQLiteDatabase) => {
-  const existing = await database.getFirstAsync<{ count: number }>(
-    'SELECT COUNT(*) as count FROM categories'
+  const categoryCount = await database.getFirstAsync<{ count: number }>(
+    'SELECT COUNT(*) as count FROM categories',
   );
-  if (existing && existing.count > 0) return;
 
-  const now = new Date().toISOString();
-
-  const categories = [
-    { id: 'cat_food', name: 'Food & Dining', type: 'expense', icon: 'restaurant', color: '#F97316' },
-    { id: 'cat_groceries', name: 'Groceries', type: 'expense', icon: 'cart', color: '#22C55E' },
-    { id: 'cat_transport', name: 'Transport', type: 'expense', icon: 'car', color: '#3B82F6' },
-    { id: 'cat_shopping', name: 'Shopping', type: 'expense', icon: 'bag', color: '#EC4899' },
-    { id: 'cat_travel', name: 'Travel', type: 'expense', icon: 'airplane', color: '#14B8A6' },
-    { id: 'cat_rent', name: 'Rent', type: 'expense', icon: 'home', color: '#8B5CF6' },
-    { id: 'cat_utilities', name: 'Utilities', type: 'expense', icon: 'flash', color: '#EAB308' },
-    { id: 'cat_entertainment', name: 'Entertainment', type: 'expense', icon: 'film', color: '#F43F5E' },
-    { id: 'cat_health', name: 'Health', type: 'expense', icon: 'medkit', color: '#06B6D4' },
-    { id: 'cat_education', name: 'Education', type: 'expense', icon: 'school', color: '#84CC16' },
-    { id: 'cat_investment', name: 'Investment', type: 'expense', icon: 'trending-up', color: '#10B981' },
-    { id: 'cat_salary', name: 'Salary', type: 'income', icon: 'briefcase', color: '#22C55E' },
-    { id: 'cat_freelance', name: 'Freelance', type: 'income', icon: 'laptop', color: '#3B82F6' },
-    { id: 'cat_business', name: 'Business', type: 'income', icon: 'business', color: '#F97316' },
-    { id: 'cat_interest', name: 'Interest', type: 'income', icon: 'cash', color: '#8B5CF6' },
-    { id: 'cat_other_income', name: 'Other Income', type: 'income', icon: 'add-circle', color: '#14B8A6' },
-    { id: 'cat_other', name: 'Other', type: 'both', icon: 'ellipsis-horizontal', color: '#6B7280' },
-  ];
-
-  for (const cat of categories) {
-    await database.runAsync(
-      'INSERT OR IGNORE INTO categories (id, name, type, icon, color, isCustom, createdAt) VALUES (?, ?, ?, ?, ?, 0, ?)',
-      [cat.id, cat.name, cat.type, cat.icon, cat.color, now]
-    );
+  if ((categoryCount?.count ?? 0) === 0) {
+    const now = new Date().toISOString();
+    for (const category of defaultCategories) {
+      await database.runAsync(
+        `INSERT INTO categories
+          (id, name, type, icon, color, isCustom, parentId, createdAt, updatedAt, userId, syncStatus, lastSyncedAt, deletedAt)
+         VALUES (?, ?, ?, ?, ?, 0, NULL, ?, ?, NULL, 'synced', ?, NULL)`,
+        [category.id, category.name, category.type, category.icon, category.color, now, now, now],
+      );
+    }
   }
 
-  // Default cash account
-  const accountId = 'acc_default_cash';
+  const accountCount = await database.getFirstAsync<{ count: number }>(
+    'SELECT COUNT(*) as count FROM accounts WHERE deletedAt IS NULL',
+  );
+
+  if ((accountCount?.count ?? 0) === 0) {
+    const now = new Date().toISOString();
+    await database.runAsync(
+      `INSERT INTO accounts
+        (id, name, type, balance, currency, color, icon, isDefault, createdAt, updatedAt, userId, syncStatus, lastSyncedAt, deletedAt)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, 'pending', NULL, NULL)`,
+      ['acc_default_cash', 'Cash Wallet', 'cash', 0, 'INR', '#22C55E', 'wallet', 1, now, now],
+    );
+    await enqueueSync('accounts', 'acc_default_cash', 'upsert', {
+      id: 'acc_default_cash',
+      name: 'Cash Wallet',
+      type: 'cash',
+      balance: 0,
+      currency: 'INR',
+      color: '#22C55E',
+      icon: 'wallet',
+      isDefault: 1,
+      createdAt: now,
+      updatedAt: now,
+      syncStatus: 'pending',
+      deletedAt: null,
+      lastSyncedAt: null,
+      userId: null,
+    });
+  }
+};
+
+export const enqueueSync = async (
+  entity: SyncableTable | string,
+  recordId: string,
+  operation: 'upsert' | 'delete',
+  payload: Record<string, unknown>,
+) => {
+  const database = getDatabase();
+  const now = new Date().toISOString();
+  const existing = await database.getFirstAsync<{ id: string }>(
+    'SELECT id FROM sync_queue WHERE entity = ? AND recordId = ?',
+    [entity, recordId],
+  );
+
+  if (existing?.id) {
+    await database.runAsync(
+      `UPDATE sync_queue
+       SET operation = ?, payload = ?, retryCount = 0, lastError = NULL, updatedAt = ?
+       WHERE id = ?`,
+      [operation, JSON.stringify(payload), now, existing.id],
+    );
+    return existing.id;
+  }
+
+  const id = generateId();
   await database.runAsync(
-    'INSERT OR IGNORE INTO accounts (id, name, type, balance, currency, color, icon, isDefault, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-    [accountId, 'Cash Wallet', 'cash', 0, 'INR', '#22C55E', 'cash', 1, now, now]
+    `INSERT INTO sync_queue (id, entity, recordId, operation, payload, retryCount, lastError, createdAt, updatedAt)
+     VALUES (?, ?, ?, ?, ?, 0, NULL, ?, ?)`,
+    [id, entity, recordId, operation, JSON.stringify(payload), now, now],
+  );
+  return id;
+};
+
+export const markRecordSyncStatus = async (
+  table: SyncableTable,
+  id: string,
+  syncStatus: SyncStatus,
+  lastSyncedAt?: string | null,
+) => {
+  const database = getDatabase();
+  await database.runAsync(
+    `UPDATE ${table} SET syncStatus = ?, lastSyncedAt = COALESCE(?, lastSyncedAt) WHERE id = ?`,
+    [syncStatus, lastSyncedAt ?? null, id],
   );
 };
+
+export const removeFromSyncQueue = async (queueId: string) => {
+  await getDatabase().runAsync('DELETE FROM sync_queue WHERE id = ?', [queueId]);
+};
+
+export const listPendingSyncItems = async (): Promise<SyncQueueItem[]> =>
+  getDatabase().getAllAsync<SyncQueueItem>(
+    `SELECT * FROM sync_queue
+     WHERE retryCount < 5
+     ORDER BY createdAt ASC`,
+  );
+
+export const incrementSyncRetry = async (queueId: string, errorMessage: string) => {
+  const now = new Date().toISOString();
+  await getDatabase().runAsync(
+    `UPDATE sync_queue
+     SET retryCount = retryCount + 1, lastError = ?, updatedAt = ?
+     WHERE id = ?`,
+    [errorMessage, now, queueId],
+  );
+};
+
+export const setSyncState = async (key: string, value: string) => {
+  const now = new Date().toISOString();
+  await getDatabase().runAsync(
+    `INSERT INTO sync_state (key, value, updatedAt)
+     VALUES (?, ?, ?)
+     ON CONFLICT(key) DO UPDATE SET value = excluded.value, updatedAt = excluded.updatedAt`,
+    [key, value, now],
+  );
+};
+
+export const getSyncState = async (key: string) => {
+  const row = await getDatabase().getFirstAsync<{ value: string }>(
+    'SELECT value FROM sync_state WHERE key = ?',
+    [key],
+  );
+  return row?.value ?? null;
+};
+
+export const fetchTableRows = async <T>(table: SyncableTable, where = 'deletedAt IS NULL', params: SQLite.SQLiteBindParams = []) =>
+  getDatabase().getAllAsync<T>(`SELECT * FROM ${table} WHERE ${where}`, params);
+
+export const upsertLocalRecord = async (
+  table: SyncableTable,
+  record: Record<string, unknown>,
+) => {
+  const database = getDatabase();
+  const columns = Object.keys(record);
+  const placeholders = columns.map(() => '?').join(', ');
+  const updateSet = columns
+    .filter((column) => column !== 'id')
+    .map((column) => `${column} = excluded.${column}`)
+    .join(', ');
+
+  await database.runAsync(
+    `INSERT INTO ${table} (${columns.join(', ')})
+     VALUES (${placeholders})
+     ON CONFLICT(id) DO UPDATE SET ${updateSet}`,
+    columns.map((column) => normalizeBindValue(record[column])),
+  );
+};
+
+export const softDeleteLocalRecord = async (table: SyncableTable, id: string, deletedAt: string) => {
+  await getDatabase().runAsync(
+    `UPDATE ${table}
+     SET deletedAt = ?, updatedAt = ?, syncStatus = 'synced', lastSyncedAt = ?
+     WHERE id = ?`,
+    [deletedAt, deletedAt, deletedAt, id],
+  );
+};
+
+export const getLastSyncTimestamp = async () => getSyncState('lastSuccessfulSyncAt');
+
+export const setLastSyncTimestamp = async (timestamp: string) => setSyncState('lastSuccessfulSyncAt', timestamp);
+
+export const getSyncableTables = (): readonly SyncableTable[] => SYNCABLE_TABLES;

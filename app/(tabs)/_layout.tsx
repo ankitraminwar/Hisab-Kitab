@@ -1,7 +1,8 @@
+import React from 'react';
 import { Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { View, StyleSheet } from 'react-native';
-import { COLORS, RADIUS } from '../../src/utils/constants';
+import { COLORS } from '../../src/utils/constants';
 
 export default function TabsLayout() {
   return (
@@ -69,8 +70,6 @@ const TabIcon: React.FC<{ name: string; color: string; focused: boolean }> = ({ 
     <Ionicons name={name as any} size={22} color={color} />
   </View>
 );
-
-import React from 'react';
 const iconStyles = StyleSheet.create({
   container: {
     width: 36,

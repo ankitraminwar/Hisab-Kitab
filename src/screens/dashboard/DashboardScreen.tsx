@@ -4,7 +4,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { FlashList } from '@shopify/flash-list';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { COLORS, SPACING, RADIUS, TYPOGRAPHY, formatCurrency, formatCompact } from '../../utils/constants';
 import { TransactionService } from '../../services/transactionService';
@@ -12,7 +12,7 @@ import { AccountService, BudgetService, NetWorthService } from '../../services/d
 import { useAppStore } from '../../store/appStore';
 import { Card, SectionHeader, StatCard, ProgressBar, EmptyState, FAB } from '../../components/common';
 import TransactionItem from '../../components/TransactionItem';
-import { Transaction, Budget } from '../../utils/types';
+import { Budget } from '../../utils/types';
 import { format } from 'date-fns';
 
 export default function DashboardScreen() {
@@ -49,9 +49,9 @@ export default function DashboardScreen() {
       savingsRate,
       netWorth: nw.netWorth,
     });
-  }, []);
+  }, [setAccounts, setBudgets, setDashboardStats, setRecentTransactions]);
 
-  useEffect(() => { loadData(); }, []);
+  useEffect(() => { void loadData(); }, [loadData]);
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -86,7 +86,7 @@ export default function DashboardScreen() {
 
         {/* Net Worth Hero Card */}
         <View style={styles.heroCard}>
-          <LinearGradientView>
+          <LinearGradient colors={[COLORS.primary, '#9D50BB']} style={styles.gradientCard}>
             <Text style={styles.heroLabel}>TOTAL NET WORTH</Text>
             <Text style={styles.heroAmount}>{formatCurrency(netWorth.netWorth)}</Text>
             <View style={styles.heroRow}>
@@ -108,7 +108,7 @@ export default function DashboardScreen() {
                 <Text style={[styles.heroStatValue, { color: COLORS.primary }]}>{formatCompact(dashboardStats.totalBalance)}</Text>
               </View>
             </View>
-          </LinearGradientView>
+          </LinearGradient>
         </View>
 
         {/* Month Stats */}
@@ -166,7 +166,7 @@ export default function DashboardScreen() {
               </Text>
             </TouchableOpacity>
           ))}
-          <TouchableOpacity style={styles.addAccountCard} onPress={() => router.push('/accounts/add')}>
+          <TouchableOpacity style={styles.addAccountCard} onPress={() => router.push('/accounts')}>
             <Ionicons name="add" size={24} color={COLORS.primary} />
             <Text style={styles.addAccountText}>Add Account</Text>
           </TouchableOpacity>
@@ -208,11 +208,6 @@ export default function DashboardScreen() {
     </SafeAreaView>
   );
 }
-
-// Inline gradient-style card using borderColor trick
-const LinearGradientView: React.FC<{ children: React.ReactNode }> = ({ children }) => (
-  <View style={styles.gradientCard}>{children}</View>
-);
 
 const BudgetRow: React.FC<{ budget: Budget }> = ({ budget }) => {
   const progress = budget.limit_amount > 0 ? budget.spent / budget.limit_amount : 0;

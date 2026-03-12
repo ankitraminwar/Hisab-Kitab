@@ -1,211 +1,170 @@
-import React, { useState, useEffect } from 'react';
-import {
-  View, Text, StyleSheet, ScrollView, TouchableOpacity, Dimensions,
-} from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { VictoryPie, VictoryBar, VictoryLine, VictoryChart, VictoryAxis, VictoryTheme } from 'victory-native';
 import { Ionicons } from '@expo/vector-icons';
-import { COLORS, SPACING, RADIUS, TYPOGRAPHY, formatCurrency, formatCompact } from '../../utils/constants';
-import { TransactionService } from '../../services/transactionService';
-import { Card, SectionHeader } from '../../components/common';
+import { Bar, CartesianChart, Line } from 'victory-native';
+import { useFont } from '@shopify/react-native-skia';
 import { format } from 'date-fns';
 
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
-const CHART_WIDTH = SCREEN_WIDTH - SPACING.md * 2 - 32;
+import { Card, SectionHeader } from '@/components/common';
+import { TransactionService } from '@/services/transactionService';
+import { COLORS, SPACING, TYPOGRAPHY, formatCompact, formatCurrency } from '@/utils/constants';
+
+type TrendDatum = {
+  month: string;
+  income: number;
+  expense: number;
+};
+
+type CategoryDatum = {
+  categoryId: string;
+  categoryName: string;
+  categoryColor: string;
+  total: number;
+};
 
 export default function ReportsScreen() {
   const now = new Date();
+  const font = useFont(undefined, 12);
   const [year, setYear] = useState(now.getFullYear());
   const [month, setMonth] = useState(String(now.getMonth() + 1).padStart(2, '0'));
-  const [expenseBreakdown, setExpenseBreakdown] = useState<any[]>([]);
-  const [incomeBreakdown, setIncomeBreakdown] = useState<any[]>([]);
-  const [monthlyTrend, setMonthlyTrend] = useState<any[]>([]);
+  const [expenseBreakdown, setExpenseBreakdown] = useState<CategoryDatum[]>([]);
+  const [monthlyTrend, setMonthlyTrend] = useState<TrendDatum[]>([]);
   const [stats, setStats] = useState({ income: 0, expense: 0 });
 
-  useEffect(() => { loadData(); }, [year, month]);
+  useEffect(() => {
+    const loadData = async () => {
+      const [expenseData, trendData, monthStats] = await Promise.all([
+        TransactionService.getCategoryBreakdown(year, month, 'expense'),
+        TransactionService.getMonthlyTrend(6),
+        TransactionService.getMonthlyStats(year, month),
+      ]);
 
-  const loadData = async () => {
-    const [exp, inc, trend, monthStats] = await Promise.all([
-      TransactionService.getCategoryBreakdown(year, month, 'expense'),
-      TransactionService.getCategoryBreakdown(year, month, 'income'),
-      TransactionService.getMonthlyTrend(6),
-      TransactionService.getMonthlyStats(year, month),
-    ]);
-    setExpenseBreakdown(exp);
-    setIncomeBreakdown(inc);
-    setMonthlyTrend(trend);
-    setStats(monthStats);
-  };
+      setExpenseBreakdown(expenseData);
+      setMonthlyTrend(trendData);
+      setStats(monthStats);
+    };
 
-  const pieColors = COLORS.chart;
+    void loadData();
+  }, [month, year]);
 
-  const expensePieData = expenseBreakdown.slice(0, 6).map((item, i) => ({
-    x: item.categoryName,
-    y: item.total,
-    color: item.categoryColor || pieColors[i % pieColors.length],
+  const savingsRate = stats.income > 0 ? ((stats.income - stats.expense) / stats.income) * 100 : 0;
+  const topExpenseData = expenseBreakdown.slice(0, 5).map((item) => ({
+    label: item.categoryName,
+    total: item.total,
   }));
-
-  const trendBarData = monthlyTrend.map(m => ({
-    month: m.month.slice(5),
-    income: m.income,
-    expense: m.expense,
-  }));
-
-  const savingsRate = stats.income > 0
-    ? ((stats.income - stats.expense) / stats.income * 100).toFixed(1)
-    : '0';
 
   const prevMonth = () => {
-    const d = new Date(year, parseInt(month) - 2, 1);
-    setYear(d.getFullYear());
-    setMonth(String(d.getMonth() + 1).padStart(2, '0'));
+    const date = new Date(year, Number(month) - 2, 1);
+    setYear(date.getFullYear());
+    setMonth(String(date.getMonth() + 1).padStart(2, '0'));
   };
 
   const nextMonth = () => {
-    const d = new Date(year, parseInt(month), 1);
-    setYear(d.getFullYear());
-    setMonth(String(d.getMonth() + 1).padStart(2, '0'));
+    const date = new Date(year, Number(month), 1);
+    setYear(date.getFullYear());
+    setMonth(String(date.getMonth() + 1).padStart(2, '0'));
   };
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.header}>
-        <Text style={styles.title}>Analytics</Text>
+        <Text style={styles.title}>Reports</Text>
       </View>
 
-      {/* Month Picker */}
       <View style={styles.monthPicker}>
-        <TouchableOpacity onPress={prevMonth} style={styles.arrow}>
+        <TouchableOpacity onPress={prevMonth} style={styles.monthButton}>
           <Ionicons name="chevron-back" size={20} color={COLORS.textSecondary} />
         </TouchableOpacity>
-        <Text style={styles.monthLabel}>{format(new Date(year, parseInt(month) - 1), 'MMMM yyyy')}</Text>
-        <TouchableOpacity onPress={nextMonth} style={styles.arrow}>
+        <Text style={styles.monthLabel}>{format(new Date(year, Number(month) - 1), 'MMMM yyyy')}</Text>
+        <TouchableOpacity onPress={nextMonth} style={styles.monthButton}>
           <Ionicons name="chevron-forward" size={20} color={COLORS.textSecondary} />
         </TouchableOpacity>
       </View>
 
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
-        {/* Summary Cards */}
         <View style={styles.statsRow}>
           <Card style={styles.statCard}>
             <Text style={styles.statLabel}>Income</Text>
             <Text style={[styles.statValue, { color: COLORS.income }]}>{formatCompact(stats.income)}</Text>
           </Card>
           <Card style={styles.statCard}>
-            <Text style={styles.statLabel}>Expenses</Text>
+            <Text style={styles.statLabel}>Expense</Text>
             <Text style={[styles.statValue, { color: COLORS.expense }]}>{formatCompact(stats.expense)}</Text>
           </Card>
           <Card style={styles.statCard}>
             <Text style={styles.statLabel}>Savings</Text>
-            <Text style={[styles.statValue, { color: parseFloat(savingsRate) >= 0 ? COLORS.income : COLORS.expense }]}>
-              {savingsRate}%
+            <Text style={[styles.statValue, { color: savingsRate >= 0 ? COLORS.income : COLORS.expense }]}>
+              {savingsRate.toFixed(1)}%
             </Text>
           </Card>
         </View>
 
-        {/* Expense Breakdown Pie */}
-        {expensePieData.length > 0 && (
-          <Card style={styles.chartCard}>
-            <SectionHeader title="Expense Breakdown" />
-            <VictoryPie
-              data={expensePieData}
-              colorScale={expensePieData.map(d => d.color)}
-              width={CHART_WIDTH}
-              height={200}
-              innerRadius={50}
-              padAngle={2}
-              style={{
-                labels: { fill: COLORS.textSecondary, fontSize: 11, fontWeight: '600' },
-              }}
-              labelRadius={({ innerRadius }) => (typeof innerRadius === 'number' ? innerRadius : 0) + 40}
-            />
-            {/* Legend */}
-            <View style={styles.legend}>
-              {expensePieData.map((item, i) => (
-                <View key={i} style={styles.legendItem}>
-                  <View style={[styles.legendDot, { backgroundColor: item.color }]} />
-                  <Text style={styles.legendLabel} numberOfLines={1}>{item.x}</Text>
-                  <Text style={styles.legendValue}>{formatCompact(item.y)}</Text>
-                </View>
-              ))}
-            </View>
-          </Card>
-        )}
-
-        {/* Monthly Trend */}
-        {trendBarData.length > 0 && (
+        {monthlyTrend.length > 0 && (
           <Card style={styles.chartCard}>
             <SectionHeader title="6-Month Trend" />
-            <VictoryChart
-              width={CHART_WIDTH}
-              height={200}
-              theme={VictoryTheme.material}
-              domainPadding={{ x: 20 }}
+            <CartesianChart
+              data={monthlyTrend}
+              xKey="month"
+              yKeys={['income', 'expense']}
+              axisOptions={{
+                font,
+                labelColor: COLORS.textMuted,
+                lineColor: COLORS.border,
+              }}
+              domainPadding={{ left: 20, right: 20, top: 24 }}
             >
-              <VictoryAxis
-                style={{
-                  axis: { stroke: COLORS.border },
-                  tickLabels: { fill: COLORS.textMuted, fontSize: 10 },
-                  grid: { stroke: 'transparent' },
-                }}
-              />
-              <VictoryAxis
-                dependentAxis
-                style={{
-                  axis: { stroke: 'transparent' },
-                  tickLabels: { fill: COLORS.textMuted, fontSize: 10 },
-                  grid: { stroke: COLORS.border, strokeDasharray: '4' },
-                }}
-                tickFormat={v => formatCompact(v)}
-              />
-              <VictoryBar
-                data={trendBarData}
-                x="month"
-                y="income"
-                style={{ data: { fill: COLORS.income + 'CC', width: 12, borderRadius: 4 } }}
-              />
-              <VictoryBar
-                data={trendBarData}
-                x="month"
-                y="expense"
-                style={{ data: { fill: COLORS.expense + 'CC', width: 12, borderRadius: 4 } }}
-              />
-            </VictoryChart>
-            <View style={styles.chartLegend}>
-              <View style={styles.chartLegendItem}>
-                <View style={[styles.legendDot, { backgroundColor: COLORS.income }]} />
-                <Text style={styles.legendLabel}>Income</Text>
-              </View>
-              <View style={styles.chartLegendItem}>
-                <View style={[styles.legendDot, { backgroundColor: COLORS.expense }]} />
-                <Text style={styles.legendLabel}>Expenses</Text>
-              </View>
-            </View>
+              {({ points, chartBounds }) => (
+                <>
+                  <Bar points={points.income} chartBounds={chartBounds} color={`${COLORS.income}99`} />
+                  <Line points={points.expense} color={COLORS.expense} strokeWidth={3} />
+                </>
+              )}
+            </CartesianChart>
           </Card>
         )}
 
-        {/* Category Table */}
-        {expenseBreakdown.length > 0 && (
+        {topExpenseData.length > 0 && (
           <Card style={styles.chartCard}>
             <SectionHeader title="Top Expenses" />
-            {expenseBreakdown.slice(0, 8).map((item, i) => {
-              const pct = stats.expense > 0 ? (item.total / stats.expense * 100).toFixed(1) : '0';
+            <CartesianChart
+              data={topExpenseData}
+              xKey="label"
+              yKeys={['total']}
+              axisOptions={{
+                font,
+                labelColor: COLORS.textMuted,
+                lineColor: COLORS.border,
+              }}
+              domainPadding={{ left: 24, right: 24, top: 24 }}
+            >
+              {({ points, chartBounds }) => (
+                <Bar points={points.total} chartBounds={chartBounds} color={`${COLORS.primary}CC`} />
+              )}
+            </CartesianChart>
+          </Card>
+        )}
+
+        {expenseBreakdown.length > 0 && (
+          <Card style={styles.chartCard}>
+            <SectionHeader title="Expense Breakdown" />
+            {expenseBreakdown.slice(0, 8).map((item) => {
+              const percentage = stats.expense > 0 ? (item.total / stats.expense) * 100 : 0;
               return (
-                <View key={item.categoryId} style={styles.tableRow}>
-                  <View style={[styles.rankBadge, { backgroundColor: COLORS.bgElevated }]}>
-                    <Text style={styles.rankText}>#{i + 1}</Text>
-                  </View>
-                  <View style={[styles.catDot, { backgroundColor: item.categoryColor || COLORS.primary }]} />
-                  <Text style={styles.catName} numberOfLines={1}>{item.categoryName}</Text>
-                  <Text style={styles.catPct}>{pct}%</Text>
-                  <Text style={styles.catAmount}>{formatCurrency(item.total)}</Text>
+                <View key={item.categoryId} style={styles.breakdownRow}>
+                  <View style={[styles.dot, { backgroundColor: item.categoryColor || COLORS.primary }]} />
+                  <Text style={styles.breakdownName} numberOfLines={1}>
+                    {item.categoryName}
+                  </Text>
+                  <Text style={styles.breakdownPercent}>{percentage.toFixed(1)}%</Text>
+                  <Text style={styles.breakdownAmount}>{formatCurrency(item.total)}</Text>
                 </View>
               );
             })}
           </Card>
         )}
 
-        <View style={{ height: 80 }} />
+        <View style={styles.bottomSpacer} />
       </ScrollView>
     </SafeAreaView>
   );
@@ -216,32 +175,45 @@ const styles = StyleSheet.create({
   header: { paddingHorizontal: SPACING.md, paddingVertical: SPACING.sm },
   title: { ...TYPOGRAPHY.h2, color: COLORS.textPrimary },
   monthPicker: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-    gap: SPACING.md, paddingVertical: SPACING.sm, marginBottom: SPACING.sm,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: SPACING.md,
+    paddingBottom: SPACING.sm,
   },
-  arrow: {
-    width: 36, height: 36, borderRadius: 18, backgroundColor: COLORS.bgCard,
-    alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: COLORS.border,
+  monthButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: COLORS.bgCard,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: COLORS.border,
   },
-  monthLabel: { ...TYPOGRAPHY.h3, color: COLORS.textPrimary, minWidth: 140, textAlign: 'center' },
+  monthLabel: {
+    ...TYPOGRAPHY.h3,
+    color: COLORS.textPrimary,
+    minWidth: 140,
+    textAlign: 'center',
+  },
   scroll: { paddingHorizontal: SPACING.md },
   statsRow: { flexDirection: 'row', gap: SPACING.sm, marginBottom: SPACING.md },
   statCard: { flex: 1, alignItems: 'center', paddingVertical: SPACING.md },
-  statLabel: { ...TYPOGRAPHY.caption, color: COLORS.textMuted, marginBottom: 4 },
-  statValue: { ...TYPOGRAPHY.h3, fontWeight: '800' },
+  statLabel: { ...TYPOGRAPHY.caption, color: COLORS.textMuted },
+  statValue: { ...TYPOGRAPHY.h3, fontWeight: '700' },
   chartCard: { marginBottom: SPACING.md },
-  legend: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: SPACING.sm },
-  legendItem: { flexDirection: 'row', alignItems: 'center', gap: 6, width: '48%' },
-  legendDot: { width: 8, height: 8, borderRadius: 4 },
-  legendLabel: { ...TYPOGRAPHY.caption, color: COLORS.textSecondary, flex: 1 },
-  legendValue: { ...TYPOGRAPHY.caption, color: COLORS.textPrimary, fontWeight: '600' },
-  chartLegend: { flexDirection: 'row', justifyContent: 'center', gap: SPACING.lg },
-  chartLegendItem: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  tableRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 8, borderTopWidth: 1, borderTopColor: COLORS.border },
-  rankBadge: { width: 24, height: 24, borderRadius: 6, alignItems: 'center', justifyContent: 'center' },
-  rankText: { ...TYPOGRAPHY.caption, color: COLORS.textMuted, fontWeight: '700' },
-  catDot: { width: 8, height: 8, borderRadius: 4 },
-  catName: { ...TYPOGRAPHY.body, color: COLORS.textPrimary, flex: 1 },
-  catPct: { ...TYPOGRAPHY.caption, color: COLORS.textMuted, width: 40, textAlign: 'right' },
-  catAmount: { ...TYPOGRAPHY.bodyMedium, color: COLORS.textPrimary, fontWeight: '600', width: 80, textAlign: 'right' },
+  breakdownRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.sm,
+    paddingVertical: 8,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.border,
+  },
+  dot: { width: 8, height: 8, borderRadius: 4 },
+  breakdownName: { ...TYPOGRAPHY.body, color: COLORS.textPrimary, flex: 1 },
+  breakdownPercent: { ...TYPOGRAPHY.caption, color: COLORS.textMuted, width: 44, textAlign: 'right' },
+  breakdownAmount: { ...TYPOGRAPHY.bodyMedium, color: COLORS.textPrimary, width: 88, textAlign: 'right' },
+  bottomSpacer: { height: 80 },
 });

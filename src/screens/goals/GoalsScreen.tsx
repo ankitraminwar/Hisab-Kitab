@@ -1,14 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import {
-  View, Text, StyleSheet, ScrollView, TouchableOpacity, Modal, TextInput, Alert,
+  View, Text, StyleSheet, ScrollView, TouchableOpacity, Modal, TextInput,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { COLORS, SPACING, RADIUS, TYPOGRAPHY, formatCurrency, generateId } from '../../utils/constants';
+import { COLORS, SPACING, RADIUS, TYPOGRAPHY, formatCurrency } from '../../utils/constants';
 import { GoalService } from '../../services/dataServices';
 import { Goal } from '../../utils/types';
 import { Card, ProgressBar, EmptyState, Button } from '../../components/common';
-import { format, differenceInDays } from 'date-fns';
+import { differenceInDays } from 'date-fns';
 
 const GOAL_COLORS = ['#7C3AED', '#06B6D4', '#22C55E', '#F97316', '#F43F5E', '#EAB308', '#EC4899'];
 const GOAL_ICONS = ['flag', 'home', 'car', 'airplane', 'laptop', 'gift', 'heart', 'school', 'business', 'medkit'];

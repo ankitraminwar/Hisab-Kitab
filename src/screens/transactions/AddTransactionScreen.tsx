@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
   TextInput, KeyboardAvoidingView, Platform, Alert,
@@ -6,8 +6,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
-import { format } from 'date-fns';
-import { COLORS, SPACING, RADIUS, TYPOGRAPHY, generateId } from '../../utils/constants';
+import { COLORS, SPACING, RADIUS, TYPOGRAPHY } from '../../utils/constants';
 import { TransactionService } from '../../services/transactionService';
 import { AccountService, CategoryService } from '../../services/dataServices';
 import { Button } from '../../components/common';
@@ -37,19 +36,14 @@ export default function AddTransactionScreen() {
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [loading, setLoading] = useState(false);
 
-  useEffect(() => {
-    loadData();
-    if (isEditing) loadExisting();
-  }, []);
-
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     const [cats, accs] = await Promise.all([CategoryService.getAll(), AccountService.getAll()]);
     setCategories(cats.filter(c => c.type === type || c.type === 'both'));
     setAccounts(accs);
     if (accs.length > 0 && !selectedAccount) setSelectedAccount(accs[0]);
-  };
+  }, [selectedAccount, type]);
 
-  const loadExisting = async () => {
+  const loadExisting = useCallback(async () => {
     const tx = await TransactionService.getById(id!);
     if (!tx) return;
     setType(tx.type);
@@ -58,7 +52,14 @@ export default function AddTransactionScreen() {
     setNotes(tx.notes || '');
     setTags(tx.tags.join(', '));
     setDate(tx.date.slice(0, 10));
-  };
+  }, [id]);
+
+  useEffect(() => {
+    void loadData();
+    if (isEditing) {
+      void loadExisting();
+    }
+  }, [isEditing, loadData, loadExisting]);
 
   useEffect(() => {
     setCategories(prev => {
@@ -109,7 +110,7 @@ export default function AddTransactionScreen() {
         await TransactionService.create(data);
       }
       router.back();
-    } catch (e) {
+    } catch {
       Alert.alert('Error', 'Failed to save transaction');
     } finally {
       setLoading(false);

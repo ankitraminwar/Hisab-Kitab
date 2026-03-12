@@ -1,18 +1,80 @@
-import { getDatabase } from '../database';
-import { Transaction, TransactionFilters, TransactionType } from '../utils/types';
-import { generateId } from '../utils/constants';
+import { getDatabase, enqueueSync } from '@/database';
+import type { SQLiteBindValue } from 'expo-sqlite';
+import { generateId } from '@/utils/constants';
+import type { Transaction, TransactionFilters, TransactionType } from '@/utils/types';
+
+const bindValue = (value: unknown): SQLiteBindValue => {
+  if (
+    value === null ||
+    value === undefined ||
+    typeof value === 'string' ||
+    typeof value === 'number' ||
+    typeof value === 'boolean' ||
+    value instanceof Uint8Array
+  ) {
+    return value ?? null;
+  }
+
+  return JSON.stringify(value);
+};
+
+const parseTransaction = (row: Transaction & { tags: string | string[]; isRecurring: number | boolean }): Transaction => ({
+  ...row,
+  tags: Array.isArray(row.tags) ? row.tags : JSON.parse(row.tags || '[]'),
+  isRecurring: Boolean(row.isRecurring),
+});
+
+const applyBalanceEffect = async (
+  type: TransactionType,
+  amount: number,
+  accountId: string,
+  toAccountId?: string,
+  reverse = false,
+) => {
+  const db = getDatabase();
+  const now = new Date().toISOString();
+  const multiplier = reverse ? -1 : 1;
+
+  if (type === 'income') {
+    await db.runAsync(
+      `UPDATE accounts SET balance = balance + ?, updatedAt = ?, syncStatus = 'pending' WHERE id = ?`,
+      [amount * multiplier, now, accountId],
+    );
+    return;
+  }
+
+  if (type === 'expense') {
+    await db.runAsync(
+      `UPDATE accounts SET balance = balance - ?, updatedAt = ?, syncStatus = 'pending' WHERE id = ?`,
+      [amount * multiplier, now, accountId],
+    );
+    return;
+  }
+
+  if (type === 'transfer' && toAccountId) {
+    await db.runAsync(
+      `UPDATE accounts SET balance = balance - ?, updatedAt = ?, syncStatus = 'pending' WHERE id = ?`,
+      [amount * multiplier, now, accountId],
+    );
+    await db.runAsync(
+      `UPDATE accounts SET balance = balance + ?, updatedAt = ?, syncStatus = 'pending' WHERE id = ?`,
+      [amount * multiplier, now, toAccountId],
+    );
+  }
+};
 
 export const TransactionService = {
   async getAll(filters?: TransactionFilters, limit = 50, offset = 0): Promise<Transaction[]> {
-    const db = getDatabase();
     let query = `
       SELECT t.*,
-             c.name as categoryName, c.icon as categoryIcon, c.color as categoryColor,
+             c.name as categoryName,
+             c.icon as categoryIcon,
+             c.color as categoryColor,
              a.name as accountName
       FROM transactions t
       LEFT JOIN categories c ON t.categoryId = c.id
       LEFT JOIN accounts a ON t.accountId = a.id
-      WHERE 1=1
+      WHERE t.deletedAt IS NULL
     `;
     const params: (string | number)[] = [];
 
@@ -28,6 +90,10 @@ export const TransactionService = {
       query += ' AND t.accountId = ?';
       params.push(filters.accountId);
     }
+    if (filters?.toAccountId) {
+      query += ' AND t.toAccountId = ?';
+      params.push(filters.toAccountId);
+    }
     if (filters?.dateFrom) {
       query += ' AND t.date >= ?';
       params.push(filters.dateFrom);
@@ -36,177 +102,230 @@ export const TransactionService = {
       query += ' AND t.date <= ?';
       params.push(filters.dateTo);
     }
-    if (filters?.minAmount) {
+    if (filters?.minAmount !== undefined) {
       query += ' AND t.amount >= ?';
       params.push(filters.minAmount);
     }
-    if (filters?.maxAmount) {
+    if (filters?.maxAmount !== undefined) {
       query += ' AND t.amount <= ?';
       params.push(filters.maxAmount);
     }
     if (filters?.search) {
       query += ' AND (t.merchant LIKE ? OR t.notes LIKE ? OR t.tags LIKE ?)';
-      const s = `%${filters.search}%`;
-      params.push(s, s, s);
+      const searchTerm = `%${filters.search}%`;
+      params.push(searchTerm, searchTerm, searchTerm);
     }
 
     query += ' ORDER BY t.date DESC, t.createdAt DESC LIMIT ? OFFSET ?';
     params.push(limit, offset);
 
-    const rows = await db.getAllAsync<any>(query, params);
+    const rows = await getDatabase().getAllAsync<Transaction & { tags: string; isRecurring: number }>(query, params);
     return rows.map(parseTransaction);
   },
 
   async getById(id: string): Promise<Transaction | null> {
-    const db = getDatabase();
-    const row = await db.getFirstAsync<any>(`
-      SELECT t.*, c.name as categoryName, c.icon as categoryIcon, c.color as categoryColor, a.name as accountName
-      FROM transactions t
-      LEFT JOIN categories c ON t.categoryId = c.id
-      LEFT JOIN accounts a ON t.accountId = a.id
-      WHERE t.id = ?
-    `, [id]);
+    const row = await getDatabase().getFirstAsync<Transaction & { tags: string; isRecurring: number }>(
+      `SELECT t.*,
+              c.name as categoryName,
+              c.icon as categoryIcon,
+              c.color as categoryColor,
+              a.name as accountName
+       FROM transactions t
+       LEFT JOIN categories c ON t.categoryId = c.id
+       LEFT JOIN accounts a ON t.accountId = a.id
+       WHERE t.id = ? AND t.deletedAt IS NULL`,
+      [id],
+    );
+
     return row ? parseTransaction(row) : null;
   },
 
-  async create(data: Omit<Transaction, 'id' | 'createdAt' | 'updatedAt'>): Promise<Transaction> {
-    const db = getDatabase();
-    const id = generateId();
+  async create(data: Omit<Transaction, 'id' | 'createdAt' | 'updatedAt' | 'userId' | 'syncStatus' | 'lastSyncedAt' | 'deletedAt'>): Promise<Transaction> {
     const now = new Date().toISOString();
-    const tags = JSON.stringify(data.tags || []);
+    const transaction: Transaction = {
+      ...data,
+      id: generateId(),
+      createdAt: now,
+      updatedAt: now,
+      userId: null,
+      syncStatus: 'pending',
+      lastSyncedAt: null,
+      deletedAt: null,
+    };
 
-    await db.runAsync(
-      `INSERT INTO transactions (id, amount, type, categoryId, accountId, toAccountId, merchant, notes, tags, date, isRecurring, recurringId, createdAt, updatedAt)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [id, data.amount, data.type, data.categoryId, data.accountId, data.toAccountId || null,
-       data.merchant || null, data.notes || null, tags, data.date, data.isRecurring ? 1 : 0,
-       data.recurringId || null, now, now]
+    await getDatabase().runAsync(
+      `INSERT INTO transactions
+        (id, amount, type, categoryId, accountId, toAccountId, merchant, notes, tags, date, isRecurring, recurringId, createdAt, updatedAt, userId, syncStatus, lastSyncedAt, deletedAt)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        transaction.id,
+        transaction.amount,
+        transaction.type,
+        transaction.categoryId,
+        transaction.accountId,
+        bindValue(transaction.toAccountId),
+        bindValue(transaction.merchant),
+        bindValue(transaction.notes),
+        JSON.stringify(transaction.tags ?? []),
+        transaction.date,
+        transaction.isRecurring ? 1 : 0,
+        bindValue(transaction.recurringId),
+        transaction.createdAt,
+        transaction.updatedAt,
+        bindValue(transaction.userId),
+        transaction.syncStatus,
+        bindValue(transaction.lastSyncedAt),
+        bindValue(transaction.deletedAt),
+      ],
     );
 
-    // Update account balance
-    if (data.type === 'income') {
-      await db.runAsync('UPDATE accounts SET balance = balance + ?, updatedAt = ? WHERE id = ?', [data.amount, now, data.accountId]);
-    } else if (data.type === 'expense') {
-      await db.runAsync('UPDATE accounts SET balance = balance - ?, updatedAt = ? WHERE id = ?', [data.amount, now, data.accountId]);
-    } else if (data.type === 'transfer' && data.toAccountId) {
-      await db.runAsync('UPDATE accounts SET balance = balance - ?, updatedAt = ? WHERE id = ?', [data.amount, now, data.accountId]);
-      await db.runAsync('UPDATE accounts SET balance = balance + ?, updatedAt = ? WHERE id = ?', [data.amount, now, data.toAccountId]);
-    }
+    await applyBalanceEffect(transaction.type, transaction.amount, transaction.accountId, transaction.toAccountId);
+    await enqueueSync('transactions', transaction.id, 'upsert', {
+      ...transaction,
+      tags: JSON.stringify(transaction.tags ?? []),
+      isRecurring: transaction.isRecurring ? 1 : 0,
+    });
 
-    // Update budget spent
-    if (data.type === 'expense') {
-      const month = data.date.slice(5, 7);
-      const year = parseInt(data.date.slice(0, 4));
-      await db.runAsync(
-        'UPDATE budgets SET spent = spent + ? WHERE categoryId = ? AND month = ? AND year = ?',
-        [data.amount, data.categoryId, month, year]
-      );
+    const created = await this.getById(transaction.id);
+    if (!created) {
+      throw new Error('Failed to read created transaction');
     }
-
-    return (await this.getById(id))!;
+    return created;
   },
 
   async update(id: string, data: Partial<Transaction>): Promise<void> {
-    const db = getDatabase();
-    const now = new Date().toISOString();
     const existing = await this.getById(id);
-    if (!existing) throw new Error('Transaction not found');
-
-    // Reverse old balance effect
-    if (existing.type === 'income') {
-      await db.runAsync('UPDATE accounts SET balance = balance - ? WHERE id = ?', [existing.amount, existing.accountId]);
-    } else if (existing.type === 'expense') {
-      await db.runAsync('UPDATE accounts SET balance = balance + ? WHERE id = ?', [existing.amount, existing.accountId]);
+    if (!existing) {
+      throw new Error('Transaction not found');
     }
 
-    const updated = { ...existing, ...data };
-    await db.runAsync(
-      `UPDATE transactions SET amount=?, type=?, categoryId=?, accountId=?, merchant=?, notes=?, tags=?, date=?, updatedAt=? WHERE id=?`,
-      [updated.amount, updated.type, updated.categoryId, updated.accountId,
-       updated.merchant || null, updated.notes || null, JSON.stringify(updated.tags),
-       updated.date, now, id]
+    await applyBalanceEffect(existing.type, existing.amount, existing.accountId, existing.toAccountId, true);
+
+    const updatedAt = new Date().toISOString();
+    const updated: Transaction = {
+      ...existing,
+      ...data,
+      updatedAt,
+      syncStatus: 'pending',
+    };
+
+    await getDatabase().runAsync(
+      `UPDATE transactions
+       SET amount = ?, type = ?, categoryId = ?, accountId = ?, toAccountId = ?, merchant = ?, notes = ?, tags = ?, date = ?, isRecurring = ?, recurringId = ?, updatedAt = ?, syncStatus = 'pending'
+       WHERE id = ?`,
+      [
+        updated.amount,
+        updated.type,
+        updated.categoryId,
+        updated.accountId,
+        bindValue(updated.toAccountId),
+        bindValue(updated.merchant),
+        bindValue(updated.notes),
+        JSON.stringify(updated.tags ?? []),
+        updated.date,
+        updated.isRecurring ? 1 : 0,
+        bindValue(updated.recurringId),
+        updated.updatedAt,
+        id,
+      ],
     );
 
-    // Apply new balance effect
-    if (updated.type === 'income') {
-      await db.runAsync('UPDATE accounts SET balance = balance + ? WHERE id = ?', [updated.amount, updated.accountId]);
-    } else if (updated.type === 'expense') {
-      await db.runAsync('UPDATE accounts SET balance = balance - ? WHERE id = ?', [updated.amount, updated.accountId]);
-    }
+    await applyBalanceEffect(updated.type, updated.amount, updated.accountId, updated.toAccountId);
+    await enqueueSync('transactions', id, 'upsert', {
+      ...updated,
+      tags: JSON.stringify(updated.tags ?? []),
+      isRecurring: updated.isRecurring ? 1 : 0,
+    });
   },
 
   async delete(id: string): Promise<void> {
-    const db = getDatabase();
     const existing = await this.getById(id);
-    if (!existing) return;
-
-    const now = new Date().toISOString();
-    if (existing.type === 'income') {
-      await db.runAsync('UPDATE accounts SET balance = balance - ?, updatedAt = ? WHERE id = ?', [existing.amount, now, existing.accountId]);
-    } else if (existing.type === 'expense') {
-      await db.runAsync('UPDATE accounts SET balance = balance + ?, updatedAt = ? WHERE id = ?', [existing.amount, now, existing.accountId]);
+    if (!existing) {
+      return;
     }
 
-    await db.runAsync('DELETE FROM transactions WHERE id = ?', [id]);
+    const deletedAt = new Date().toISOString();
+    await applyBalanceEffect(existing.type, existing.amount, existing.accountId, existing.toAccountId, true);
+    await getDatabase().runAsync(
+      `UPDATE transactions
+       SET deletedAt = ?, updatedAt = ?, syncStatus = 'pending'
+       WHERE id = ?`,
+      [deletedAt, deletedAt, id],
+    );
+    await enqueueSync('transactions', id, 'delete', { id, deletedAt, updatedAt: deletedAt });
   },
 
   async getMonthlyStats(year: number, month: string): Promise<{ income: number; expense: number }> {
-    const db = getDatabase();
-    const rows = await db.getAllAsync<{ type: string; total: number }>(
-      `SELECT type, SUM(amount) as total FROM transactions
-       WHERE strftime('%Y', date) = ? AND strftime('%m', date) = ?
-       AND type != 'transfer'
+    const rows = await getDatabase().getAllAsync<{ type: string; total: number }>(
+      `SELECT type, COALESCE(SUM(amount), 0) as total
+       FROM transactions
+       WHERE deletedAt IS NULL AND strftime('%Y', date) = ? AND strftime('%m', date) = ? AND type != 'transfer'
        GROUP BY type`,
-      [year.toString(), month]
+      [year.toString(), month],
     );
-    const stats = { income: 0, expense: 0 };
-    for (const row of rows) {
-      if (row.type === 'income') stats.income = row.total;
-      else if (row.type === 'expense') stats.expense = row.total;
-    }
-    return stats;
+
+    return rows.reduce(
+      (accumulator, row) => {
+        if (row.type === 'income') {
+          accumulator.income = row.total;
+        }
+        if (row.type === 'expense') {
+          accumulator.expense = row.total;
+        }
+        return accumulator;
+      },
+      { income: 0, expense: 0 },
+    );
   },
 
   async getCategoryBreakdown(year: number, month: string, type: TransactionType = 'expense') {
-    const db = getDatabase();
-    return db.getAllAsync<{ categoryId: string; categoryName: string; categoryColor: string; total: number }>(
-      `SELECT t.categoryId, c.name as categoryName, c.color as categoryColor, SUM(t.amount) as total
+    return getDatabase().getAllAsync<{
+      categoryId: string;
+      categoryName: string;
+      categoryColor: string;
+      total: number;
+    }>(
+      `SELECT t.categoryId, c.name as categoryName, c.color as categoryColor, COALESCE(SUM(t.amount), 0) as total
        FROM transactions t
        LEFT JOIN categories c ON t.categoryId = c.id
-       WHERE strftime('%Y', t.date) = ? AND strftime('%m', t.date) = ? AND t.type = ?
+       WHERE t.deletedAt IS NULL AND strftime('%Y', t.date) = ? AND strftime('%m', t.date) = ? AND t.type = ?
        GROUP BY t.categoryId
        ORDER BY total DESC`,
-      [year.toString(), month, type]
+      [year.toString(), month, type],
     );
   },
 
   async getMonthlyTrend(months = 6) {
-    const db = getDatabase();
-    return db.getAllAsync<{ month: string; income: number; expense: number }>(
+    return getDatabase().getAllAsync<{ month: string; income: number; expense: number }>(
       `SELECT strftime('%Y-%m', date) as month,
-              SUM(CASE WHEN type='income' THEN amount ELSE 0 END) as income,
-              SUM(CASE WHEN type='expense' THEN amount ELSE 0 END) as expense
+              COALESCE(SUM(CASE WHEN type = 'income' THEN amount ELSE 0 END), 0) as income,
+              COALESCE(SUM(CASE WHEN type = 'expense' THEN amount ELSE 0 END), 0) as expense
        FROM transactions
-       WHERE date >= date('now', '-${months} months')
+       WHERE deletedAt IS NULL AND date >= date('now', ?)
        GROUP BY month
-       ORDER BY month ASC`
+       ORDER BY month ASC`,
+      [`-${months} months`],
     );
   },
 
   async exportToCSV(): Promise<string> {
     const transactions = await this.getAll(undefined, 100000, 0);
-    const headers = 'Date,Type,Amount,Category,Account,Merchant,Notes,Tags\n';
-    const rows = transactions.map(t =>
-      `${t.date},${t.type},${t.amount},${t.categoryName || ''},${t.accountName || ''},${t.merchant || ''},${t.notes || ''},${t.tags.join(';')}`
-    ).join('\n');
-    return headers + rows;
+    const header = 'Date,Type,Amount,Category,Account,Merchant,Notes,Tags';
+    const rows = transactions.map((transaction) =>
+      [
+        transaction.date,
+        transaction.type,
+        transaction.amount,
+        transaction.categoryName ?? '',
+        transaction.accountName ?? '',
+        transaction.merchant ?? '',
+        transaction.notes ?? '',
+        transaction.tags.join(';'),
+      ]
+        .map((value) => `"${String(value).replace(/"/g, '""')}"`)
+        .join(','),
+    );
+
+    return [header, ...rows].join('\n');
   },
 };
-
-function parseTransaction(row: any): Transaction {
-  return {
-    ...row,
-    tags: typeof row.tags === 'string' ? JSON.parse(row.tags) : (row.tags || []),
-    isRecurring: row.isRecurring === 1,
-  };
-}
