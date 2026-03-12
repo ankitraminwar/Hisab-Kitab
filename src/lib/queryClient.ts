@@ -1,23 +1,16 @@
-import NetInfo from '@react-native-community/netinfo';
-import { QueryClient, onlineManager } from '@tanstack/react-query';
-
-onlineManager.setEventListener((setOnline) =>
-  NetInfo.addEventListener((state) => {
-    setOnline(Boolean(state.isConnected && state.isInternetReachable !== false));
-  }),
-);
+import { QueryClient } from '@tanstack/react-query';
 
 export const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      staleTime: 15_000,
-      gcTime: 5 * 60_000,
+      staleTime: 5 * 60 * 1000,
+      gcTime: 10 * 60 * 1000,
       retry: 1,
-      refetchOnReconnect: true,
       refetchOnWindowFocus: false,
+      refetchOnReconnect: true,
     },
     mutations: {
-      retry: 1,
+      retry: 0,
     },
   },
 });

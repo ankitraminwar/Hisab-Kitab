@@ -1,16 +1,28 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
-import React, { useCallback, useEffect, useState } from 'react';
-import { Alert, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { FlashList } from '@shopify/flash-list';
 import { format } from 'date-fns';
+import { useRouter } from 'expo-router';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import {
+  Alert,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+} from 'react-native';
+import Animated, { FadeInDown, FadeInRight } from 'react-native-reanimated';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { EmptyState, FAB, SearchBar } from '@/components/common';
+import { EmptyState, FAB } from '@/components/common';
 import TransactionItem from '@/components/TransactionItem';
 import { TransactionService } from '@/services/transactionService';
 import { COLORS, RADIUS, SPACING, TYPOGRAPHY } from '@/utils/constants';
-import type { Transaction, TransactionFilters, TransactionType } from '@/utils/types';
+import type {
+  Transaction,
+  TransactionFilters,
+  TransactionType,
+} from '@/utils/types';
 
 const TYPE_FILTERS: { key: TransactionType | 'all'; label: string }[] = [
   { key: 'all', label: 'All' },
@@ -19,71 +31,120 @@ const TYPE_FILTERS: { key: TransactionType | 'all'; label: string }[] = [
   { key: 'transfer', label: 'Transfers' },
 ];
 
+const PAGE_SIZE = 30;
+const SEARCH_DEBOUNCE_MS = 300;
+
 export default function TransactionsScreen() {
   const router = useRouter();
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [search, setSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [typeFilter, setTypeFilter] = useState<TransactionType | 'all'>('all');
   const [loading, setLoading] = useState(false);
-  const [page, setPage] = useState(0);
   const [hasMore, setHasMore] = useState(true);
-  const pageSize = 30;
+  const loadingRef = useRef(false);
+  const offsetRef = useRef(0);
+  const searchTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(
+    undefined,
+  );
+
+  useEffect(() => {
+    if (searchTimerRef.current) {
+      clearTimeout(searchTimerRef.current);
+    }
+    searchTimerRef.current = setTimeout(() => {
+      setDebouncedSearch(search);
+    }, SEARCH_DEBOUNCE_MS);
+
+    return () => {
+      if (searchTimerRef.current) {
+        clearTimeout(searchTimerRef.current);
+      }
+    };
+  }, [search]);
 
   const loadTransactions = useCallback(
-    async (reset = true) => {
-      if (loading) {
+    async (reset: boolean) => {
+      if (loadingRef.current) {
         return;
       }
 
+      loadingRef.current = true;
       setLoading(true);
       try {
         const filters: TransactionFilters = {};
         if (typeFilter !== 'all') {
           filters.type = typeFilter;
         }
-        if (search.trim()) {
-          filters.search = search.trim();
+        if (debouncedSearch.trim()) {
+          filters.search = debouncedSearch.trim();
         }
 
-        const offset = reset ? 0 : page * pageSize;
-        const rows = await TransactionService.getAll(filters, pageSize, offset);
+        const offset = reset ? 0 : offsetRef.current;
+        const rows = await TransactionService.getAll(
+          filters,
+          PAGE_SIZE,
+          offset,
+        );
 
-        setTransactions((current) => (reset ? rows : [...current, ...rows]));
-        setPage((current) => (reset ? 1 : current + 1));
-        setHasMore(rows.length === pageSize);
+        if (reset) {
+          setTransactions(rows);
+          offsetRef.current = rows.length;
+        } else {
+          setTransactions((current) => [...current, ...rows]);
+          offsetRef.current += rows.length;
+        }
+        setHasMore(rows.length === PAGE_SIZE);
       } finally {
+        loadingRef.current = false;
         setLoading(false);
       }
     },
-    [loading, page, search, typeFilter],
+    [debouncedSearch, typeFilter],
   );
 
   useEffect(() => {
     void loadTransactions(true);
   }, [loadTransactions]);
 
-  const handleDelete = (transaction: Transaction) => {
-    Alert.alert('Delete transaction', `Delete Rs ${transaction.amount} transaction?`, [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Delete',
-        style: 'destructive',
-        onPress: async () => {
-          await TransactionService.delete(transaction.id);
-          void loadTransactions(true);
-        },
-      },
-    ]);
-  };
-
-  const grouped = transactions.reduce<Record<string, Transaction[]>>((accumulator, transaction) => {
-    const dateKey = transaction.date.slice(0, 10);
-    if (!accumulator[dateKey]) {
-      accumulator[dateKey] = [];
+  const handleLoadMore = useCallback(() => {
+    if (hasMore && !loadingRef.current) {
+      void loadTransactions(false);
     }
-    accumulator[dateKey].push(transaction);
-    return accumulator;
-  }, {});
+  }, [hasMore, loadTransactions]);
+
+  const handleDelete = useCallback(
+    (transaction: Transaction) => {
+      Alert.alert(
+        'Delete transaction',
+        `Delete ₹${transaction.amount} transaction?`,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Delete',
+            style: 'destructive',
+            onPress: async () => {
+              await TransactionService.delete(transaction.id);
+              void loadTransactions(true);
+            },
+          },
+        ],
+      );
+    },
+    [loadTransactions],
+  );
+
+  const grouped = transactions.reduce<Record<string, Transaction[]>>(
+    (accumulator, transaction) => {
+      const dateKey = transaction.date.slice(0, 10);
+      if (!accumulator[dateKey]) {
+        accumulator[dateKey] = [];
+      }
+      accumulator[dateKey].push(transaction);
+      return accumulator;
+    },
+    {},
+  );
 
   const listData: (string | Transaction)[] = [];
   Object.entries(grouped).forEach(([dateKey, rows]) => {
@@ -93,39 +154,85 @@ export default function TransactionsScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      <View style={styles.header}>
+      <Animated.View entering={FadeInDown.duration(400)} style={styles.header}>
         <Text style={styles.title}>Transactions</Text>
-        <TouchableOpacity onPress={() => router.push('/reports')} style={styles.headerButton}>
-          <Ionicons name="bar-chart-outline" size={20} color={COLORS.textSecondary} />
+        <TouchableOpacity
+          onPress={() => router.push('/reports')}
+          style={styles.headerButton}
+        >
+          <Ionicons
+            name="bar-chart-outline"
+            size={20}
+            color={COLORS.textSecondary}
+          />
         </TouchableOpacity>
-      </View>
+      </Animated.View>
 
-      <View style={styles.filters}>
-        <SearchBar value={search} onChangeText={setSearch} placeholder="Search transactions..." />
+      <Animated.View
+        entering={FadeInDown.duration(400).delay(100)}
+        style={styles.filters}
+      >
+        <View style={styles.searchContainer}>
+          <Ionicons name="search-outline" size={18} color={COLORS.textMuted} />
+          <TextInput
+            value={search}
+            onChangeText={setSearch}
+            placeholder="Search transactions..."
+            placeholderTextColor={COLORS.textMuted}
+            style={styles.searchInput}
+            returnKeyType="search"
+          />
+          {search.length > 0 && (
+            <TouchableOpacity onPress={() => setSearch('')}>
+              <Ionicons
+                name="close-circle"
+                size={18}
+                color={COLORS.textMuted}
+              />
+            </TouchableOpacity>
+          )}
+        </View>
         <View style={styles.filterRow}>
           {TYPE_FILTERS.map((filter) => (
             <TouchableOpacity
               key={filter.key}
-              style={[styles.filterChip, typeFilter === filter.key && styles.filterChipActive]}
+              style={[
+                styles.filterChip,
+                typeFilter === filter.key && styles.filterChipActive,
+              ]}
               onPress={() => setTypeFilter(filter.key)}
             >
-              <Text style={[styles.filterChipText, typeFilter === filter.key && styles.filterChipTextActive]}>
+              <Text
+                style={[
+                  styles.filterChipText,
+                  typeFilter === filter.key && styles.filterChipTextActive,
+                ]}
+              >
                 {filter.label}
               </Text>
             </TouchableOpacity>
           ))}
         </View>
-      </View>
+      </Animated.View>
 
       {transactions.length === 0 && !loading ? (
-        <EmptyState icon="receipt-outline" title="No transactions found" subtitle="Adjust the filters or add a new transaction." />
+        <Animated.View entering={FadeInRight.duration(500).delay(200)}>
+          <EmptyState
+            icon="receipt-outline"
+            title="No transactions found"
+            subtitle="Adjust the filters or add a new transaction."
+          />
+        </Animated.View>
       ) : (
-        <FlashList
+        <FlashList<string | Transaction>
           data={listData}
+          drawDistance={300}
           renderItem={({ item }) =>
             typeof item === 'string' ? (
               <View style={styles.dateHeader}>
-                <Text style={styles.dateText}>{format(new Date(item), 'EEEE, d MMMM')}</Text>
+                <Text style={styles.dateText}>
+                  {format(new Date(item), 'EEEE, d MMMM')}
+                </Text>
               </View>
             ) : (
               <TransactionItem
@@ -135,13 +242,11 @@ export default function TransactionsScreen() {
               />
             )
           }
-          keyExtractor={(item) => (typeof item === 'string' ? `header-${item}` : item.id)}
+          keyExtractor={(item) =>
+            typeof item === 'string' ? `header-${item}` : item.id
+          }
           getItemType={(item) => (typeof item === 'string' ? 'header' : 'row')}
-          onEndReached={() => {
-            if (hasMore) {
-              void loadTransactions(false);
-            }
-          }}
+          onEndReached={handleLoadMore}
           onEndReachedThreshold={0.3}
           contentContainerStyle={styles.list}
         />
@@ -177,6 +282,23 @@ const styles = StyleSheet.create({
     gap: SPACING.sm,
     marginBottom: SPACING.sm,
   },
+  searchContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.bgInput,
+    borderRadius: RADIUS.md,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: 10,
+    gap: SPACING.sm,
+  },
+  searchInput: {
+    flex: 1,
+    color: COLORS.textPrimary,
+    ...TYPOGRAPHY.body,
+    paddingVertical: 0,
+  },
   filterRow: { flexDirection: 'row', gap: SPACING.sm },
   filterChip: {
     paddingHorizontal: 14,
@@ -190,9 +312,17 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.primary,
     borderColor: COLORS.primary,
   },
-  filterChipText: { ...TYPOGRAPHY.caption, color: COLORS.textMuted, fontWeight: '600' },
+  filterChipText: {
+    ...TYPOGRAPHY.caption,
+    color: COLORS.textMuted,
+    fontWeight: '600',
+  },
   filterChipTextActive: { color: '#fff' },
   dateHeader: { paddingHorizontal: SPACING.md, paddingVertical: 8 },
-  dateText: { ...TYPOGRAPHY.label, color: COLORS.textMuted, textTransform: 'uppercase' },
+  dateText: {
+    ...TYPOGRAPHY.label,
+    color: COLORS.textMuted,
+    textTransform: 'uppercase',
+  },
   list: { paddingBottom: 120 },
 });

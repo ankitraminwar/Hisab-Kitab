@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useMemo } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -28,7 +28,8 @@ import { applyNotificationPreferences } from '@/services/notifications';
 import { syncService } from '@/services/syncService';
 import { UserProfileService } from '@/services/dataServices';
 import { useAppStore } from '@/store/appStore';
-import { COLORS, SPACING, TYPOGRAPHY } from '@/utils/constants';
+import { SPACING, TYPOGRAPHY } from '@/utils/constants';
+import { useTheme } from '@/hooks/useTheme';
 
 export default function RootLayout() {
   const router = useRouter();
@@ -50,6 +51,9 @@ export default function RootLayout() {
   } = useAppStore();
   const [initializing, setInitializing] = useState(true);
   const [session, setSession] = useState<Session | null>(null);
+
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
 
   useEffect(() => {
     const bootstrap = async () => {
@@ -229,7 +233,7 @@ export default function RootLayout() {
   if (initializing) {
     return (
       <View style={styles.lockContainer}>
-        <ActivityIndicator size="large" color={COLORS.primary} />
+        <ActivityIndicator size="large" color={colors.primary} />
         <Text style={styles.loadingText}>Loading Hisab Kitab...</Text>
       </View>
     );
@@ -239,7 +243,7 @@ export default function RootLayout() {
     return (
       <View style={styles.lockContainer}>
         <View style={styles.iconContainer}>
-          <Ionicons name="lock-closed" size={40} color={COLORS.primary} />
+          <Ionicons name="lock-closed" size={40} color={colors.primary} />
         </View>
         <Text style={styles.title}>Hisab Kitab</Text>
         <Text style={styles.subtitle}>Your finances are locked</Text>
@@ -259,7 +263,7 @@ export default function RootLayout() {
       <QueryClientProvider client={queryClient}>
         <StatusBar
           style={theme === 'dark' ? 'light' : 'dark'}
-          backgroundColor={COLORS.bg}
+          backgroundColor={colors.bg}
         />
         <Stack
           screenOptions={{ headerShown: false, animation: 'slide_from_right' }}
@@ -289,53 +293,54 @@ export default function RootLayout() {
   );
 }
 
-const styles = StyleSheet.create({
-  root: {
-    flex: 1,
-  },
-  lockContainer: {
-    flex: 1,
-    backgroundColor: COLORS.bg,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: SPACING.md,
-  },
-  iconContainer: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: `${COLORS.primary}20`,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 2,
-    borderColor: `${COLORS.primary}40`,
-    marginBottom: SPACING.sm,
-  },
-  title: {
-    ...TYPOGRAPHY.h1,
-    color: COLORS.textPrimary,
-  },
-  subtitle: {
-    ...TYPOGRAPHY.body,
-    color: COLORS.textSecondary,
-  },
-  loadingText: {
-    ...TYPOGRAPHY.body,
-    color: COLORS.textSecondary,
-    marginTop: SPACING.md,
-  },
-  unlockButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: SPACING.sm,
-    backgroundColor: COLORS.primary,
-    paddingHorizontal: SPACING.xl,
-    paddingVertical: SPACING.md,
-    borderRadius: 48,
-    marginTop: SPACING.lg,
-  },
-  unlockText: {
-    ...TYPOGRAPHY.bodyMedium,
-    color: '#ffffff',
-  },
-});
+const createStyles = (colors: any) =>
+  StyleSheet.create({
+    root: {
+      flex: 1,
+    },
+    lockContainer: {
+      flex: 1,
+      backgroundColor: colors.bg,
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: SPACING.md,
+    },
+    iconContainer: {
+      width: 80,
+      height: 80,
+      borderRadius: 40,
+      backgroundColor: `${colors.primary}20`,
+      alignItems: 'center',
+      justifyContent: 'center',
+      borderWidth: 2,
+      borderColor: `${colors.primary}40`,
+      marginBottom: SPACING.sm,
+    },
+    title: {
+      ...TYPOGRAPHY.h1,
+      color: colors.textPrimary,
+    },
+    subtitle: {
+      ...TYPOGRAPHY.body,
+      color: colors.textSecondary,
+    },
+    loadingText: {
+      ...TYPOGRAPHY.body,
+      color: colors.textSecondary,
+      marginTop: SPACING.md,
+    },
+    unlockButton: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: SPACING.sm,
+      backgroundColor: colors.primary,
+      paddingHorizontal: SPACING.xl,
+      paddingVertical: SPACING.md,
+      borderRadius: 48,
+      marginTop: SPACING.lg,
+    },
+    unlockText: {
+      ...TYPOGRAPHY.bodyMedium,
+      color: '#ffffff',
+    },
+  });

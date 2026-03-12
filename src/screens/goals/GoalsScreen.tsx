@@ -1,17 +1,49 @@
 import React, { useState, useEffect } from 'react';
 import {
-  View, Text, StyleSheet, ScrollView, TouchableOpacity, Modal, TextInput,
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  TouchableOpacity,
+  Modal,
+  TextInput,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { COLORS, SPACING, RADIUS, TYPOGRAPHY, formatCurrency } from '../../utils/constants';
+import Animated, { FadeInDown } from 'react-native-reanimated';
+import {
+  COLORS,
+  SPACING,
+  RADIUS,
+  TYPOGRAPHY,
+  formatCurrency,
+} from '../../utils/constants';
 import { GoalService } from '../../services/dataServices';
 import { Goal } from '../../utils/types';
 import { Card, ProgressBar, EmptyState, Button } from '../../components/common';
 import { differenceInDays } from 'date-fns';
 
-const GOAL_COLORS = ['#7C3AED', '#06B6D4', '#22C55E', '#F97316', '#F43F5E', '#EAB308', '#EC4899'];
-const GOAL_ICONS = ['flag', 'home', 'car', 'airplane', 'laptop', 'gift', 'heart', 'school', 'business', 'medkit'];
+const GOAL_COLORS = [
+  '#7C3AED',
+  '#06B6D4',
+  '#22C55E',
+  '#F97316',
+  '#F43F5E',
+  '#EAB308',
+  '#EC4899',
+];
+const GOAL_ICONS = [
+  'flag',
+  'home',
+  'car',
+  'airplane',
+  'laptop',
+  'gift',
+  'heart',
+  'school',
+  'business',
+  'medkit',
+];
 
 export default function GoalsScreen() {
   const [goals, setGoals] = useState<Goal[]>([]);
@@ -19,7 +51,9 @@ export default function GoalsScreen() {
   const [selectedGoal, setSelectedGoal] = useState<Goal | null>(null);
   const [fundAmount, setFundAmount] = useState('');
 
-  useEffect(() => { loadGoals(); }, []);
+  useEffect(() => {
+    loadGoals();
+  }, []);
 
   const loadGoals = async () => {
     const data = await GoalService.getAll();
@@ -34,39 +68,51 @@ export default function GoalsScreen() {
     loadGoals();
   };
 
-  const active = goals.filter(g => !g.isCompleted);
-  const completed = goals.filter(g => g.isCompleted);
+  const active = goals.filter((g) => !g.isCompleted);
+  const completed = goals.filter((g) => g.isCompleted);
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      <View style={styles.header}>
+      <Animated.View entering={FadeInDown.duration(400)} style={styles.header}>
         <Text style={styles.title}>Savings Goals</Text>
-        <TouchableOpacity onPress={() => setShowAdd(true)} style={styles.addBtn}>
+        <TouchableOpacity
+          onPress={() => setShowAdd(true)}
+          style={styles.addBtn}
+        >
           <Ionicons name="add" size={22} color={COLORS.primary} />
         </TouchableOpacity>
-      </View>
+      </Animated.View>
 
-      <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        contentContainerStyle={styles.scroll}
+        showsVerticalScrollIndicator={false}
+      >
         {/* Summary */}
         {goals.length > 0 && (
-          <View style={styles.summaryRow}>
-            <Card style={styles.summaryCard}>
-              <Text style={styles.summaryLabel}>Active Goals</Text>
-              <Text style={styles.summaryValue}>{active.length}</Text>
-            </Card>
-            <Card style={styles.summaryCard}>
-              <Text style={styles.summaryLabel}>Total Target</Text>
-              <Text style={styles.summaryValue}>
-                {formatCurrency(goals.reduce((s, g) => s + g.targetAmount, 0))}
-              </Text>
-            </Card>
-            <Card style={styles.summaryCard}>
-              <Text style={styles.summaryLabel}>Saved</Text>
-              <Text style={[styles.summaryValue, { color: COLORS.income }]}>
-                {formatCurrency(goals.reduce((s, g) => s + g.currentAmount, 0))}
-              </Text>
-            </Card>
-          </View>
+          <Animated.View entering={FadeInDown.duration(500).delay(100)}>
+            <View style={styles.summaryRow}>
+              <Card style={styles.summaryCard}>
+                <Text style={styles.summaryLabel}>Active Goals</Text>
+                <Text style={styles.summaryValue}>{active.length}</Text>
+              </Card>
+              <Card style={styles.summaryCard}>
+                <Text style={styles.summaryLabel}>Total Target</Text>
+                <Text style={styles.summaryValue}>
+                  {formatCurrency(
+                    goals.reduce((s, g) => s + g.targetAmount, 0),
+                  )}
+                </Text>
+              </Card>
+              <Card style={styles.summaryCard}>
+                <Text style={styles.summaryLabel}>Saved</Text>
+                <Text style={[styles.summaryValue, { color: COLORS.income }]}>
+                  {formatCurrency(
+                    goals.reduce((s, g) => s + g.currentAmount, 0),
+                  )}
+                </Text>
+              </Card>
+            </View>
+          </Animated.View>
         )}
 
         {active.length === 0 && completed.length === 0 ? (
@@ -82,20 +128,29 @@ export default function GoalsScreen() {
             {active.length > 0 && (
               <>
                 <Text style={styles.sectionTitle}>Active Goals</Text>
-                {active.map(goal => (
-                  <GoalCard
+                {active.map((goal, index) => (
+                  <Animated.View
                     key={goal.id}
-                    goal={goal}
-                    onAddFunds={() => setSelectedGoal(goal)}
-                    onDelete={async () => { await GoalService.delete(goal.id); loadGoals(); }}
-                  />
+                    entering={FadeInDown.duration(400).delay(200 + index * 60)}
+                  >
+                    <GoalCard
+                      goal={goal}
+                      onAddFunds={() => setSelectedGoal(goal)}
+                      onDelete={async () => {
+                        await GoalService.delete(goal.id);
+                        loadGoals();
+                      }}
+                    />
+                  </Animated.View>
                 ))}
               </>
             )}
             {completed.length > 0 && (
               <>
-                <Text style={[styles.sectionTitle, { marginTop: SPACING.md }]}>Completed 🎉</Text>
-                {completed.map(goal => (
+                <Text style={[styles.sectionTitle, { marginTop: SPACING.md }]}>
+                  Completed 🎉
+                </Text>
+                {completed.map((goal) => (
                   <GoalCard key={goal.id} goal={goal} completed />
                 ))}
               </>
@@ -106,13 +161,21 @@ export default function GoalsScreen() {
       </ScrollView>
 
       {/* Add Funds Modal */}
-      <Modal visible={!!selectedGoal} transparent animationType="slide" onRequestClose={() => setSelectedGoal(null)}>
+      <Modal
+        visible={!!selectedGoal}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setSelectedGoal(null)}
+      >
         <View style={modalStyles.overlay}>
           <View style={modalStyles.sheet}>
             <View style={modalStyles.handle} />
-            <Text style={modalStyles.title}>Add Funds to {selectedGoal?.name}</Text>
+            <Text style={modalStyles.title}>
+              Add Funds to {selectedGoal?.name}
+            </Text>
             <Text style={modalStyles.goalInfo}>
-              {formatCurrency(selectedGoal?.currentAmount || 0)} / {formatCurrency(selectedGoal?.targetAmount || 0)}
+              {formatCurrency(selectedGoal?.currentAmount || 0)} /{' '}
+              {formatCurrency(selectedGoal?.targetAmount || 0)}
             </Text>
             <TextInput
               value={fundAmount}
@@ -123,23 +186,45 @@ export default function GoalsScreen() {
               style={modalStyles.input}
             />
             <View style={modalStyles.actions}>
-              <Button title="Cancel" onPress={() => setSelectedGoal(null)} variant="ghost" style={{ flex: 1 }} />
-              <Button title="Add Funds" onPress={handleAddFunds} style={{ flex: 1 }} />
+              <Button
+                title="Cancel"
+                onPress={() => setSelectedGoal(null)}
+                variant="ghost"
+                style={{ flex: 1 }}
+              />
+              <Button
+                title="Add Funds"
+                onPress={handleAddFunds}
+                style={{ flex: 1 }}
+              />
             </View>
           </View>
         </View>
       </Modal>
 
-      <AddGoalModal visible={showAdd} onClose={() => setShowAdd(false)} onSave={() => { loadGoals(); setShowAdd(false); }} />
+      <AddGoalModal
+        visible={showAdd}
+        onClose={() => setShowAdd(false)}
+        onSave={() => {
+          loadGoals();
+          setShowAdd(false);
+        }}
+      />
     </SafeAreaView>
   );
 }
 
-const GoalCard: React.FC<{ goal: Goal; onAddFunds?: () => void; onDelete?: () => void; completed?: boolean }> = ({
-  goal, onAddFunds, onDelete, completed
-}) => {
-  const progress = goal.targetAmount > 0 ? goal.currentAmount / goal.targetAmount : 0;
-  const daysLeft = goal.deadline ? differenceInDays(new Date(goal.deadline), new Date()) : null;
+const GoalCard: React.FC<{
+  goal: Goal;
+  onAddFunds?: () => void;
+  onDelete?: () => void;
+  completed?: boolean;
+}> = ({ goal, onAddFunds, onDelete, completed }) => {
+  const progress =
+    goal.targetAmount > 0 ? goal.currentAmount / goal.targetAmount : 0;
+  const daysLeft = goal.deadline
+    ? differenceInDays(new Date(goal.deadline), new Date())
+    : null;
 
   return (
     <Card style={styles.goalCard}>
@@ -150,31 +235,66 @@ const GoalCard: React.FC<{ goal: Goal; onAddFunds?: () => void; onDelete?: () =>
         <View style={styles.goalInfo}>
           <Text style={styles.goalName}>{goal.name}</Text>
           {daysLeft !== null && !completed && (
-            <Text style={[styles.goalDeadline, { color: daysLeft < 30 ? COLORS.warning : COLORS.textMuted }]}>
+            <Text
+              style={[
+                styles.goalDeadline,
+                { color: daysLeft < 30 ? COLORS.warning : COLORS.textMuted },
+              ]}
+            >
               {daysLeft > 0 ? `${daysLeft} days left` : 'Overdue'}
             </Text>
           )}
-          {completed && <Text style={{ color: COLORS.income, ...TYPOGRAPHY.caption }}>✓ Completed!</Text>}
+          {completed && (
+            <Text style={{ color: COLORS.income, ...TYPOGRAPHY.caption }}>
+              ✓ Completed!
+            </Text>
+          )}
         </View>
         <View style={{ alignItems: 'flex-end' }}>
-          <Text style={[styles.goalAmount, { color: goal.color }]}>{formatCurrency(goal.currentAmount)}</Text>
-          <Text style={styles.goalTarget}>of {formatCurrency(goal.targetAmount)}</Text>
+          <Text style={[styles.goalAmount, { color: goal.color }]}>
+            {formatCurrency(goal.currentAmount)}
+          </Text>
+          <Text style={styles.goalTarget}>
+            of {formatCurrency(goal.targetAmount)}
+          </Text>
         </View>
       </View>
 
-      <ProgressBar progress={progress} color={goal.color} height={8} style={{ marginVertical: SPACING.sm }} />
+      <ProgressBar
+        progress={progress}
+        color={goal.color}
+        height={8}
+        style={{ marginVertical: SPACING.sm }}
+      />
 
       <View style={styles.goalFooter}>
-        <Text style={styles.goalPercent}>{(progress * 100).toFixed(1)}% saved</Text>
+        <Text style={styles.goalPercent}>
+          {(progress * 100).toFixed(1)}% saved
+        </Text>
         {!completed && (
           <View style={styles.goalActions}>
-            <TouchableOpacity onPress={onAddFunds} style={[styles.goalBtn, { backgroundColor: goal.color + '20', borderColor: goal.color + '40' }]}>
+            <TouchableOpacity
+              onPress={onAddFunds}
+              style={[
+                styles.goalBtn,
+                {
+                  backgroundColor: goal.color + '20',
+                  borderColor: goal.color + '40',
+                },
+              ]}
+            >
               <Ionicons name="add" size={14} color={goal.color} />
-              <Text style={[styles.goalBtnText, { color: goal.color }]}>Add Funds</Text>
+              <Text style={[styles.goalBtnText, { color: goal.color }]}>
+                Add Funds
+              </Text>
             </TouchableOpacity>
             {onDelete && (
               <TouchableOpacity onPress={onDelete} style={styles.deleteBtn}>
-                <Ionicons name="trash-outline" size={14} color={COLORS.textMuted} />
+                <Ionicons
+                  name="trash-outline"
+                  size={14}
+                  color={COLORS.textMuted}
+                />
               </TouchableOpacity>
             )}
           </View>
@@ -184,7 +304,11 @@ const GoalCard: React.FC<{ goal: Goal; onAddFunds?: () => void; onDelete?: () =>
   );
 };
 
-const AddGoalModal: React.FC<{ visible: boolean; onClose: () => void; onSave: () => void }> = ({ visible, onClose, onSave }) => {
+const AddGoalModal: React.FC<{
+  visible: boolean;
+  onClose: () => void;
+  onSave: () => void;
+}> = ({ visible, onClose, onSave }) => {
   const [name, setName] = useState('');
   const [target, setTarget] = useState('');
   const [deadline, setDeadline] = useState('');
@@ -205,41 +329,102 @@ const AddGoalModal: React.FC<{ visible: boolean; onClose: () => void; onSave: ()
       isCompleted: false,
     });
     setLoading(false);
-    setName(''); setTarget(''); setDeadline('');
+    setName('');
+    setTarget('');
+    setDeadline('');
     onSave();
   };
 
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+    <Modal
+      visible={visible}
+      transparent
+      animationType="slide"
+      onRequestClose={onClose}
+    >
       <View style={modalStyles.overlay}>
         <View style={[modalStyles.sheet, { maxHeight: '90%' }]}>
           <View style={modalStyles.handle} />
           <ScrollView showsVerticalScrollIndicator={false}>
             <Text style={modalStyles.title}>New Savings Goal</Text>
 
-            <TextInput value={name} onChangeText={setName} placeholder="Goal name (e.g. Emergency Fund)" placeholderTextColor={COLORS.textMuted} style={modalStyles.input} />
-            <TextInput value={target} onChangeText={setTarget} keyboardType="numeric" placeholder="Target amount (₹)" placeholderTextColor={COLORS.textMuted} style={modalStyles.input} />
-            <TextInput value={deadline} onChangeText={setDeadline} placeholder="Deadline (YYYY-MM-DD, optional)" placeholderTextColor={COLORS.textMuted} style={modalStyles.input} />
+            <TextInput
+              value={name}
+              onChangeText={setName}
+              placeholder="Goal name (e.g. Emergency Fund)"
+              placeholderTextColor={COLORS.textMuted}
+              style={modalStyles.input}
+            />
+            <TextInput
+              value={target}
+              onChangeText={setTarget}
+              keyboardType="numeric"
+              placeholder="Target amount (₹)"
+              placeholderTextColor={COLORS.textMuted}
+              style={modalStyles.input}
+            />
+            <TextInput
+              value={deadline}
+              onChangeText={setDeadline}
+              placeholder="Deadline (YYYY-MM-DD, optional)"
+              placeholderTextColor={COLORS.textMuted}
+              style={modalStyles.input}
+            />
 
             <Text style={modalStyles.label}>Color</Text>
             <View style={modalStyles.colorRow}>
-              {GOAL_COLORS.map(c => (
-                <TouchableOpacity key={c} onPress={() => setColor(c)} style={[modalStyles.colorDot, { backgroundColor: c, borderWidth: color === c ? 3 : 0, borderColor: '#fff' }]} />
+              {GOAL_COLORS.map((c) => (
+                <TouchableOpacity
+                  key={c}
+                  onPress={() => setColor(c)}
+                  style={[
+                    modalStyles.colorDot,
+                    {
+                      backgroundColor: c,
+                      borderWidth: color === c ? 3 : 0,
+                      borderColor: '#fff',
+                    },
+                  ]}
+                />
               ))}
             </View>
 
             <Text style={modalStyles.label}>Icon</Text>
             <View style={modalStyles.iconRow}>
-              {GOAL_ICONS.map(ic => (
-                <TouchableOpacity key={ic} onPress={() => setIcon(ic)} style={[modalStyles.iconBtn, icon === ic && { backgroundColor: color, borderColor: color }]}>
-                  <Ionicons name={ic as any} size={20} color={icon === ic ? '#fff' : COLORS.textMuted} />
+              {GOAL_ICONS.map((ic) => (
+                <TouchableOpacity
+                  key={ic}
+                  onPress={() => setIcon(ic)}
+                  style={[
+                    modalStyles.iconBtn,
+                    icon === ic && {
+                      backgroundColor: color,
+                      borderColor: color,
+                    },
+                  ]}
+                >
+                  <Ionicons
+                    name={ic as any}
+                    size={20}
+                    color={icon === ic ? '#fff' : COLORS.textMuted}
+                  />
                 </TouchableOpacity>
               ))}
             </View>
 
             <View style={[modalStyles.actions, { marginTop: SPACING.md }]}>
-              <Button title="Cancel" onPress={onClose} variant="ghost" style={{ flex: 1 }} />
-              <Button title="Create Goal" onPress={handleSave} loading={loading} style={{ flex: 1 }} />
+              <Button
+                title="Cancel"
+                onPress={onClose}
+                variant="ghost"
+                style={{ flex: 1 }}
+              />
+              <Button
+                title="Create Goal"
+                onPress={handleSave}
+                loading={loading}
+                style={{ flex: 1 }}
+              />
             </View>
           </ScrollView>
         </View>
@@ -249,7 +434,11 @@ const AddGoalModal: React.FC<{ visible: boolean; onClose: () => void; onSave: ()
 };
 
 const modalStyles = StyleSheet.create({
-  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end' },
+  overlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    justifyContent: 'flex-end',
+  },
   sheet: {
     backgroundColor: COLORS.bgCard,
     borderTopLeftRadius: RADIUS.xl,
@@ -259,20 +448,57 @@ const modalStyles = StyleSheet.create({
     borderWidth: 1,
     borderColor: COLORS.border,
   },
-  handle: { width: 40, height: 4, backgroundColor: COLORS.border, borderRadius: 2, alignSelf: 'center', marginBottom: SPACING.md },
-  title: { ...TYPOGRAPHY.h3, color: COLORS.textPrimary, marginBottom: SPACING.md },
-  goalInfo: { ...TYPOGRAPHY.body, color: COLORS.textSecondary, marginBottom: SPACING.md },
-  label: { ...TYPOGRAPHY.label, color: COLORS.textMuted, marginBottom: SPACING.sm, textTransform: 'uppercase' },
+  handle: {
+    width: 40,
+    height: 4,
+    backgroundColor: COLORS.border,
+    borderRadius: 2,
+    alignSelf: 'center',
+    marginBottom: SPACING.md,
+  },
+  title: {
+    ...TYPOGRAPHY.h3,
+    color: COLORS.textPrimary,
+    marginBottom: SPACING.md,
+  },
+  goalInfo: {
+    ...TYPOGRAPHY.body,
+    color: COLORS.textSecondary,
+    marginBottom: SPACING.md,
+  },
+  label: {
+    ...TYPOGRAPHY.label,
+    color: COLORS.textMuted,
+    marginBottom: SPACING.sm,
+    textTransform: 'uppercase',
+  },
   input: {
-    backgroundColor: COLORS.bgInput, borderRadius: RADIUS.md, padding: SPACING.md,
-    color: COLORS.textPrimary, ...TYPOGRAPHY.body, borderWidth: 1, borderColor: COLORS.border, marginBottom: SPACING.sm,
+    backgroundColor: COLORS.bgInput,
+    borderRadius: RADIUS.md,
+    padding: SPACING.md,
+    color: COLORS.textPrimary,
+    ...TYPOGRAPHY.body,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    marginBottom: SPACING.sm,
   },
   colorRow: { flexDirection: 'row', gap: 12, marginBottom: SPACING.md },
   colorDot: { width: 32, height: 32, borderRadius: 16 },
-  iconRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: SPACING.md },
+  iconRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginBottom: SPACING.md,
+  },
   iconBtn: {
-    width: 44, height: 44, borderRadius: 12, alignItems: 'center', justifyContent: 'center',
-    backgroundColor: COLORS.bgElevated, borderWidth: 1, borderColor: COLORS.border,
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: COLORS.bgElevated,
+    borderWidth: 1,
+    borderColor: COLORS.border,
   },
   actions: { flexDirection: 'row', gap: SPACING.sm },
 });
@@ -280,38 +506,85 @@ const modalStyles = StyleSheet.create({
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.bg },
   header: {
-    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-    paddingHorizontal: SPACING.md, paddingVertical: SPACING.sm,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.sm,
   },
   title: { ...TYPOGRAPHY.h2, color: COLORS.textPrimary },
   addBtn: {
-    width: 40, height: 40, borderRadius: 20, backgroundColor: COLORS.primary + '20',
-    alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: COLORS.primary + '40',
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: COLORS.primary + '20',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: COLORS.primary + '40',
   },
   scroll: { paddingHorizontal: SPACING.md },
-  summaryRow: { flexDirection: 'row', gap: SPACING.sm, marginBottom: SPACING.md },
+  summaryRow: {
+    flexDirection: 'row',
+    gap: SPACING.sm,
+    marginBottom: SPACING.md,
+  },
   summaryCard: { flex: 1, alignItems: 'center' },
-  summaryLabel: { ...TYPOGRAPHY.caption, color: COLORS.textMuted, textAlign: 'center' },
-  summaryValue: { ...TYPOGRAPHY.bodyMedium, color: COLORS.textPrimary, fontWeight: '700', marginTop: 4, textAlign: 'center' },
-  sectionTitle: { ...TYPOGRAPHY.h3, color: COLORS.textPrimary, marginBottom: SPACING.sm },
+  summaryLabel: {
+    ...TYPOGRAPHY.caption,
+    color: COLORS.textMuted,
+    textAlign: 'center',
+  },
+  summaryValue: {
+    ...TYPOGRAPHY.bodyMedium,
+    color: COLORS.textPrimary,
+    fontWeight: '700',
+    marginTop: 4,
+    textAlign: 'center',
+  },
+  sectionTitle: {
+    ...TYPOGRAPHY.h3,
+    color: COLORS.textPrimary,
+    marginBottom: SPACING.sm,
+  },
   goalCard: { marginBottom: SPACING.sm },
   goalTop: { flexDirection: 'row', alignItems: 'center', gap: SPACING.sm },
-  goalIcon: { width: 44, height: 44, borderRadius: 14, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
+  goalIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  },
   goalInfo: { flex: 1 },
   goalName: { ...TYPOGRAPHY.bodyMedium, color: COLORS.textPrimary },
   goalDeadline: { ...TYPOGRAPHY.caption },
   goalAmount: { ...TYPOGRAPHY.bodyMedium, fontWeight: '700' },
   goalTarget: { ...TYPOGRAPHY.caption, color: COLORS.textMuted },
-  goalFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  goalFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
   goalPercent: { ...TYPOGRAPHY.caption, color: COLORS.textMuted },
   goalActions: { flexDirection: 'row', gap: 8 },
   goalBtn: {
-    flexDirection: 'row', alignItems: 'center', gap: 4,
-    paddingHorizontal: 10, paddingVertical: 5, borderRadius: RADIUS.full, borderWidth: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: RADIUS.full,
+    borderWidth: 1,
   },
   goalBtnText: { ...TYPOGRAPHY.caption, fontWeight: '600' },
   deleteBtn: {
-    width: 28, height: 28, borderRadius: 8, backgroundColor: COLORS.bgElevated,
-    alignItems: 'center', justifyContent: 'center',
+    width: 28,
+    height: 28,
+    borderRadius: 8,
+    backgroundColor: COLORS.bgElevated,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });

@@ -49,7 +49,18 @@ export const AccountService = {
     return rows.map((row) => ({ ...row, isDefault: Boolean(row.isDefault) }));
   },
 
-  async create(data: Omit<Account, 'id' | 'createdAt' | 'updatedAt' | 'userId' | 'syncStatus' | 'lastSyncedAt' | 'deletedAt'>): Promise<Account> {
+  async create(
+    data: Omit<
+      Account,
+      | 'id'
+      | 'createdAt'
+      | 'updatedAt'
+      | 'userId'
+      | 'syncStatus'
+      | 'lastSyncedAt'
+      | 'deletedAt'
+    >,
+  ): Promise<Account> {
     const now = new Date().toISOString();
     const account: Account = {
       ...data,
@@ -81,18 +92,29 @@ export const AccountService = {
       ],
     );
 
-    await queueEntitySync('accounts', account.id, { ...account, isDefault: account.isDefault ? 1 : 0 } as Record<string, unknown>);
+    await queueEntitySync('accounts', account.id, {
+      ...account,
+      isDefault: account.isDefault ? 1 : 0,
+    } as Record<string, unknown>);
     return account;
   },
 
   async update(id: string, data: Partial<Account>) {
-    const existing = await getDatabase().getFirstAsync<Account>('SELECT * FROM accounts WHERE id = ?', [id]);
+    const existing = await getDatabase().getFirstAsync<Account>(
+      'SELECT * FROM accounts WHERE id = ?',
+      [id],
+    );
     if (!existing) {
       throw new Error('Account not found');
     }
 
     const updatedAt = new Date().toISOString();
-    const account = { ...existing, ...data, updatedAt, syncStatus: 'pending' as const };
+    const account = {
+      ...existing,
+      ...data,
+      updatedAt,
+      syncStatus: 'pending' as const,
+    };
 
     await getDatabase().runAsync(
       `UPDATE accounts
@@ -111,7 +133,10 @@ export const AccountService = {
       ],
     );
 
-    await queueEntitySync('accounts', id, { ...account, isDefault: account.isDefault ? 1 : 0 } as Record<string, unknown>);
+    await queueEntitySync('accounts', id, {
+      ...account,
+      isDefault: account.isDefault ? 1 : 0,
+    } as Record<string, unknown>);
   },
 
   async delete(id: string) {
@@ -120,7 +145,12 @@ export const AccountService = {
       `UPDATE accounts SET deletedAt = ?, updatedAt = ?, syncStatus = 'pending' WHERE id = ?`,
       [deletedAt, deletedAt, id],
     );
-    await queueEntitySync('accounts', id, { id, deletedAt, updatedAt: deletedAt }, 'delete');
+    await queueEntitySync(
+      'accounts',
+      id,
+      { id, deletedAt, updatedAt: deletedAt },
+      'delete',
+    );
   },
 
   async getTotalBalance(): Promise<number> {
@@ -133,7 +163,9 @@ export const AccountService = {
 
 export const CategoryService = {
   async getAll(): Promise<Category[]> {
-    const rows = await getDatabase().getAllAsync<(Omit<Category, 'isCustom'> & { isCustom: number })>(
+    const rows = await getDatabase().getAllAsync<
+      Omit<Category, 'isCustom'> & { isCustom: number }
+    >(
       'SELECT * FROM categories WHERE deletedAt IS NULL ORDER BY isCustom ASC, name ASC',
     );
     return rows.map((row) => ({ ...row, isCustom: Boolean(row.isCustom) }));
@@ -169,12 +201,22 @@ export const CategoryService = {
       ],
     );
 
-    await queueEntitySync('categories', category.id, category as unknown as Record<string, unknown>);
+    await queueEntitySync(
+      'categories',
+      category.id,
+      category as unknown as Record<string, unknown>,
+    );
     return category.id;
   },
 
-  async update(id: string, data: Partial<Pick<Category, 'name' | 'type' | 'icon' | 'color'>>) {
-    const existing = await getDatabase().getFirstAsync<Category>('SELECT * FROM categories WHERE id = ?', [id]);
+  async update(
+    id: string,
+    data: Partial<Pick<Category, 'name' | 'type' | 'icon' | 'color'>>,
+  ) {
+    const existing = await getDatabase().getFirstAsync<Category>(
+      'SELECT * FROM categories WHERE id = ?',
+      [id],
+    );
     if (!existing) {
       throw new Error('Category not found');
     }
@@ -191,10 +233,21 @@ export const CategoryService = {
       `UPDATE categories
        SET name = ?, type = ?, icon = ?, color = ?, updatedAt = ?, syncStatus = 'pending'
        WHERE id = ?`,
-      [category.name, category.type, category.icon, category.color, updatedAt, id],
+      [
+        category.name,
+        category.type,
+        category.icon,
+        category.color,
+        updatedAt,
+        id,
+      ],
     );
 
-    await queueEntitySync('categories', id, category as unknown as Record<string, unknown>);
+    await queueEntitySync(
+      'categories',
+      id,
+      category as unknown as Record<string, unknown>,
+    );
   },
 
   async delete(id: string) {
@@ -203,14 +256,32 @@ export const CategoryService = {
       `UPDATE categories SET deletedAt = ?, updatedAt = ?, syncStatus = 'pending' WHERE id = ?`,
       [deletedAt, deletedAt, id],
     );
-    await queueEntitySync('categories', id, { id, deletedAt, updatedAt: deletedAt }, 'delete');
+    await queueEntitySync(
+      'categories',
+      id,
+      { id, deletedAt, updatedAt: deletedAt },
+      'delete',
+    );
   },
 };
 
 export const BudgetService = {
   async getForMonth(year: number, month: string): Promise<Budget[]> {
     return getDatabase().getAllAsync<Budget>(
-      `SELECT b.*, c.name as categoryName, c.icon as categoryIcon, c.color as categoryColor
+      `SELECT b.*,
+              c.name as categoryName,
+              c.icon as categoryIcon,
+              c.color as categoryColor,
+              COALESCE(
+                (SELECT SUM(t.amount)
+                 FROM transactions t
+                 WHERE t.categoryId = b.categoryId
+                   AND t.type = 'expense'
+                   AND t.deletedAt IS NULL
+                   AND strftime('%Y', t.date) = CAST(b.year AS TEXT)
+                   AND strftime('%m', t.date) = b.month),
+                0
+              ) as spent
        FROM budgets b
        LEFT JOIN categories c ON b.categoryId = c.id
        WHERE b.year = ? AND b.month = ? AND b.deletedAt IS NULL
@@ -219,7 +290,19 @@ export const BudgetService = {
     );
   },
 
-  async create(data: Omit<Budget, 'id' | 'spent' | 'createdAt' | 'updatedAt' | 'userId' | 'syncStatus' | 'lastSyncedAt' | 'deletedAt'>) {
+  async create(
+    data: Omit<
+      Budget,
+      | 'id'
+      | 'spent'
+      | 'createdAt'
+      | 'updatedAt'
+      | 'userId'
+      | 'syncStatus'
+      | 'lastSyncedAt'
+      | 'deletedAt'
+    >,
+  ) {
     const now = new Date().toISOString();
     const budget: Budget = {
       ...data,
@@ -251,7 +334,11 @@ export const BudgetService = {
       ],
     );
 
-    await queueEntitySync('budgets', budget.id, budget as unknown as Record<string, unknown>);
+    await queueEntitySync(
+      'budgets',
+      budget.id,
+      budget as unknown as Record<string, unknown>,
+    );
     return budget.id;
   },
 
@@ -261,7 +348,12 @@ export const BudgetService = {
       `UPDATE budgets SET deletedAt = ?, updatedAt = ?, syncStatus = 'pending' WHERE id = ?`,
       [deletedAt, deletedAt, id],
     );
-    await queueEntitySync('budgets', id, { id, deletedAt, updatedAt: deletedAt }, 'delete');
+    await queueEntitySync(
+      'budgets',
+      id,
+      { id, deletedAt, updatedAt: deletedAt },
+      'delete',
+    );
   },
 };
 
@@ -270,10 +362,24 @@ export const GoalService = {
     const rows = await getDatabase().getAllAsync<Goal>(
       'SELECT * FROM goals WHERE deletedAt IS NULL ORDER BY isCompleted ASC, createdAt DESC',
     );
-    return rows.map((row) => ({ ...row, isCompleted: Boolean(row.isCompleted) }));
+    return rows.map((row) => ({
+      ...row,
+      isCompleted: Boolean(row.isCompleted),
+    }));
   },
 
-  async create(data: Omit<Goal, 'id' | 'createdAt' | 'updatedAt' | 'userId' | 'syncStatus' | 'lastSyncedAt' | 'deletedAt'>) {
+  async create(
+    data: Omit<
+      Goal,
+      | 'id'
+      | 'createdAt'
+      | 'updatedAt'
+      | 'userId'
+      | 'syncStatus'
+      | 'lastSyncedAt'
+      | 'deletedAt'
+    >,
+  ) {
     const now = new Date().toISOString();
     const goal: Goal = {
       ...data,
@@ -306,18 +412,27 @@ export const GoalService = {
       ],
     );
 
-    await queueEntitySync('goals', goal.id, { ...goal, isCompleted: goal.isCompleted ? 1 : 0 } as Record<string, unknown>);
+    await queueEntitySync('goals', goal.id, {
+      ...goal,
+      isCompleted: goal.isCompleted ? 1 : 0,
+    } as Record<string, unknown>);
     return goal.id;
   },
 
   async addFunds(id: string, amount: number) {
-    const existing = await getDatabase().getFirstAsync<Goal>('SELECT * FROM goals WHERE id = ?', [id]);
+    const existing = await getDatabase().getFirstAsync<Goal>(
+      'SELECT * FROM goals WHERE id = ?',
+      [id],
+    );
     if (!existing) {
       throw new Error('Goal not found');
     }
 
     const updatedAt = new Date().toISOString();
-    const currentAmount = Math.min(existing.currentAmount + amount, existing.targetAmount);
+    const currentAmount = Math.min(
+      existing.currentAmount + amount,
+      existing.targetAmount,
+    );
     const isCompleted = currentAmount >= existing.targetAmount;
 
     await getDatabase().runAsync(
@@ -327,17 +442,13 @@ export const GoalService = {
       [currentAmount, isCompleted ? 1 : 0, updatedAt, id],
     );
 
-    await queueEntitySync(
-      'goals',
-      id,
-      {
-        ...existing,
-        currentAmount,
-        isCompleted: isCompleted ? 1 : 0,
-        updatedAt,
-        syncStatus: 'pending',
-      } as Record<string, unknown>,
-    );
+    await queueEntitySync('goals', id, {
+      ...existing,
+      currentAmount,
+      isCompleted: isCompleted ? 1 : 0,
+      updatedAt,
+      syncStatus: 'pending',
+    } as Record<string, unknown>);
   },
 
   async delete(id: string) {
@@ -346,20 +457,33 @@ export const GoalService = {
       `UPDATE goals SET deletedAt = ?, updatedAt = ?, syncStatus = 'pending' WHERE id = ?`,
       [deletedAt, deletedAt, id],
     );
-    await queueEntitySync('goals', id, { id, deletedAt, updatedAt: deletedAt }, 'delete');
+    await queueEntitySync(
+      'goals',
+      id,
+      { id, deletedAt, updatedAt: deletedAt },
+      'delete',
+    );
   },
 };
 
 export const NetWorthService = {
   async getAssets(): Promise<Asset[]> {
-    return getDatabase().getAllAsync<Asset>('SELECT * FROM assets WHERE deletedAt IS NULL ORDER BY value DESC');
+    return getDatabase().getAllAsync<Asset>(
+      'SELECT * FROM assets WHERE deletedAt IS NULL ORDER BY value DESC',
+    );
   },
 
   async getLiabilities(): Promise<Liability[]> {
-    return getDatabase().getAllAsync<Liability>('SELECT * FROM liabilities WHERE deletedAt IS NULL ORDER BY amount DESC');
+    return getDatabase().getAllAsync<Liability>(
+      'SELECT * FROM liabilities WHERE deletedAt IS NULL ORDER BY amount DESC',
+    );
   },
 
-  async getNetWorth(): Promise<{ assets: number; liabilities: number; netWorth: number }> {
+  async getNetWorth(): Promise<{
+    assets: number;
+    liabilities: number;
+    netWorth: number;
+  }> {
     const assets = await getDatabase().getFirstAsync<{ total: number }>(
       'SELECT COALESCE(SUM(value), 0) as total FROM assets WHERE deletedAt IS NULL',
     );
@@ -409,7 +533,11 @@ export const NetWorthService = {
       ],
     );
 
-    await queueEntitySync('net_worth_history', snapshot.id, snapshot as unknown as Record<string, unknown>);
+    await queueEntitySync(
+      'net_worth_history',
+      snapshot.id,
+      snapshot as unknown as Record<string, unknown>,
+    );
   },
 
   async getNetWorthHistory(months = 12): Promise<NetWorthHistory[]> {
@@ -421,7 +549,18 @@ export const NetWorthService = {
     );
   },
 
-  async createAsset(data: Omit<Asset, 'id' | 'createdAt' | 'updatedAt' | 'userId' | 'syncStatus' | 'lastSyncedAt' | 'deletedAt'>) {
+  async createAsset(
+    data: Omit<
+      Asset,
+      | 'id'
+      | 'createdAt'
+      | 'updatedAt'
+      | 'userId'
+      | 'syncStatus'
+      | 'lastSyncedAt'
+      | 'deletedAt'
+    >,
+  ) {
     const now = new Date().toISOString();
     const asset: Asset = {
       ...data,
@@ -451,11 +590,26 @@ export const NetWorthService = {
       ],
     );
 
-    await queueEntitySync('assets', asset.id, asset as unknown as Record<string, unknown>);
+    await queueEntitySync(
+      'assets',
+      asset.id,
+      asset as unknown as Record<string, unknown>,
+    );
     return asset.id;
   },
 
-  async createLiability(data: Omit<Liability, 'id' | 'createdAt' | 'updatedAt' | 'userId' | 'syncStatus' | 'lastSyncedAt' | 'deletedAt'>) {
+  async createLiability(
+    data: Omit<
+      Liability,
+      | 'id'
+      | 'createdAt'
+      | 'updatedAt'
+      | 'userId'
+      | 'syncStatus'
+      | 'lastSyncedAt'
+      | 'deletedAt'
+    >,
+  ) {
     const now = new Date().toISOString();
     const liability: Liability = {
       ...data,
@@ -487,7 +641,11 @@ export const NetWorthService = {
       ],
     );
 
-    await queueEntitySync('liabilities', liability.id, liability as unknown as Record<string, unknown>);
+    await queueEntitySync(
+      'liabilities',
+      liability.id,
+      liability as unknown as Record<string, unknown>,
+    );
     return liability.id;
   },
 
@@ -497,7 +655,12 @@ export const NetWorthService = {
       `UPDATE assets SET deletedAt = ?, updatedAt = ?, syncStatus = 'pending' WHERE id = ?`,
       [deletedAt, deletedAt, id],
     );
-    await queueEntitySync('assets', id, { id, deletedAt, updatedAt: deletedAt }, 'delete');
+    await queueEntitySync(
+      'assets',
+      id,
+      { id, deletedAt, updatedAt: deletedAt },
+      'delete',
+    );
   },
 
   async deleteLiability(id: string) {
@@ -506,7 +669,12 @@ export const NetWorthService = {
       `UPDATE liabilities SET deletedAt = ?, updatedAt = ?, syncStatus = 'pending' WHERE id = ?`,
       [deletedAt, deletedAt, id],
     );
-    await queueEntitySync('liabilities', id, { id, deletedAt, updatedAt: deletedAt }, 'delete');
+    await queueEntitySync(
+      'liabilities',
+      id,
+      { id, deletedAt, updatedAt: deletedAt },
+      'delete',
+    );
   },
 };
 
@@ -526,7 +694,9 @@ export const DataService = {
     const result: Record<string, unknown[]> = {};
 
     for (const table of tables) {
-      result[table] = await getDatabase().getAllAsync(`SELECT * FROM ${table} WHERE deletedAt IS NULL`);
+      result[table] = await getDatabase().getAllAsync(
+        `SELECT * FROM ${table} WHERE deletedAt IS NULL`,
+      );
     }
 
     return result;
@@ -534,7 +704,10 @@ export const DataService = {
 };
 
 const parseUserProfile = (
-  row: UserProfile & { notificationsEnabled: number | boolean; biometricEnabled: number | boolean },
+  row: UserProfile & {
+    notificationsEnabled: number | boolean;
+    biometricEnabled: number | boolean;
+  },
 ): UserProfile => ({
   ...row,
   notificationsEnabled: Boolean(row.notificationsEnabled),
@@ -550,7 +723,11 @@ export const UserProfileService = {
     return row ? parseUserProfile(row) : null;
   },
 
-  async upsertProfile(data: Partial<Omit<UserProfile, 'id' | 'createdAt' | 'updatedAt' | 'syncStatus'>>): Promise<UserProfile> {
+  async upsertProfile(
+    data: Partial<
+      Omit<UserProfile, 'id' | 'createdAt' | 'updatedAt' | 'syncStatus'>
+    >,
+  ): Promise<UserProfile> {
     const existing = await this.getProfile();
     const now = new Date().toISOString();
     const profile: UserProfile = {
@@ -560,9 +737,12 @@ export const UserProfileService = {
       phone: data.phone ?? existing?.phone,
       currency: data.currency ?? existing?.currency ?? 'INR',
       monthlyBudget: data.monthlyBudget ?? existing?.monthlyBudget ?? 0,
-      themePreference: data.themePreference ?? existing?.themePreference ?? 'dark',
-      notificationsEnabled: data.notificationsEnabled ?? existing?.notificationsEnabled ?? false,
-      biometricEnabled: data.biometricEnabled ?? existing?.biometricEnabled ?? false,
+      themePreference:
+        data.themePreference ?? existing?.themePreference ?? 'dark',
+      notificationsEnabled:
+        data.notificationsEnabled ?? existing?.notificationsEnabled ?? false,
+      biometricEnabled:
+        data.biometricEnabled ?? existing?.biometricEnabled ?? false,
       createdAt: existing?.createdAt ?? now,
       updatedAt: now,
       userId: data.userId ?? existing?.userId ?? null,

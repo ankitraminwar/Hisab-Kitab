@@ -1,16 +1,14 @@
-/**
- * Learn more about light and dark modes:
- * https://docs.expo.dev/guides/color-schemes/
- */
-
-import { Colors } from '@/constants/theme';
-import { useColorScheme } from '@/hooks/use-color-scheme';
-import { useAppStore } from '@/store/appStore';
+import { useTheme as useAppTheme } from '@/hooks/useTheme';
 
 export function useTheme() {
-  const scheme = useColorScheme();
-  const storedTheme = useAppStore((state) => state.theme);
-  const theme = storedTheme ?? (scheme === 'dark' ? 'dark' : 'light');
+  const { colors } = useAppTheme();
 
-  return Colors[theme];
+  return {
+    ...colors,
+    text: colors.textPrimary,
+    background: colors.bg,
+    backgroundElement: colors.bgCard,
+    backgroundSelected: colors.bgElevated,
+    textSecondary: colors.textSecondary,
+  };
 }

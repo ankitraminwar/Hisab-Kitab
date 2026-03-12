@@ -1,35 +1,81 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import {
-  View, Text, ScrollView, StyleSheet, RefreshControl, TouchableOpacity,
+  View,
+  Text,
+  ScrollView,
+  StyleSheet,
+  RefreshControl,
+  TouchableOpacity,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
-import { COLORS, SPACING, RADIUS, TYPOGRAPHY, formatCurrency, formatCompact } from '../../utils/constants';
+import Animated, {
+  FadeInDown,
+  FadeInRight,
+  FadeInUp,
+} from 'react-native-reanimated';
+import {
+  COLORS,
+  SPACING,
+  RADIUS,
+  TYPOGRAPHY,
+  formatCurrency,
+  formatCompact,
+} from '../../utils/constants';
 import { TransactionService } from '../../services/transactionService';
-import { AccountService, BudgetService, NetWorthService } from '../../services/dataServices';
+import {
+  AccountService,
+  BudgetService,
+  NetWorthService,
+} from '../../services/dataServices';
 import { useAppStore } from '../../store/appStore';
-import { Card, SectionHeader, StatCard, ProgressBar, EmptyState, FAB } from '../../components/common';
+import {
+  Card,
+  SectionHeader,
+  StatCard,
+  ProgressBar,
+  EmptyState,
+  FAB,
+} from '../../components/common';
 import TransactionItem from '../../components/TransactionItem';
-import { Budget } from '../../utils/types';
+import type { Budget } from '../../utils/types';
 import { format } from 'date-fns';
 
 export default function DashboardScreen() {
   const router = useRouter();
-  const { dashboardStats, setDashboardStats, recentTransactions, setRecentTransactions,
-          accounts, setAccounts, budgets, setBudgets } = useAppStore();
+  const {
+    dashboardStats,
+    setDashboardStats,
+    recentTransactions,
+    setRecentTransactions,
+    accounts,
+    setAccounts,
+    budgets,
+    setBudgets,
+  } = useAppStore();
   const [refreshing, setRefreshing] = useState(false);
-  const [netWorth, setNetWorth] = useState({ assets: 0, liabilities: 0, netWorth: 0 });
+  const [netWorth, setNetWorth] = useState({
+    assets: 0,
+    liabilities: 0,
+    netWorth: 0,
+  });
 
   const loadData = useCallback(async () => {
     const now = new Date();
     const [txs, accs, budgetData, nw, monthStats] = await Promise.all([
       TransactionService.getAll(undefined, 10),
       AccountService.getAll(),
-      BudgetService.getForMonth(now.getFullYear(), String(now.getMonth() + 1).padStart(2, '0')),
+      BudgetService.getForMonth(
+        now.getFullYear(),
+        String(now.getMonth() + 1).padStart(2, '0'),
+      ),
       NetWorthService.getNetWorth(),
-      TransactionService.getMonthlyStats(now.getFullYear(), String(now.getMonth() + 1).padStart(2, '0')),
+      TransactionService.getMonthlyStats(
+        now.getFullYear(),
+        String(now.getMonth() + 1).padStart(2, '0'),
+      ),
     ]);
 
     setRecentTransactions(txs);
@@ -38,9 +84,10 @@ export default function DashboardScreen() {
     setNetWorth(nw);
 
     const totalBalance = accs.reduce((sum, a) => sum + a.balance, 0);
-    const savingsRate = monthStats.income > 0
-      ? ((monthStats.income - monthStats.expense) / monthStats.income) * 100
-      : 0;
+    const savingsRate =
+      monthStats.income > 0
+        ? ((monthStats.income - monthStats.expense) / monthStats.income) * 100
+        : 0;
 
     setDashboardStats({
       totalBalance,
@@ -51,7 +98,9 @@ export default function DashboardScreen() {
     });
   }, [setAccounts, setBudgets, setDashboardStats, setRecentTransactions]);
 
-  useEffect(() => { void loadData(); }, [loadData]);
+  useEffect(() => {
+    void loadData();
+  }, [loadData]);
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -70,49 +119,90 @@ export default function DashboardScreen() {
     <SafeAreaView style={styles.container} edges={['top']}>
       <ScrollView
         showsVerticalScrollIndicator={false}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={COLORS.primary} />}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={COLORS.primary}
+          />
+        }
         contentContainerStyle={styles.scroll}
       >
         {/* Header */}
-        <View style={styles.header}>
+        <Animated.View
+          entering={FadeInDown.duration(500)}
+          style={styles.header}
+        >
           <View>
             <Text style={styles.greeting}>{greeting()} 👋</Text>
             <Text style={styles.month}>{format(new Date(), 'MMMM yyyy')}</Text>
           </View>
-          <TouchableOpacity onPress={() => router.push('/settings')} style={styles.settingsBtn}>
-            <Ionicons name="settings-outline" size={22} color={COLORS.textSecondary} />
+          <TouchableOpacity
+            onPress={() => router.push('/settings')}
+            style={styles.settingsBtn}
+          >
+            <Ionicons
+              name="settings-outline"
+              size={22}
+              color={COLORS.textSecondary}
+            />
           </TouchableOpacity>
-        </View>
+        </Animated.View>
 
         {/* Net Worth Hero Card */}
-        <View style={styles.heroCard}>
-          <LinearGradient colors={[COLORS.primary, '#9D50BB']} style={styles.gradientCard}>
+        <Animated.View
+          entering={FadeInUp.duration(600).delay(100)}
+          style={styles.heroCard}
+        >
+          <LinearGradient
+            colors={[COLORS.primary, '#9D50BB']}
+            style={styles.gradientCard}
+          >
             <Text style={styles.heroLabel}>TOTAL NET WORTH</Text>
-            <Text style={styles.heroAmount}>{formatCurrency(netWorth.netWorth)}</Text>
+            <Text style={styles.heroAmount}>
+              {formatCurrency(netWorth.netWorth)}
+            </Text>
             <View style={styles.heroRow}>
               <View style={styles.heroStat}>
-                <Ionicons name="arrow-up-circle" size={16} color={COLORS.income} />
+                <Ionicons
+                  name="arrow-up-circle"
+                  size={16}
+                  color={COLORS.income}
+                />
                 <Text style={styles.heroStatLabel}>Assets</Text>
-                <Text style={[styles.heroStatValue, { color: COLORS.income }]}>{formatCompact(netWorth.assets)}</Text>
+                <Text style={[styles.heroStatValue, { color: COLORS.income }]}>
+                  {formatCompact(netWorth.assets)}
+                </Text>
               </View>
               <View style={styles.heroDivider} />
               <View style={styles.heroStat}>
-                <Ionicons name="arrow-down-circle" size={16} color={COLORS.expense} />
+                <Ionicons
+                  name="arrow-down-circle"
+                  size={16}
+                  color={COLORS.expense}
+                />
                 <Text style={styles.heroStatLabel}>Liabilities</Text>
-                <Text style={[styles.heroStatValue, { color: COLORS.expense }]}>{formatCompact(netWorth.liabilities)}</Text>
+                <Text style={[styles.heroStatValue, { color: COLORS.expense }]}>
+                  {formatCompact(netWorth.liabilities)}
+                </Text>
               </View>
               <View style={styles.heroDivider} />
               <View style={styles.heroStat}>
-                <Ionicons name="wallet" size={16} color={COLORS.primary} />
+                <Ionicons name="wallet" size={16} color="#fff" />
                 <Text style={styles.heroStatLabel}>Balance</Text>
-                <Text style={[styles.heroStatValue, { color: COLORS.primary }]}>{formatCompact(dashboardStats.totalBalance)}</Text>
+                <Text style={[styles.heroStatValue, { color: '#fff' }]}>
+                  {formatCompact(dashboardStats.totalBalance)}
+                </Text>
               </View>
             </View>
           </LinearGradient>
-        </View>
+        </Animated.View>
 
         {/* Month Stats */}
-        <View style={styles.statsRow}>
+        <Animated.View
+          entering={FadeInDown.duration(500).delay(200)}
+          style={styles.statsRow}
+        >
           <StatCard
             title="Income"
             amount={dashboardStats.totalIncome}
@@ -126,80 +216,164 @@ export default function DashboardScreen() {
             type="expense"
             icon="trending-down"
           />
-        </View>
+        </Animated.View>
 
         {/* Savings Rate */}
-        <Card style={styles.savingsCard}>
-          <View style={styles.savingsHeader}>
-            <Text style={styles.savingsTitle}>Savings Rate</Text>
-            <Text style={[styles.savingsPercent, {
-              color: dashboardStats.savingsRate >= 20 ? COLORS.income
-                : dashboardStats.savingsRate >= 10 ? COLORS.warning : COLORS.expense
-            }]}>
-              {dashboardStats.savingsRate.toFixed(1)}%
+        <Animated.View entering={FadeInDown.duration(500).delay(300)}>
+          <Card style={styles.savingsCard}>
+            <View style={styles.savingsHeader}>
+              <Text style={styles.savingsTitle}>Savings Rate</Text>
+              <Text
+                style={[
+                  styles.savingsPercent,
+                  {
+                    color:
+                      dashboardStats.savingsRate >= 20
+                        ? COLORS.income
+                        : dashboardStats.savingsRate >= 10
+                          ? COLORS.warning
+                          : COLORS.expense,
+                  },
+                ]}
+              >
+                {dashboardStats.savingsRate.toFixed(1)}%
+              </Text>
+            </View>
+            <ProgressBar
+              progress={Math.max(0, dashboardStats.savingsRate) / 100}
+              color={
+                dashboardStats.savingsRate >= 20
+                  ? COLORS.income
+                  : dashboardStats.savingsRate >= 10
+                    ? COLORS.warning
+                    : COLORS.expense
+              }
+              height={8}
+            />
+            <Text style={styles.savingsHint}>
+              {dashboardStats.savingsRate >= 20
+                ? '🎉 Excellent! Keep it up!'
+                : dashboardStats.savingsRate >= 10
+                  ? '✅ Good, try to save more'
+                  : '⚠️ Low savings this month'}
             </Text>
-          </View>
-          <ProgressBar
-            progress={Math.max(0, dashboardStats.savingsRate) / 100}
-            color={dashboardStats.savingsRate >= 20 ? COLORS.income : dashboardStats.savingsRate >= 10 ? COLORS.warning : COLORS.expense}
-            height={8}
-          />
-          <Text style={styles.savingsHint}>
-            {dashboardStats.savingsRate >= 20 ? '🎉 Excellent! Keep it up!'
-              : dashboardStats.savingsRate >= 10 ? '✅ Good, try to save more'
-              : '⚠️ Low savings this month'}
-          </Text>
-        </Card>
+          </Card>
+        </Animated.View>
 
         {/* Accounts */}
-        <SectionHeader title="Accounts" action="View all" onAction={() => router.push('/accounts')} />
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.accountsScroll}>
-          {accounts.map(account => (
-            <TouchableOpacity key={account.id} style={[styles.accountCard, { borderColor: account.color + '40' }]}
-              onPress={() => router.push('/accounts')}>
-              <View style={[styles.accountIcon, { backgroundColor: account.color + '20' }]}>
-                <Ionicons name={account.icon as any} size={20} color={account.color} />
-              </View>
-              <Text style={styles.accountName} numberOfLines={1}>{account.name}</Text>
-              <Text style={[styles.accountBalance, { color: account.balance >= 0 ? COLORS.textPrimary : COLORS.expense }]}>
-                {formatCompact(account.balance)}
-              </Text>
-            </TouchableOpacity>
+        <Animated.View entering={FadeInDown.duration(500).delay(350)}>
+          <SectionHeader
+            title="Accounts"
+            action="View all"
+            onAction={() => router.push('/accounts')}
+          />
+        </Animated.View>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={styles.accountsScroll}
+        >
+          {accounts.map((account, index) => (
+            <Animated.View
+              key={account.id}
+              entering={FadeInRight.duration(400).delay(400 + index * 80)}
+            >
+              <TouchableOpacity
+                style={[
+                  styles.accountCard,
+                  { borderColor: account.color + '40' },
+                ]}
+                onPress={() => router.push('/accounts')}
+              >
+                <View
+                  style={[
+                    styles.accountIcon,
+                    { backgroundColor: account.color + '20' },
+                  ]}
+                >
+                  <Ionicons
+                    name={account.icon as never}
+                    size={20}
+                    color={account.color}
+                  />
+                </View>
+                <Text style={styles.accountName} numberOfLines={1}>
+                  {account.name}
+                </Text>
+                <Text
+                  style={[
+                    styles.accountBalance,
+                    {
+                      color:
+                        account.balance >= 0
+                          ? COLORS.textPrimary
+                          : COLORS.expense,
+                    },
+                  ]}
+                >
+                  {formatCompact(account.balance)}
+                </Text>
+              </TouchableOpacity>
+            </Animated.View>
           ))}
-          <TouchableOpacity style={styles.addAccountCard} onPress={() => router.push('/accounts')}>
-            <Ionicons name="add" size={24} color={COLORS.primary} />
-            <Text style={styles.addAccountText}>Add Account</Text>
-          </TouchableOpacity>
+          <Animated.View
+            entering={FadeInRight.duration(400).delay(
+              400 + accounts.length * 80,
+            )}
+          >
+            <TouchableOpacity
+              style={styles.addAccountCard}
+              onPress={() => router.push('/accounts')}
+            >
+              <Ionicons name="add" size={24} color={COLORS.primary} />
+              <Text style={styles.addAccountText}>Add Account</Text>
+            </TouchableOpacity>
+          </Animated.View>
         </ScrollView>
 
         {/* Budget Overview */}
         {budgets.length > 0 && (
-          <>
-            <SectionHeader title="Budgets" action="View all" onAction={() => router.push('/budgets')} />
-            {budgets.slice(0, 3).map(budget => (
+          <Animated.View entering={FadeInDown.duration(500).delay(500)}>
+            <SectionHeader
+              title="Budgets"
+              action="View all"
+              onAction={() => router.push('/budgets')}
+            />
+            {budgets.slice(0, 3).map((budget) => (
               <BudgetRow key={budget.id} budget={budget} />
             ))}
-          </>
+          </Animated.View>
         )}
 
         {/* Recent Transactions */}
-        <SectionHeader title="Recent Transactions" action="View all" onAction={() => router.push('/transactions')} />
-        {recentTransactions.length === 0 ? (
-          <EmptyState
-            icon="receipt-outline"
-            title="No transactions yet"
-            subtitle="Tap + to add your first transaction"
+        <Animated.View entering={FadeInDown.duration(500).delay(550)}>
+          <SectionHeader
+            title="Recent Transactions"
+            action="View all"
+            onAction={() => router.push('/transactions')}
           />
-        ) : (
-          <Card style={styles.txCard}>
-            {recentTransactions.map((tx, idx) => (
-              <View key={tx.id}>
-                <TransactionItem item={tx} onPress={() => router.push(`/transactions/${tx.id}`)} />
-                {idx < recentTransactions.length - 1 && <View style={styles.divider} />}
-              </View>
-            ))}
-          </Card>
-        )}
+          {recentTransactions.length === 0 ? (
+            <EmptyState
+              icon="receipt-outline"
+              title="No transactions yet"
+              subtitle="Tap + to add your first transaction"
+            />
+          ) : (
+            <Card style={styles.txCard}>
+              {recentTransactions.map((tx, idx) => (
+                <View key={tx.id}>
+                  <TransactionItem
+                    item={tx}
+                    onPress={() => router.push(`/transactions/${tx.id}`)}
+                  />
+                  {idx < recentTransactions.length - 1 && (
+                    <View style={styles.divider} />
+                  )}
+                </View>
+              ))}
+            </Card>
+          )}
+        </Animated.View>
 
         <View style={{ height: 100 }} />
       </ScrollView>
@@ -210,19 +384,32 @@ export default function DashboardScreen() {
 }
 
 const BudgetRow: React.FC<{ budget: Budget }> = ({ budget }) => {
-  const progress = budget.limit_amount > 0 ? budget.spent / budget.limit_amount : 0;
+  const progress =
+    budget.limit_amount > 0 ? budget.spent / budget.limit_amount : 0;
   return (
     <Card style={styles.budgetRow}>
       <View style={styles.budgetHeader}>
         <View style={styles.budgetLeft}>
-          <View style={[styles.budgetDot, { backgroundColor: budget.categoryColor || COLORS.primary }]} />
+          <View
+            style={[
+              styles.budgetDot,
+              { backgroundColor: budget.categoryColor || COLORS.primary },
+            ]}
+          />
           <Text style={styles.budgetName}>{budget.categoryName}</Text>
         </View>
         <Text style={styles.budgetAmount}>
-          <Text style={{ color: progress > 0.9 ? COLORS.expense : COLORS.textPrimary }}>
+          <Text
+            style={{
+              color: progress > 0.9 ? COLORS.expense : COLORS.textPrimary,
+            }}
+          >
             {formatCurrency(budget.spent)}
           </Text>
-          <Text style={{ color: COLORS.textMuted }}> / {formatCurrency(budget.limit_amount)}</Text>
+          <Text style={{ color: COLORS.textMuted }}>
+            {' '}
+            / {formatCurrency(budget.limit_amount)}
+          </Text>
         </Text>
       </View>
       <ProgressBar progress={progress} height={5} style={{ marginTop: 8 }} />

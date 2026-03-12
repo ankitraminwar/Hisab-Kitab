@@ -1,12 +1,33 @@
 export type TransactionType = 'expense' | 'income' | 'transfer';
-export type AccountType = 'cash' | 'bank' | 'upi' | 'credit_card' | 'wallet' | 'investment';
-export type AssetType = 'bank' | 'cash' | 'stocks' | 'mutual_funds' | 'crypto' | 'gold' | 'real_estate' | 'other';
+export type AccountType =
+  | 'cash'
+  | 'bank'
+  | 'upi'
+  | 'credit_card'
+  | 'wallet'
+  | 'investment';
+export type AssetType =
+  | 'bank'
+  | 'cash'
+  | 'stocks'
+  | 'mutual_funds'
+  | 'crypto'
+  | 'gold'
+  | 'real_estate'
+  | 'other';
 export type LiabilityType = 'credit_card' | 'loan' | 'mortgage' | 'other';
 export type RecurringFrequency = 'daily' | 'weekly' | 'monthly' | 'yearly';
 export type CategoryType = 'expense' | 'income' | 'both';
 export type SyncStatus = 'synced' | 'pending' | 'failed';
-export type ThemePreference = 'dark' | 'light';
-export type PaymentMethod = 'cash' | 'bank_transfer' | 'upi' | 'wallet' | 'credit_card' | 'debit_card' | 'other';
+export type ThemePreference = 'dark' | 'light' | 'system';
+export type PaymentMethod =
+  | 'cash'
+  | 'bank_transfer'
+  | 'upi'
+  | 'wallet'
+  | 'credit_card'
+  | 'debit_card'
+  | 'other';
 
 export interface SyncMetadata {
   userId?: string | null;

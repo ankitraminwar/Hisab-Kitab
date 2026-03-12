@@ -21,6 +21,21 @@ import { useAppStore } from '@/store/appStore';
 import type { SyncableTable } from '@/utils/constants';
 import type { SyncQueueItem } from '@/utils/types';
 
+const MAX_RETRY_DELAY_MS = 60_000;
+const BASE_DELAY_MS = 1_000;
+
+const backoffDelay = (retryCount: number): number => {
+  const exponential = Math.min(
+    BASE_DELAY_MS * Math.pow(2, retryCount),
+    MAX_RETRY_DELAY_MS,
+  );
+  const jitter = Math.random() * exponential * 0.3;
+  return exponential + jitter;
+};
+
+const sleep = (ms: number) =>
+  new Promise<void>((resolve) => setTimeout(resolve, ms));
+
 class SyncService {
   private syncing = false;
   private remoteSchemaAvailable = true;
@@ -49,6 +64,10 @@ class SyncService {
     this.unsubscribe = undefined;
   }
 
+  resetSchemaFlag() {
+    this.remoteSchemaAvailable = true;
+  }
+
   async sync(reason = 'manual') {
     if (this.syncing) {
       return;
@@ -61,6 +80,11 @@ class SyncService {
     if (!isOnline) {
       return;
     }
+
+    if (reason === 'manual') {
+      this.remoteSchemaAvailable = true;
+    }
+
     if (!this.remoteSchemaAvailable) {
       return;
     }
@@ -97,7 +121,6 @@ class SyncService {
         syncInProgress: false,
         lastSyncError: error instanceof Error ? error.message : 'Sync failed',
       });
-      throw error;
     } finally {
       this.syncing = false;
     }
@@ -112,12 +135,20 @@ class SyncService {
   }
 
   private isRemoteSchemaMissing(error: unknown) {
-    return (
-      typeof error === 'object' &&
-      error !== null &&
-      'code' in error &&
-      error.code === 'PGRST205'
-    );
+    if (typeof error !== 'object' || error === null) {
+      return false;
+    }
+
+    if ('code' in error && error.code === 'PGRST205') {
+      return true;
+    }
+
+    if ('message' in error) {
+      const message = String((error as { message: string }).message);
+      return message.includes('schema cache') || message.includes('PGRST');
+    }
+
+    return false;
   }
 
   private async pushPendingChanges() {
@@ -129,7 +160,18 @@ class SyncService {
     const pendingItems = await listPendingSyncItems();
 
     for (const item of pendingItems) {
-      await this.pushQueueItem(item, userId);
+      try {
+        await this.pushQueueItem(item, userId);
+      } catch (error) {
+        console.warn(
+          `Sync push failed for ${item.entity}/${item.recordId}:`,
+          error instanceof Error ? error.message : error,
+        );
+
+        if (item.retryCount >= 2) {
+          await sleep(backoffDelay(item.retryCount));
+        }
+      }
     }
   }
 
@@ -220,7 +262,8 @@ class SyncService {
 
   private async pullRemoteChanges() {
     const session = await supabase.auth.getSession();
-    if (!session.data.session?.user?.id) {
+    const userId = session.data.session?.user?.id;
+    if (!userId) {
       return;
     }
 
@@ -230,6 +273,7 @@ class SyncService {
       let query = supabase
         .from(table)
         .select('*')
+        .eq('user_id', userId)
         .order('updated_at', { ascending: true });
       if (lastSyncAt) {
         query = query.gte('updated_at', lastSyncAt);
@@ -237,7 +281,11 @@ class SyncService {
 
       const { data, error } = await query;
       if (error) {
-        throw error;
+        if (this.isRemoteSchemaMissing(error)) {
+          throw error;
+        }
+        console.warn(`Pull failed for table ${table}:`, error.message);
+        continue;
       }
 
       for (const record of data ?? []) {

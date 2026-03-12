@@ -2,6 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as LocalAuthentication from 'expo-local-authentication';
 import React, { useEffect, useState } from 'react';
 import {
+  ActivityIndicator,
   Alert,
   Modal,
   ScrollView,
@@ -13,6 +14,7 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import Animated, { FadeInDown } from 'react-native-reanimated';
 
 import { Button, Card } from '@/components/common';
 import { exportService } from '@/services/exportService';
@@ -20,6 +22,7 @@ import { authService, setBiometricPreference } from '@/services/auth';
 import { UserProfileService } from '@/services/dataServices';
 import { applyNotificationPreferences } from '@/services/notifications';
 import { importSmsTransactions } from '@/services/sms';
+import { syncService } from '@/services/syncService';
 import { useAppStore } from '@/store/appStore';
 import { COLORS, RADIUS, SPACING, TYPOGRAPHY } from '@/utils/constants';
 import type {
@@ -334,43 +337,53 @@ export default function SettingsScreen() {
           />
         </SettingsSection>
 
-        <SettingsSection title="Data & Backup">
-          <SettingsRow
-            icon="chatbox-ellipses-outline"
-            iconColor="#8B5CF6"
-            label="Import Bank SMS"
-            subtitle="Requests SMS read permission on Android. Native inbox parsing is not available in this build yet."
-            onPress={() => void handleSmsImport()}
-            showChevron
-          />
-          <SettingsRow
-            icon="download-outline"
-            iconColor="#22C55E"
-            label="Export CSV"
-            subtitle="Share paginated transaction history as CSV"
-            onPress={() => void handleExport('csv')}
-            showChevron
-          />
-          <SettingsRow
-            icon="document-text-outline"
-            iconColor="#3B82F6"
-            label="Export JSON"
-            subtitle="Share full offline backup as JSON"
-            onPress={() => void handleExport('json')}
-            showChevron
-          />
-        </SettingsSection>
+        <Animated.View entering={FadeInDown.duration(400).delay(200)}>
+          <SettingsSection title="Sync">
+            <SyncStatusRow />
+          </SettingsSection>
+        </Animated.View>
 
-        <SettingsSection title="Account">
-          <SettingsRow
-            icon="log-out-outline"
-            iconColor="#F43F5E"
-            label="Logout"
-            subtitle="Sign out, block app access, and clear all local cached data"
-            onPress={() => void authService.signOut()}
-            showChevron
-          />
-        </SettingsSection>
+        <Animated.View entering={FadeInDown.duration(400).delay(300)}>
+          <SettingsSection title="Data & Backup">
+            <SettingsRow
+              icon="chatbox-ellipses-outline"
+              iconColor="#8B5CF6"
+              label="Import Bank SMS"
+              subtitle="Requests SMS read permission on Android. Native inbox parsing is not available in this build yet."
+              onPress={() => void handleSmsImport()}
+              showChevron
+            />
+            <SettingsRow
+              icon="download-outline"
+              iconColor="#22C55E"
+              label="Export CSV"
+              subtitle="Share paginated transaction history as CSV"
+              onPress={() => void handleExport('csv')}
+              showChevron
+            />
+            <SettingsRow
+              icon="document-text-outline"
+              iconColor="#3B82F6"
+              label="Export JSON"
+              subtitle="Share full offline backup as JSON"
+              onPress={() => void handleExport('json')}
+              showChevron
+            />
+          </SettingsSection>
+        </Animated.View>
+
+        <Animated.View entering={FadeInDown.duration(400).delay(400)}>
+          <SettingsSection title="Account">
+            <SettingsRow
+              icon="log-out-outline"
+              iconColor="#F43F5E"
+              label="Logout"
+              subtitle="Sign out, block app access, and clear all local cached data"
+              onPress={() => void authService.signOut()}
+              showChevron
+            />
+          </SettingsSection>
+        </Animated.View>
       </ScrollView>
 
       <Modal
@@ -454,6 +467,56 @@ export default function SettingsScreen() {
     </SafeAreaView>
   );
 }
+
+const SyncStatusRow = () => {
+  const { syncInProgress, lastSyncAt, lastSyncError, isOnline } = useAppStore();
+  const [syncing, setSyncing] = useState(false);
+
+  const handleSync = async () => {
+    setSyncing(true);
+    try {
+      await syncService.requestSync('manual');
+    } finally {
+      setSyncing(false);
+    }
+  };
+
+  return (
+    <View style={styles.row}>
+      <View style={[styles.rowIcon, { backgroundColor: '#06B6D420' }]}>
+        <Ionicons name="sync-outline" size={18} color="#06B6D4" />
+      </View>
+      <View style={styles.rowContent}>
+        <Text style={styles.rowLabel}>Cloud Sync</Text>
+        {lastSyncError ? (
+          <Text
+            style={[styles.rowSub, { color: COLORS.expense }]}
+            numberOfLines={2}
+          >
+            {lastSyncError}
+          </Text>
+        ) : lastSyncAt ? (
+          <Text style={styles.rowSub}>
+            Last synced: {new Date(lastSyncAt).toLocaleString()}
+          </Text>
+        ) : (
+          <Text style={styles.rowSub}>Not synced yet</Text>
+        )}
+      </View>
+      {syncing || syncInProgress ? (
+        <ActivityIndicator size="small" color={COLORS.primary} />
+      ) : (
+        <TouchableOpacity
+          onPress={() => void handleSync()}
+          disabled={!isOnline}
+          style={[styles.syncButton, !isOnline && { opacity: 0.4 }]}
+        >
+          <Text style={styles.syncButtonText}>Sync Now</Text>
+        </TouchableOpacity>
+      )}
+    </View>
+  );
+};
 
 const ThemeChip = ({
   label,
@@ -625,6 +688,19 @@ const styles = StyleSheet.create({
   },
   themeChipText: { ...TYPOGRAPHY.caption, color: COLORS.textMuted },
   themeChipTextActive: { color: COLORS.primary, fontWeight: '600' },
+  syncButton: {
+    borderWidth: 1,
+    borderColor: COLORS.primary + '40',
+    backgroundColor: COLORS.primary + '20',
+    borderRadius: RADIUS.full,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+  },
+  syncButtonText: {
+    ...TYPOGRAPHY.caption,
+    color: COLORS.primary,
+    fontWeight: '600',
+  },
 });
 
 const modalStyles = StyleSheet.create({

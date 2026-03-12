@@ -1,4 +1,4 @@
-export const COLORS = {
+export const DARK_COLORS = {
   primary: '#7C3AED',
   primaryLight: '#8B5CF6',
   primaryDark: '#6D28D9',
@@ -17,8 +17,51 @@ export const COLORS = {
   textSecondary: '#9890B8',
   textMuted: '#5C567A',
   textInverse: '#0A0A0F',
-  chart: ['#7C3AED', '#06B6D4', '#22C55E', '#F97316', '#F43F5E', '#EAB308', '#EC4899', '#14B8A6'],
+  chart: [
+    '#7C3AED',
+    '#06B6D4',
+    '#22C55E',
+    '#F97316',
+    '#F43F5E',
+    '#EAB308',
+    '#EC4899',
+    '#14B8A6',
+  ],
 } as const;
+
+export const LIGHT_COLORS = {
+  primary: '#7C3AED',
+  primaryLight: '#8B5CF6',
+  primaryDark: '#6D28D9',
+  secondary: '#06B6D4',
+  income: '#16A34A',
+  expense: '#E11D48',
+  transfer: '#2563EB',
+  warning: '#D97706',
+  bg: '#F8FAFC',
+  bgCard: '#FFFFFF',
+  bgElevated: '#F1F5F9',
+  bgInput: '#F1F5F9',
+  border: '#E2E8F0',
+  borderLight: '#CBD5E1',
+  textPrimary: '#0F172A',
+  textSecondary: '#475569',
+  textMuted: '#64748B',
+  textInverse: '#F8FAFC',
+  chart: [
+    '#7C3AED',
+    '#06B6D4',
+    '#16A34A',
+    '#EA580C',
+    '#E11D48',
+    '#CA8A04',
+    '#DB2777',
+    '#0D9488',
+  ],
+} as const;
+
+// Legacy export for files not yet refactored to useTheme hook
+export const COLORS = DARK_COLORS;
 
 export const SPACING = {
   xs: 4,

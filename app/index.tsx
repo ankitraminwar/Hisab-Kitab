@@ -1,5 +1,5 @@
-import DashboardScreen from '../src/screens/dashboard/DashboardScreen';
+import { Redirect } from 'expo-router';
 
-export default function HomeScreen() {
-  return <DashboardScreen />;
+export default function IndexRoute() {
+  return <Redirect href="/(tabs)" />;
 }
