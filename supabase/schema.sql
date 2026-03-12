@@ -10,6 +10,43 @@ begin
 end;
 $$;
 
+create or replace function public.handle_new_user()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  insert into public.user_profile (
+    id,
+    user_id,
+    name,
+    email,
+    currency,
+    monthly_budget,
+    theme_preference,
+    notifications_enabled,
+    biometric_enabled
+  )
+  values (
+    new.id::text,
+    new.id,
+    coalesce(new.raw_user_meta_data ->> 'name', 'Hisab Kitab User'),
+    coalesce(new.email, ''),
+    'INR',
+    0,
+    'dark',
+    false,
+    false
+  )
+  on conflict (user_id) do update
+  set email = excluded.email,
+      updated_at = timezone('utc', now());
+
+  return new;
+end;
+$$;
+
 create table if not exists public.accounts (
   id text primary key,
   user_id uuid references auth.users(id) on delete cascade,
@@ -55,7 +92,7 @@ create table if not exists public.transactions (
   notes text,
   tags jsonb not null default '[]'::jsonb,
   transaction_date date not null,
-  payment_method text not null default 'other',
+  payment_method text not null default 'other' check (payment_method in ('cash', 'bank_transfer', 'upi', 'wallet', 'credit_card', 'debit_card', 'other')),
   is_recurring boolean not null default false,
   recurring_id text,
   created_at timestamptz not null default timezone('utc', now()),
@@ -103,7 +140,7 @@ create table if not exists public.assets (
   id text primary key,
   user_id uuid references auth.users(id) on delete cascade,
   name text not null,
-  type text not null,
+  type text not null check (type in ('bank', 'cash', 'stocks', 'mutual_funds', 'crypto', 'gold', 'real_estate', 'other')),
   value double precision not null,
   notes text,
   last_updated timestamptz not null default timezone('utc', now()),
@@ -118,7 +155,7 @@ create table if not exists public.liabilities (
   id text primary key,
   user_id uuid references auth.users(id) on delete cascade,
   name text not null,
-  type text not null,
+  type text not null check (type in ('credit_card', 'loan', 'mortgage', 'other')),
   amount double precision not null,
   interest_rate double precision not null default 0,
   due_date date,
@@ -153,7 +190,7 @@ create table if not exists public.user_profile (
   phone text,
   currency text not null default 'INR',
   monthly_budget double precision not null default 0,
-  theme_preference text not null default 'dark' check (theme_preference in ('dark', 'light')),
+  theme_preference text not null default 'dark' check (theme_preference in ('dark', 'light', 'system')),
   notifications_enabled boolean not null default false,
   biometric_enabled boolean not null default false,
   created_at timestamptz not null default timezone('utc', now()),
@@ -167,6 +204,14 @@ create index if not exists idx_transactions_transaction_date on public.transacti
 create index if not exists idx_transactions_category_id on public.transactions (category_id);
 create index if not exists idx_transactions_account_id on public.transactions (account_id);
 create index if not exists idx_transactions_user_updated_at on public.transactions (user_id, updated_at desc);
+create index if not exists idx_accounts_user_updated_at on public.accounts (user_id, updated_at desc);
+create index if not exists idx_categories_user_updated_at on public.categories (user_id, updated_at desc);
+create index if not exists idx_budgets_user_updated_at on public.budgets (user_id, updated_at desc);
+create index if not exists idx_goals_user_updated_at on public.goals (user_id, updated_at desc);
+create index if not exists idx_assets_user_updated_at on public.assets (user_id, updated_at desc);
+create index if not exists idx_liabilities_user_updated_at on public.liabilities (user_id, updated_at desc);
+create index if not exists idx_net_worth_history_user_updated_at on public.net_worth_history (user_id, updated_at desc);
+create index if not exists idx_user_profile_user_updated_at on public.user_profile (user_id, updated_at desc);
 create unique index if not exists idx_budgets_user_category_month_year
   on public.budgets (user_id, category_id, month, year)
   where deleted_at is null;
@@ -189,6 +234,8 @@ drop trigger if exists set_net_worth_updated_at on public.net_worth_history;
 create trigger set_net_worth_updated_at before update on public.net_worth_history for each row execute function public.set_updated_at();
 drop trigger if exists set_user_profile_updated_at on public.user_profile;
 create trigger set_user_profile_updated_at before update on public.user_profile for each row execute function public.set_updated_at();
+drop trigger if exists on_auth_user_created on auth.users;
+create trigger on_auth_user_created after insert on auth.users for each row execute function public.handle_new_user();
 
 alter table public.accounts enable row level security;
 alter table public.categories enable row level security;

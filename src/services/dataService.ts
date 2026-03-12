@@ -1,4 +1,5 @@
 import { getDatabase, enqueueSync } from '@/database';
+import { supabase } from '@/lib/supabase';
 import type { SQLiteBindValue } from 'expo-sqlite';
 import { generateId } from '@/utils/constants';
 import type {
@@ -716,9 +717,17 @@ const parseUserProfile = (
 
 export const UserProfileService = {
   async getProfile(): Promise<UserProfile | null> {
+    const session = await supabase.auth.getSession();
+    const sessionUserId = session.data.session?.user?.id ?? null;
+
     const row = await getDatabase().getFirstAsync<
       UserProfile & { notificationsEnabled: number; biometricEnabled: number }
-    >('SELECT * FROM user_profile LIMIT 1');
+    >(
+      sessionUserId
+        ? 'SELECT * FROM user_profile WHERE userId = ? LIMIT 1'
+        : 'SELECT * FROM user_profile LIMIT 1',
+      sessionUserId ? [sessionUserId] : [],
+    );
 
     return row ? parseUserProfile(row) : null;
   },
@@ -728,12 +737,15 @@ export const UserProfileService = {
       Omit<UserProfile, 'id' | 'createdAt' | 'updatedAt' | 'syncStatus'>
     >,
   ): Promise<UserProfile> {
+    const session = await supabase.auth.getSession();
+    const sessionUserId = session.data.session?.user?.id ?? null;
+    const sessionEmail = session.data.session?.user?.email ?? '';
     const existing = await this.getProfile();
     const now = new Date().toISOString();
     const profile: UserProfile = {
-      id: existing?.id ?? 'profile_local',
+      id: existing?.id ?? sessionUserId ?? 'profile_local',
       name: data.name ?? existing?.name ?? 'Hisab Kitab User',
-      email: data.email ?? existing?.email ?? '',
+      email: data.email ?? existing?.email ?? sessionEmail,
       phone: data.phone ?? existing?.phone,
       currency: data.currency ?? existing?.currency ?? 'INR',
       monthlyBudget: data.monthlyBudget ?? existing?.monthlyBudget ?? 0,
@@ -745,7 +757,7 @@ export const UserProfileService = {
         data.biometricEnabled ?? existing?.biometricEnabled ?? false,
       createdAt: existing?.createdAt ?? now,
       updatedAt: now,
-      userId: data.userId ?? existing?.userId ?? null,
+      userId: data.userId ?? existing?.userId ?? sessionUserId,
       syncStatus: 'pending',
       lastSyncedAt: existing?.lastSyncedAt ?? null,
       deletedAt: null,
