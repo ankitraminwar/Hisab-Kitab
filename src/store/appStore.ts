@@ -1,6 +1,18 @@
 import { create } from 'zustand';
 
-import type { Account, Asset, Budget, Category, DashboardStats, Goal, Liability, Transaction } from '@/utils/types';
+import type {
+  Account,
+  Asset,
+  Budget,
+  Category,
+  DashboardStats,
+  Goal,
+  Liability,
+  NotificationPreferences,
+  ThemePreference,
+  Transaction,
+  UserProfile,
+} from '@/utils/types';
 
 interface SyncStateUpdate {
   syncInProgress?: boolean;
@@ -25,7 +37,9 @@ interface AppState {
   liabilities: Liability[];
   dashboardStats: DashboardStats;
   isLoading: boolean;
-  theme: 'dark' | 'light';
+  theme: ThemePreference;
+  userProfile: UserProfile | null;
+  notificationPreferences: NotificationPreferences;
   selectedMonth: string;
   setLocked: (locked: boolean) => void;
   setBiometrics: (enabled: boolean) => void;
@@ -40,6 +54,9 @@ interface AppState {
   setLiabilities: (liabilities: Liability[]) => void;
   setDashboardStats: (stats: DashboardStats) => void;
   setLoading: (loading: boolean) => void;
+  setTheme: (theme: ThemePreference) => void;
+  setUserProfile: (profile: UserProfile | null) => void;
+  setNotificationPreferences: (preferences: NotificationPreferences) => void;
   setSelectedMonth: (month: string) => void;
 }
 
@@ -67,6 +84,13 @@ export const useAppStore = create<AppState>((set) => ({
   },
   isLoading: false,
   theme: 'dark',
+  userProfile: null,
+  notificationPreferences: {
+    enabled: false,
+    dailyReminder: false,
+    budgetAlerts: true,
+    monthlyReportReminder: true,
+  },
   selectedMonth: new Date().toISOString().slice(0, 7),
   setLocked: (locked) => set({ isLocked: locked }),
   setBiometrics: (enabled) => set({ biometricsEnabled: enabled }),
@@ -81,5 +105,8 @@ export const useAppStore = create<AppState>((set) => ({
   setLiabilities: (liabilities) => set({ liabilities }),
   setDashboardStats: (dashboardStats) => set({ dashboardStats }),
   setLoading: (isLoading) => set({ isLoading }),
+  setTheme: (theme) => set({ theme }),
+  setUserProfile: (userProfile) => set({ userProfile }),
+  setNotificationPreferences: (notificationPreferences) => set({ notificationPreferences }),
   setSelectedMonth: (selectedMonth) => set({ selectedMonth }),
 }));

@@ -65,6 +65,7 @@ const transactionalTables = [
     notes TEXT,
     tags TEXT DEFAULT '[]',
     date TEXT NOT NULL,
+    paymentMethod TEXT NOT NULL DEFAULT 'other',
     isRecurring INTEGER DEFAULT 0,
     recurringId TEXT,
     createdAt TEXT NOT NULL,
@@ -124,6 +125,20 @@ const transactionalTables = [
     updatedAt TEXT NOT NULL,
     ${baseSyncColumns}
   )`,
+  `CREATE TABLE IF NOT EXISTS user_profile (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL DEFAULT 'Hisab Kitab User',
+    email TEXT NOT NULL DEFAULT '',
+    phone TEXT,
+    currency TEXT NOT NULL DEFAULT 'INR',
+    monthlyBudget REAL NOT NULL DEFAULT 0,
+    themePreference TEXT NOT NULL DEFAULT 'dark' CHECK(themePreference IN ('dark','light')),
+    notificationsEnabled INTEGER NOT NULL DEFAULT 0,
+    biometricEnabled INTEGER NOT NULL DEFAULT 0,
+    createdAt TEXT NOT NULL,
+    updatedAt TEXT NOT NULL,
+    ${baseSyncColumns}
+  )`,
   `CREATE TABLE IF NOT EXISTS recurring_templates (
     id TEXT PRIMARY KEY,
     amount REAL NOT NULL,
@@ -171,7 +186,10 @@ const transactionalTables = [
 
 const indexes = [
   `CREATE INDEX IF NOT EXISTS idx_transactions_date ON transactions(date DESC, createdAt DESC)`,
+  `CREATE INDEX IF NOT EXISTS idx_transactions_transaction_date ON transactions(date DESC)`,
   `CREATE INDEX IF NOT EXISTS idx_transactions_category_account ON transactions(categoryId, accountId)`,
+  `CREATE INDEX IF NOT EXISTS idx_transactions_category_id ON transactions(categoryId)`,
+  `CREATE INDEX IF NOT EXISTS idx_transactions_account_id ON transactions(accountId)`,
   `CREATE INDEX IF NOT EXISTS idx_transactions_type ON transactions(type)`,
   `CREATE INDEX IF NOT EXISTS idx_transactions_updatedAt ON transactions(updatedAt DESC)`,
   `CREATE INDEX IF NOT EXISTS idx_transactions_deletedAt ON transactions(deletedAt)`,
@@ -267,6 +285,20 @@ const seedDefaultData = async (database: SQLite.SQLiteDatabase) => {
       lastSyncedAt: null,
       userId: null,
     });
+  }
+
+  const profileCount = await database.getFirstAsync<{ count: number }>(
+    'SELECT COUNT(*) as count FROM user_profile',
+  );
+
+  if ((profileCount?.count ?? 0) === 0) {
+    const now = new Date().toISOString();
+    await database.runAsync(
+      `INSERT INTO user_profile
+        (id, name, email, phone, currency, monthlyBudget, themePreference, notificationsEnabled, biometricEnabled, createdAt, updatedAt, userId, syncStatus, lastSyncedAt, deletedAt)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      ['profile_local', 'Hisab Kitab User', '', null, 'INR', 0, 'dark', 0, 0, now, now, null, 'pending', null, null],
+    );
   }
 };
 

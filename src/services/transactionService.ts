@@ -1,5 +1,6 @@
 import { getDatabase, enqueueSync } from '@/database';
 import type { SQLiteBindValue } from 'expo-sqlite';
+import { triggerBackgroundSync } from '@/services/syncService';
 import { generateId } from '@/utils/constants';
 import type { Transaction, TransactionFilters, TransactionType } from '@/utils/types';
 
@@ -21,6 +22,7 @@ const bindValue = (value: unknown): SQLiteBindValue => {
 const parseTransaction = (row: Transaction & { tags: string | string[]; isRecurring: number | boolean }): Transaction => ({
   ...row,
   tags: Array.isArray(row.tags) ? row.tags : JSON.parse(row.tags || '[]'),
+  paymentMethod: row.paymentMethod ?? 'other',
   isRecurring: Boolean(row.isRecurring),
 });
 
@@ -155,8 +157,8 @@ export const TransactionService = {
 
     await getDatabase().runAsync(
       `INSERT INTO transactions
-        (id, amount, type, categoryId, accountId, toAccountId, merchant, notes, tags, date, isRecurring, recurringId, createdAt, updatedAt, userId, syncStatus, lastSyncedAt, deletedAt)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        (id, amount, type, categoryId, accountId, toAccountId, merchant, notes, tags, date, paymentMethod, isRecurring, recurringId, createdAt, updatedAt, userId, syncStatus, lastSyncedAt, deletedAt)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         transaction.id,
         transaction.amount,
@@ -168,6 +170,7 @@ export const TransactionService = {
         bindValue(transaction.notes),
         JSON.stringify(transaction.tags ?? []),
         transaction.date,
+        transaction.paymentMethod,
         transaction.isRecurring ? 1 : 0,
         bindValue(transaction.recurringId),
         transaction.createdAt,
@@ -185,6 +188,7 @@ export const TransactionService = {
       tags: JSON.stringify(transaction.tags ?? []),
       isRecurring: transaction.isRecurring ? 1 : 0,
     });
+    void triggerBackgroundSync('transaction-created');
 
     const created = await this.getById(transaction.id);
     if (!created) {
@@ -211,7 +215,7 @@ export const TransactionService = {
 
     await getDatabase().runAsync(
       `UPDATE transactions
-       SET amount = ?, type = ?, categoryId = ?, accountId = ?, toAccountId = ?, merchant = ?, notes = ?, tags = ?, date = ?, isRecurring = ?, recurringId = ?, updatedAt = ?, syncStatus = 'pending'
+       SET amount = ?, type = ?, categoryId = ?, accountId = ?, toAccountId = ?, merchant = ?, notes = ?, tags = ?, date = ?, paymentMethod = ?, isRecurring = ?, recurringId = ?, updatedAt = ?, syncStatus = 'pending'
        WHERE id = ?`,
       [
         updated.amount,
@@ -223,6 +227,7 @@ export const TransactionService = {
         bindValue(updated.notes),
         JSON.stringify(updated.tags ?? []),
         updated.date,
+        updated.paymentMethod,
         updated.isRecurring ? 1 : 0,
         bindValue(updated.recurringId),
         updated.updatedAt,
@@ -236,6 +241,7 @@ export const TransactionService = {
       tags: JSON.stringify(updated.tags ?? []),
       isRecurring: updated.isRecurring ? 1 : 0,
     });
+    void triggerBackgroundSync('transaction-updated');
   },
 
   async delete(id: string): Promise<void> {
@@ -310,7 +316,7 @@ export const TransactionService = {
 
   async exportToCSV(): Promise<string> {
     const transactions = await this.getAll(undefined, 100000, 0);
-    const header = 'Date,Type,Amount,Category,Account,Merchant,Notes,Tags';
+    const header = 'Date,Type,Amount,Category,Account,Payment Method,Merchant,Notes,Tags';
     const rows = transactions.map((transaction) =>
       [
         transaction.date,
@@ -318,6 +324,7 @@ export const TransactionService = {
         transaction.amount,
         transaction.categoryName ?? '',
         transaction.accountName ?? '',
+        transaction.paymentMethod,
         transaction.merchant ?? '',
         transaction.notes ?? '',
         transaction.tags.join(';'),

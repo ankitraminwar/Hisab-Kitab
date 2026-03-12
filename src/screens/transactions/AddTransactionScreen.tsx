@@ -1,16 +1,25 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import DateTimePicker, { type DateTimePickerEvent } from '@react-native-community/datetimepicker';
+import { Ionicons } from '@expo/vector-icons';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  View, Text, StyleSheet, ScrollView, TouchableOpacity,
-  TextInput, KeyboardAvoidingView, Platform, Alert,
+  Alert,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
-import { useRouter, useLocalSearchParams } from 'expo-router';
-import { COLORS, SPACING, RADIUS, TYPOGRAPHY } from '../../utils/constants';
-import { TransactionService } from '../../services/transactionService';
-import { AccountService, CategoryService } from '../../services/dataServices';
-import { Button } from '../../components/common';
-import { Account, Category, TransactionType } from '../../utils/types';
+
+import { Button } from '@/components/common';
+import { AccountService, CategoryService } from '@/services/dataServices';
+import { TransactionService } from '@/services/transactionService';
+import { COLORS, RADIUS, SPACING, TYPOGRAPHY } from '@/utils/constants';
+import type { Account, Category, PaymentMethod, TransactionType } from '@/utils/types';
 
 const TRANSACTION_TYPES: { key: TransactionType; label: string; color: string }[] = [
   { key: 'expense', label: 'Expense', color: COLORS.expense },
@@ -18,17 +27,23 @@ const TRANSACTION_TYPES: { key: TransactionType; label: string; color: string }[
   { key: 'transfer', label: 'Transfer', color: COLORS.transfer },
 ];
 
+const PAYMENT_METHODS: PaymentMethod[] = ['cash', 'bank_transfer', 'upi', 'wallet', 'credit_card', 'debit_card', 'other'];
+
+const toDateString = (date: Date) => date.toISOString().slice(0, 10);
+
 export default function AddTransactionScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id?: string }>();
-  const isEditing = !!id;
+  const isEditing = Boolean(id);
 
   const [type, setType] = useState<TransactionType>('expense');
   const [amount, setAmount] = useState('');
   const [merchant, setMerchant] = useState('');
   const [notes, setNotes] = useState('');
   const [tags, setTags] = useState('');
-  const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
+  const [selectedDate, setSelectedDate] = useState(new Date());
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('other');
   const [selectedCategory, setSelectedCategory] = useState<Category | null>(null);
   const [selectedAccount, setSelectedAccount] = useState<Account | null>(null);
   const [selectedToAccount, setSelectedToAccount] = useState<Account | null>(null);
@@ -36,235 +51,300 @@ export default function AddTransactionScreen() {
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [loading, setLoading] = useState(false);
 
+  const filteredCategories = useMemo(
+    () => categories.filter((category) => category.type === type || category.type === 'both'),
+    [categories, type],
+  );
+
   const loadData = useCallback(async () => {
-    const [cats, accs] = await Promise.all([CategoryService.getAll(), AccountService.getAll()]);
-    setCategories(cats.filter(c => c.type === type || c.type === 'both'));
-    setAccounts(accs);
-    if (accs.length > 0 && !selectedAccount) setSelectedAccount(accs[0]);
-  }, [selectedAccount, type]);
+    const [categoryRows, accountRows] = await Promise.all([CategoryService.getAll(), AccountService.getAll()]);
+    setCategories(categoryRows);
+    setAccounts(accountRows);
+    setSelectedAccount((current) => current ?? accountRows[0] ?? null);
+  }, []);
 
   const loadExisting = useCallback(async () => {
-    const tx = await TransactionService.getById(id!);
-    if (!tx) return;
-    setType(tx.type);
-    setAmount(tx.amount.toString());
-    setMerchant(tx.merchant || '');
-    setNotes(tx.notes || '');
-    setTags(tx.tags.join(', '));
-    setDate(tx.date.slice(0, 10));
-  }, [id]);
+    if (!id) {
+      return;
+    }
+
+    const transaction = await TransactionService.getById(id);
+    if (!transaction) {
+      return;
+    }
+
+    setType(transaction.type);
+    setAmount(String(transaction.amount));
+    setMerchant(transaction.merchant ?? '');
+    setNotes(transaction.notes ?? '');
+    setTags(transaction.tags.join(', '));
+    setSelectedDate(new Date(transaction.date));
+    setPaymentMethod(transaction.paymentMethod);
+    setSelectedCategory(categories.find((category) => category.id === transaction.categoryId) ?? null);
+    setSelectedAccount(accounts.find((account) => account.id === transaction.accountId) ?? null);
+    setSelectedToAccount(accounts.find((account) => account.id === transaction.toAccountId) ?? null);
+  }, [accounts, categories, id]);
 
   useEffect(() => {
     void loadData();
-    if (isEditing) {
-      void loadExisting();
-    }
-  }, [isEditing, loadData, loadExisting]);
+  }, [loadData]);
 
   useEffect(() => {
-    setCategories(prev => {
-      // Re-filter when type changes
-      return prev;
-    });
-    CategoryService.getAll().then(cats =>
-      setCategories(cats.filter(c => c.type === type || c.type === 'both'))
-    );
-  }, [type]);
-
-  const handleSave = async () => {
-    if (!amount || parseFloat(amount) <= 0) {
-      Alert.alert('Error', 'Please enter a valid amount');
+    if (filteredCategories.length === 0) {
+      setSelectedCategory(null);
       return;
     }
-    if (!selectedCategory) {
-      Alert.alert('Error', 'Please select a category');
+
+    setSelectedCategory((current) => {
+      if (current && filteredCategories.some((category) => category.id === current.id)) {
+        return current;
+      }
+
+      return filteredCategories.find((category) => category.name === 'Other') ?? filteredCategories[0] ?? null;
+    });
+  }, [filteredCategories]);
+
+  useEffect(() => {
+    if (categories.length > 0 && accounts.length > 0 && isEditing) {
+      void loadExisting();
+    }
+  }, [accounts, categories, isEditing, loadExisting]);
+
+  const onDateChange = (_event: DateTimePickerEvent, value?: Date) => {
+    if (Platform.OS !== 'ios') {
+      setShowDatePicker(false);
+    }
+    if (value) {
+      setSelectedDate(value);
+    }
+  };
+
+  const handleSave = async () => {
+    if (!amount || Number(amount) <= 0) {
+      Alert.alert('Invalid amount', 'Enter a valid amount greater than zero.');
       return;
     }
     if (!selectedAccount) {
-      Alert.alert('Error', 'Please select an account');
+      Alert.alert('Missing account', 'Choose an account for this transaction.');
+      return;
+    }
+    if (!selectedCategory) {
+      Alert.alert('Missing category', 'Choose a category for this transaction.');
       return;
     }
     if (type === 'transfer' && !selectedToAccount) {
-      Alert.alert('Error', 'Please select destination account');
+      Alert.alert('Missing destination', 'Choose the destination account for this transfer.');
       return;
     }
 
     setLoading(true);
     try {
-      const data = {
-        amount: parseFloat(amount),
+      const payload = {
+        amount: Number(amount),
         type,
         categoryId: selectedCategory.id,
         accountId: selectedAccount.id,
         toAccountId: type === 'transfer' ? selectedToAccount?.id : undefined,
         merchant: merchant.trim() || undefined,
         notes: notes.trim() || undefined,
-        tags: tags.split(',').map(t => t.trim()).filter(Boolean),
-        date,
+        tags: tags.split(',').map((tag) => tag.trim()).filter(Boolean),
+        date: toDateString(selectedDate),
+        paymentMethod,
         isRecurring: false,
       };
 
-      if (isEditing) {
-        await TransactionService.update(id!, data);
+      if (isEditing && id) {
+        await TransactionService.update(id, payload);
       } else {
-        await TransactionService.create(data);
+        await TransactionService.create(payload);
       }
       router.back();
-    } catch {
-      Alert.alert('Error', 'Failed to save transaction');
+    } catch (error) {
+      Alert.alert('Save failed', error instanceof Error ? error.message : 'Transaction could not be saved.');
     } finally {
       setLoading(false);
     }
   };
 
-  const activeColor = TRANSACTION_TYPES.find(t => t.key === type)?.color || COLORS.primary;
-
   return (
     <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
-        {/* Header */}
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.flex}>
         <View style={styles.header}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
+          <TouchableOpacity onPress={() => router.back()} style={styles.iconButton}>
             <Ionicons name="chevron-back" size={24} color={COLORS.textPrimary} />
           </TouchableOpacity>
           <Text style={styles.title}>{isEditing ? 'Edit Transaction' : 'Add Transaction'}</Text>
-          <View style={{ width: 40 }} />
+          <View style={styles.iconButtonPlaceholder} />
         </View>
 
         <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
-          {/* Type Selector */}
           <View style={styles.typeSelector}>
-            {TRANSACTION_TYPES.map(t => (
+            {TRANSACTION_TYPES.map((option) => (
               <TouchableOpacity
-                key={t.key}
-                style={[styles.typeBtn, type === t.key && { backgroundColor: t.color, borderColor: t.color }]}
-                onPress={() => setType(t.key)}
+                key={option.key}
+                style={[styles.typeButton, type === option.key && { backgroundColor: option.color, borderColor: option.color }]}
+                onPress={() => setType(option.key)}
               >
-                <Text style={[styles.typeBtnText, type === t.key && { color: '#fff' }]}>{t.label}</Text>
+                <Text style={[styles.typeButtonText, type === option.key && styles.typeButtonTextActive]}>{option.label}</Text>
               </TouchableOpacity>
             ))}
           </View>
 
-          {/* Amount */}
           <View style={styles.amountContainer}>
-            <Text style={styles.currencySymbol}>₹</Text>
+            <Text style={styles.currencySymbol}>Rs</Text>
             <TextInput
               value={amount}
               onChangeText={setAmount}
               keyboardType="numeric"
               placeholder="0"
               placeholderTextColor={COLORS.textMuted}
-              style={[styles.amountInput, { color: activeColor }]}
+              style={styles.amountInput}
             />
           </View>
 
-          {/* Category */}
-          <View style={styles.section}>
-            <Text style={styles.sectionLabel}>Category</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.categoryScroll}>
-              {categories.map(cat => (
-                <TouchableOpacity
-                  key={cat.id}
-                  style={[styles.catItem, selectedCategory?.id === cat.id && { borderColor: cat.color, backgroundColor: cat.color + '20' }]}
-                  onPress={() => setSelectedCategory(cat)}
-                >
-                  <Ionicons name={cat.icon as any} size={20} color={selectedCategory?.id === cat.id ? cat.color : COLORS.textMuted} />
-                  <Text style={[styles.catName, selectedCategory?.id === cat.id && { color: cat.color }]}>{cat.name}</Text>
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
-          </View>
+          <SelectionSection label="Category">
+            {filteredCategories.map((category) => (
+              <Chip
+                key={category.id}
+                active={selectedCategory?.id === category.id}
+                activeColor={category.color}
+                icon={category.icon}
+                label={category.name}
+                onPress={() => setSelectedCategory(category)}
+              />
+            ))}
+          </SelectionSection>
 
-          {/* Account */}
-          <View style={styles.section}>
-            <Text style={styles.sectionLabel}>{type === 'transfer' ? 'From Account' : 'Account'}</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-              {accounts.map(acc => (
-                <TouchableOpacity
-                  key={acc.id}
-                  style={[styles.accItem, selectedAccount?.id === acc.id && { borderColor: acc.color, backgroundColor: acc.color + '20' }]}
-                  onPress={() => setSelectedAccount(acc)}
-                >
-                  <Ionicons name={acc.icon as any} size={16} color={selectedAccount?.id === acc.id ? acc.color : COLORS.textMuted} />
-                  <Text style={[styles.accName, selectedAccount?.id === acc.id && { color: acc.color }]}>{acc.name}</Text>
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
-          </View>
+          <SelectionSection label={type === 'transfer' ? 'From account' : 'Account'}>
+            {accounts.map((account) => (
+              <Chip
+                key={account.id}
+                active={selectedAccount?.id === account.id}
+                activeColor={account.color}
+                icon={account.icon}
+                label={account.name}
+                onPress={() => setSelectedAccount(account)}
+              />
+            ))}
+          </SelectionSection>
 
-          {type === 'transfer' && (
-            <View style={styles.section}>
-              <Text style={styles.sectionLabel}>To Account</Text>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                {accounts.filter(a => a.id !== selectedAccount?.id).map(acc => (
-                  <TouchableOpacity
-                    key={acc.id}
-                    style={[styles.accItem, selectedToAccount?.id === acc.id && { borderColor: acc.color, backgroundColor: acc.color + '20' }]}
-                    onPress={() => setSelectedToAccount(acc)}
-                  >
-                    <Ionicons name={acc.icon as any} size={16} color={selectedToAccount?.id === acc.id ? acc.color : COLORS.textMuted} />
-                    <Text style={[styles.accName, selectedToAccount?.id === acc.id && { color: acc.color }]}>{acc.name}</Text>
-                  </TouchableOpacity>
+          {type === 'transfer' ? (
+            <SelectionSection label="To account">
+              {accounts
+                .filter((account) => account.id !== selectedAccount?.id)
+                .map((account) => (
+                  <Chip
+                    key={account.id}
+                    active={selectedToAccount?.id === account.id}
+                    activeColor={account.color}
+                    icon={account.icon}
+                    label={account.name}
+                    onPress={() => setSelectedToAccount(account)}
+                  />
                 ))}
-              </ScrollView>
-            </View>
-          )}
+            </SelectionSection>
+          ) : null}
 
-          {/* Details */}
+          <SelectionSection label="Payment method">
+            {PAYMENT_METHODS.map((method) => (
+              <Chip
+                key={method}
+                active={paymentMethod === method}
+                activeColor={COLORS.primary}
+                label={method.replace('_', ' ').replace(/\b\w/g, (match) => match.toUpperCase())}
+                onPress={() => setPaymentMethod(method)}
+              />
+            ))}
+          </SelectionSection>
+
           <View style={styles.inputGroup}>
-            <InputField icon="storefront-outline" placeholder="Merchant / Payee" value={merchant} onChangeText={setMerchant} />
-            <InputField icon="calendar-outline" placeholder="Date (YYYY-MM-DD)" value={date} onChangeText={setDate} />
-            <InputField icon="pricetag-outline" placeholder="Tags (comma separated)" value={tags} onChangeText={setTags} />
-            <InputField icon="document-text-outline" placeholder="Notes" value={notes} onChangeText={setNotes} multiline />
+            <Text style={styles.sectionLabel}>Details</Text>
+            <InputField icon="calendar-outline" label="Date" value={toDateString(selectedDate)} onPress={() => setShowDatePicker(true)} />
+            <InputField icon="storefront-outline" label="Merchant / Payee" value={merchant} onChangeText={setMerchant} />
+            <InputField icon="pricetag-outline" label="Tags" value={tags} onChangeText={setTags} />
+            <InputField icon="document-text-outline" label="Notes" value={notes} onChangeText={setNotes} multiline />
           </View>
 
-          <Button title={isEditing ? 'Update Transaction' : 'Save Transaction'} onPress={handleSave} loading={loading} style={styles.saveBtn} />
+          <Button title={isEditing ? 'Update Transaction' : 'Save Transaction'} onPress={() => void handleSave()} loading={loading} />
         </ScrollView>
       </KeyboardAvoidingView>
+
+      {showDatePicker ? (
+        <DateTimePicker value={selectedDate} mode="date" display={Platform.OS === 'ios' ? 'spinner' : 'default'} onChange={onDateChange} />
+      ) : null}
     </SafeAreaView>
   );
 }
 
-const InputField: React.FC<{
-  icon: string; placeholder: string; value: string;
-  onChangeText: (v: string) => void; multiline?: boolean;
-}> = ({ icon, placeholder, value, onChangeText, multiline }) => (
-  <View style={inputStyles.container}>
-    <Ionicons name={icon as any} size={18} color={COLORS.textMuted} />
-    <TextInput
-      value={value}
-      onChangeText={onChangeText}
-      placeholder={placeholder}
-      placeholderTextColor={COLORS.textMuted}
-      style={[inputStyles.input, multiline && { height: 72, textAlignVertical: 'top' }]}
-      multiline={multiline}
-    />
+const SelectionSection = ({ label, children }: { label: string; children: React.ReactNode }) => (
+  <View style={styles.section}>
+    <Text style={styles.sectionLabel}>{label}</Text>
+    <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+      <View style={styles.chipRow}>{children}</View>
+    </ScrollView>
   </View>
 );
 
-const inputStyles = StyleSheet.create({
-  container: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: SPACING.sm,
-    backgroundColor: COLORS.bgInput,
-    borderRadius: RADIUS.md,
-    paddingHorizontal: SPACING.md,
-    paddingVertical: 12,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    marginBottom: SPACING.sm,
-  },
-  input: {
-    flex: 1,
-    color: COLORS.textPrimary,
-    ...TYPOGRAPHY.body,
-    paddingVertical: 0,
-  },
-});
+const Chip = ({
+  active,
+  activeColor,
+  icon,
+  label,
+  onPress,
+}: {
+  active: boolean;
+  activeColor: string;
+  icon?: string;
+  label: string;
+  onPress: () => void;
+}) => (
+  <TouchableOpacity
+    onPress={onPress}
+    style={[
+      styles.chip,
+      active && {
+        borderColor: activeColor,
+        backgroundColor: `${activeColor}20`,
+      },
+    ]}
+  >
+    {icon ? <Ionicons name={icon as never} size={16} color={active ? activeColor : COLORS.textMuted} /> : null}
+    <Text style={[styles.chipText, active && { color: activeColor }]}>{label}</Text>
+  </TouchableOpacity>
+);
+
+const InputField = ({
+  icon,
+  label,
+  value,
+  onChangeText,
+  multiline,
+  onPress,
+}: {
+  icon: string;
+  label: string;
+  value: string;
+  onChangeText?: (value: string) => void;
+  multiline?: boolean;
+  onPress?: () => void;
+}) => (
+  <TouchableOpacity activeOpacity={onPress ? 0.75 : 1} onPress={onPress} disabled={!onPress} style={styles.inputContainer}>
+    <Ionicons name={icon as never} size={18} color={COLORS.textMuted} />
+    <TextInput
+      value={value}
+      onChangeText={onChangeText}
+      editable={!onPress}
+      placeholder={label}
+      placeholderTextColor={COLORS.textMuted}
+      style={[styles.input, multiline && styles.multilineInput]}
+      multiline={multiline}
+    />
+  </TouchableOpacity>
+);
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.bg },
+  flex: { flex: 1 },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -274,56 +354,51 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: COLORS.border,
   },
-  backBtn: {
+  iconButton: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: COLORS.bgCard,
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: COLORS.bgCard,
   },
+  iconButtonPlaceholder: { width: 40, height: 40 },
   title: { ...TYPOGRAPHY.h3, color: COLORS.textPrimary },
-  scroll: { padding: SPACING.md, paddingBottom: SPACING.xl },
+  scroll: { padding: SPACING.md, paddingBottom: 40 },
   typeSelector: {
     flexDirection: 'row',
+    gap: 8,
     backgroundColor: COLORS.bgCard,
     borderRadius: RADIUS.md,
     padding: 4,
-    marginBottom: SPACING.lg,
     borderWidth: 1,
     borderColor: COLORS.border,
   },
-  typeBtn: {
+  typeButton: {
     flex: 1,
-    paddingVertical: 10,
-    alignItems: 'center',
-    borderRadius: RADIUS.sm,
     borderWidth: 1,
     borderColor: 'transparent',
+    borderRadius: RADIUS.sm,
+    alignItems: 'center',
+    paddingVertical: 10,
   },
-  typeBtnText: {
-    ...TYPOGRAPHY.caption,
-    fontWeight: '700',
-    color: COLORS.textMuted,
-  },
+  typeButtonText: { ...TYPOGRAPHY.caption, color: COLORS.textMuted, fontWeight: '700' },
+  typeButtonTextActive: { color: '#fff' },
   amountContainer: {
     flexDirection: 'row',
-    alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: SPACING.lg,
+    alignItems: 'center',
     gap: 8,
+    marginVertical: SPACING.lg,
   },
-  currencySymbol: {
-    fontSize: 36,
-    fontWeight: '700',
-    color: COLORS.textSecondary,
-  },
+  currencySymbol: { fontSize: 28, color: COLORS.textSecondary, fontWeight: '700' },
   amountInput: {
-    fontSize: 48,
-    fontWeight: '800',
-    letterSpacing: -2,
-    minWidth: 100,
+    minWidth: 120,
     textAlign: 'center',
+    color: COLORS.textPrimary,
+    fontSize: 42,
+    fontWeight: '800',
+    letterSpacing: -1.5,
   },
   section: { marginBottom: SPACING.md },
   sectionLabel: {
@@ -332,41 +407,40 @@ const styles = StyleSheet.create({
     marginBottom: SPACING.sm,
     textTransform: 'uppercase',
   },
-  categoryScroll: { marginHorizontal: -SPACING.sm },
-  catItem: {
+  chipRow: { flexDirection: 'row', gap: 8 },
+  chip: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: RADIUS.full,
+    backgroundColor: COLORS.bgCard,
     borderWidth: 1,
     borderColor: COLORS.border,
-    backgroundColor: COLORS.bgCard,
-    marginHorizontal: 4,
   },
-  catName: {
-    ...TYPOGRAPHY.caption,
-    color: COLORS.textMuted,
-    fontWeight: '600',
-  },
-  accItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: RADIUS.full,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    backgroundColor: COLORS.bgCard,
-    marginRight: 8,
-  },
-  accName: {
-    ...TYPOGRAPHY.caption,
-    color: COLORS.textMuted,
-    fontWeight: '600',
-  },
+  chipText: { ...TYPOGRAPHY.caption, color: COLORS.textMuted, fontWeight: '600' },
   inputGroup: { marginBottom: SPACING.md },
-  saveBtn: { marginTop: SPACING.md },
+  inputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: COLORS.bgInput,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    borderRadius: RADIUS.md,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: 12,
+    marginBottom: SPACING.sm,
+  },
+  input: {
+    flex: 1,
+    color: COLORS.textPrimary,
+    ...TYPOGRAPHY.body,
+    paddingVertical: 0,
+  },
+  multilineInput: {
+    minHeight: 72,
+    textAlignVertical: 'top',
+  },
 });

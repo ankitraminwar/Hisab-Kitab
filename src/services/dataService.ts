@@ -9,6 +9,7 @@ import type {
   Goal,
   Liability,
   NetWorthHistory,
+  UserProfile,
 } from '@/utils/types';
 
 const bindValue = (value: unknown): SQLiteBindValue => {
@@ -132,9 +133,10 @@ export const AccountService = {
 
 export const CategoryService = {
   async getAll(): Promise<Category[]> {
-    return getDatabase().getAllAsync<Category>(
+    const rows = await getDatabase().getAllAsync<(Omit<Category, 'isCustom'> & { isCustom: number })>(
       'SELECT * FROM categories WHERE deletedAt IS NULL ORDER BY isCustom ASC, name ASC',
     );
+    return rows.map((row) => ({ ...row, isCustom: Boolean(row.isCustom) }));
   },
 
   async create(data: Pick<Category, 'name' | 'type' | 'icon' | 'color'>) {
@@ -169,6 +171,39 @@ export const CategoryService = {
 
     await queueEntitySync('categories', category.id, category as unknown as Record<string, unknown>);
     return category.id;
+  },
+
+  async update(id: string, data: Partial<Pick<Category, 'name' | 'type' | 'icon' | 'color'>>) {
+    const existing = await getDatabase().getFirstAsync<Category>('SELECT * FROM categories WHERE id = ?', [id]);
+    if (!existing) {
+      throw new Error('Category not found');
+    }
+
+    const updatedAt = new Date().toISOString();
+    const category = {
+      ...existing,
+      ...data,
+      updatedAt,
+      syncStatus: 'pending' as const,
+    };
+
+    await getDatabase().runAsync(
+      `UPDATE categories
+       SET name = ?, type = ?, icon = ?, color = ?, updatedAt = ?, syncStatus = 'pending'
+       WHERE id = ?`,
+      [category.name, category.type, category.icon, category.color, updatedAt, id],
+    );
+
+    await queueEntitySync('categories', id, category as unknown as Record<string, unknown>);
+  },
+
+  async delete(id: string) {
+    const deletedAt = new Date().toISOString();
+    await getDatabase().runAsync(
+      `UPDATE categories SET deletedAt = ?, updatedAt = ?, syncStatus = 'pending' WHERE id = ?`,
+      [deletedAt, deletedAt, id],
+    );
+    await queueEntitySync('categories', id, { id, deletedAt, updatedAt: deletedAt }, 'delete');
   },
 };
 
@@ -495,5 +530,89 @@ export const DataService = {
     }
 
     return result;
+  },
+};
+
+const parseUserProfile = (
+  row: UserProfile & { notificationsEnabled: number | boolean; biometricEnabled: number | boolean },
+): UserProfile => ({
+  ...row,
+  notificationsEnabled: Boolean(row.notificationsEnabled),
+  biometricEnabled: Boolean(row.biometricEnabled),
+});
+
+export const UserProfileService = {
+  async getProfile(): Promise<UserProfile | null> {
+    const row = await getDatabase().getFirstAsync<
+      UserProfile & { notificationsEnabled: number; biometricEnabled: number }
+    >('SELECT * FROM user_profile LIMIT 1');
+
+    return row ? parseUserProfile(row) : null;
+  },
+
+  async upsertProfile(data: Partial<Omit<UserProfile, 'id' | 'createdAt' | 'updatedAt' | 'syncStatus'>>): Promise<UserProfile> {
+    const existing = await this.getProfile();
+    const now = new Date().toISOString();
+    const profile: UserProfile = {
+      id: existing?.id ?? 'profile_local',
+      name: data.name ?? existing?.name ?? 'Hisab Kitab User',
+      email: data.email ?? existing?.email ?? '',
+      phone: data.phone ?? existing?.phone,
+      currency: data.currency ?? existing?.currency ?? 'INR',
+      monthlyBudget: data.monthlyBudget ?? existing?.monthlyBudget ?? 0,
+      themePreference: data.themePreference ?? existing?.themePreference ?? 'dark',
+      notificationsEnabled: data.notificationsEnabled ?? existing?.notificationsEnabled ?? false,
+      biometricEnabled: data.biometricEnabled ?? existing?.biometricEnabled ?? false,
+      createdAt: existing?.createdAt ?? now,
+      updatedAt: now,
+      userId: data.userId ?? existing?.userId ?? null,
+      syncStatus: 'pending',
+      lastSyncedAt: existing?.lastSyncedAt ?? null,
+      deletedAt: null,
+    };
+
+    await getDatabase().runAsync(
+      `INSERT INTO user_profile
+        (id, name, email, phone, currency, monthlyBudget, themePreference, notificationsEnabled, biometricEnabled, createdAt, updatedAt, userId, syncStatus, lastSyncedAt, deletedAt)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT(id) DO UPDATE SET
+         name = excluded.name,
+         email = excluded.email,
+         phone = excluded.phone,
+         currency = excluded.currency,
+         monthlyBudget = excluded.monthlyBudget,
+         themePreference = excluded.themePreference,
+         notificationsEnabled = excluded.notificationsEnabled,
+         biometricEnabled = excluded.biometricEnabled,
+         updatedAt = excluded.updatedAt,
+         userId = excluded.userId,
+         syncStatus = excluded.syncStatus,
+         deletedAt = excluded.deletedAt`,
+      [
+        profile.id,
+        profile.name,
+        profile.email,
+        bindValue(profile.phone),
+        profile.currency,
+        profile.monthlyBudget,
+        profile.themePreference,
+        profile.notificationsEnabled ? 1 : 0,
+        profile.biometricEnabled ? 1 : 0,
+        profile.createdAt,
+        profile.updatedAt,
+        bindValue(profile.userId),
+        profile.syncStatus,
+        bindValue(profile.lastSyncedAt),
+        bindValue(profile.deletedAt),
+      ],
+    );
+
+    await queueEntitySync('user_profile', profile.id, {
+      ...profile,
+      notificationsEnabled: profile.notificationsEnabled ? 1 : 0,
+      biometricEnabled: profile.biometricEnabled ? 1 : 0,
+    } as Record<string, unknown>);
+
+    return profile;
   },
 };

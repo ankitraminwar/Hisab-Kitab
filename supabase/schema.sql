@@ -1,140 +1,191 @@
+create extension if not exists pgcrypto;
+
+create or replace function public.set_updated_at()
+returns trigger
+language plpgsql
+as $$
+begin
+  new.updated_at = timezone('utc', now());
+  return new;
+end;
+$$;
+
 create table if not exists public.accounts (
   id text primary key,
+  user_id uuid references auth.users(id) on delete cascade,
   name text not null,
-  type text not null,
+  type text not null check (type in ('cash', 'bank', 'upi', 'credit_card', 'wallet', 'investment')),
   balance double precision not null default 0,
   currency text not null default 'INR',
   color text,
   icon text,
-  "isDefault" integer default 0,
-  "createdAt" timestamptz not null,
-  "updatedAt" timestamptz not null,
-  "userId" uuid,
-  "syncStatus" text not null default 'synced',
-  "lastSyncedAt" timestamptz,
-  "deletedAt" timestamptz
+  is_default boolean not null default false,
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now()),
+  sync_status text not null default 'synced' check (sync_status in ('synced', 'pending', 'failed')),
+  last_synced_at timestamptz,
+  deleted_at timestamptz
 );
 
 create table if not exists public.categories (
   id text primary key,
+  user_id uuid references auth.users(id) on delete cascade,
   name text not null,
-  type text not null,
+  type text not null check (type in ('expense', 'income', 'both')),
   icon text not null,
   color text not null,
-  "isCustom" integer default 0,
-  "parentId" text,
-  "createdAt" timestamptz not null,
-  "updatedAt" timestamptz not null,
-  "userId" uuid,
-  "syncStatus" text not null default 'synced',
-  "lastSyncedAt" timestamptz,
-  "deletedAt" timestamptz
+  is_custom boolean not null default false,
+  parent_id text,
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now()),
+  sync_status text not null default 'synced' check (sync_status in ('synced', 'pending', 'failed')),
+  last_synced_at timestamptz,
+  deleted_at timestamptz
 );
 
 create table if not exists public.transactions (
   id text primary key,
+  user_id uuid references auth.users(id) on delete cascade,
   amount double precision not null,
-  type text not null,
-  "categoryId" text not null,
-  "accountId" text not null,
-  "toAccountId" text,
+  type text not null check (type in ('expense', 'income', 'transfer')),
+  category_id text not null references public.categories(id),
+  account_id text not null references public.accounts(id),
+  to_account_id text references public.accounts(id),
   merchant text,
   notes text,
-  tags text not null default '[]',
-  date date not null,
-  "isRecurring" integer default 0,
-  "recurringId" text,
-  "createdAt" timestamptz not null,
-  "updatedAt" timestamptz not null,
-  "userId" uuid,
-  "syncStatus" text not null default 'synced',
-  "lastSyncedAt" timestamptz,
-  "deletedAt" timestamptz
+  tags jsonb not null default '[]'::jsonb,
+  transaction_date date not null,
+  payment_method text not null default 'other',
+  is_recurring boolean not null default false,
+  recurring_id text,
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now()),
+  sync_status text not null default 'synced' check (sync_status in ('synced', 'pending', 'failed')),
+  last_synced_at timestamptz,
+  deleted_at timestamptz
 );
 
 create table if not exists public.budgets (
   id text primary key,
-  "categoryId" text not null,
+  user_id uuid references auth.users(id) on delete cascade,
+  category_id text not null references public.categories(id),
   limit_amount double precision not null,
   spent double precision not null default 0,
   month text not null,
   year integer not null,
-  "alertAt" integer default 80,
-  "createdAt" timestamptz not null,
-  "updatedAt" timestamptz not null,
-  "userId" uuid,
-  "syncStatus" text not null default 'synced',
-  "lastSyncedAt" timestamptz,
-  "deletedAt" timestamptz
+  alert_at integer not null default 80,
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now()),
+  sync_status text not null default 'synced' check (sync_status in ('synced', 'pending', 'failed')),
+  last_synced_at timestamptz,
+  deleted_at timestamptz
 );
 
 create table if not exists public.goals (
   id text primary key,
+  user_id uuid references auth.users(id) on delete cascade,
   name text not null,
-  "targetAmount" double precision not null,
-  "currentAmount" double precision not null default 0,
+  target_amount double precision not null,
+  current_amount double precision not null default 0,
   deadline date,
   icon text,
   color text,
-  "accountId" text,
-  "isCompleted" integer default 0,
-  "createdAt" timestamptz not null,
-  "updatedAt" timestamptz not null,
-  "userId" uuid,
-  "syncStatus" text not null default 'synced',
-  "lastSyncedAt" timestamptz,
-  "deletedAt" timestamptz
+  account_id text references public.accounts(id),
+  is_completed boolean not null default false,
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now()),
+  sync_status text not null default 'synced' check (sync_status in ('synced', 'pending', 'failed')),
+  last_synced_at timestamptz,
+  deleted_at timestamptz
 );
 
 create table if not exists public.assets (
   id text primary key,
+  user_id uuid references auth.users(id) on delete cascade,
   name text not null,
   type text not null,
   value double precision not null,
   notes text,
-  "lastUpdated" timestamptz not null,
-  "createdAt" timestamptz not null,
-  "updatedAt" timestamptz not null,
-  "userId" uuid,
-  "syncStatus" text not null default 'synced',
-  "lastSyncedAt" timestamptz,
-  "deletedAt" timestamptz
+  last_updated timestamptz not null default timezone('utc', now()),
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now()),
+  sync_status text not null default 'synced' check (sync_status in ('synced', 'pending', 'failed')),
+  last_synced_at timestamptz,
+  deleted_at timestamptz
 );
 
 create table if not exists public.liabilities (
   id text primary key,
+  user_id uuid references auth.users(id) on delete cascade,
   name text not null,
   type text not null,
   amount double precision not null,
-  "interestRate" double precision default 0,
-  "dueDate" date,
+  interest_rate double precision not null default 0,
+  due_date date,
   notes text,
-  "lastUpdated" timestamptz not null,
-  "createdAt" timestamptz not null,
-  "updatedAt" timestamptz not null,
-  "userId" uuid,
-  "syncStatus" text not null default 'synced',
-  "lastSyncedAt" timestamptz,
-  "deletedAt" timestamptz
+  last_updated timestamptz not null default timezone('utc', now()),
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now()),
+  sync_status text not null default 'synced' check (sync_status in ('synced', 'pending', 'failed')),
+  last_synced_at timestamptz,
+  deleted_at timestamptz
 );
 
 create table if not exists public.net_worth_history (
   id text primary key,
-  "totalAssets" double precision not null,
-  "totalLiabilities" double precision not null,
-  "netWorth" double precision not null,
-  date date not null,
-  "createdAt" timestamptz not null,
-  "updatedAt" timestamptz not null,
-  "userId" uuid,
-  "syncStatus" text not null default 'synced',
-  "lastSyncedAt" timestamptz,
-  "deletedAt" timestamptz
+  user_id uuid references auth.users(id) on delete cascade,
+  total_assets double precision not null,
+  total_liabilities double precision not null,
+  net_worth double precision not null,
+  transaction_date date not null,
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now()),
+  sync_status text not null default 'synced' check (sync_status in ('synced', 'pending', 'failed')),
+  last_synced_at timestamptz,
+  deleted_at timestamptz
 );
 
-create index if not exists idx_transactions_updated_at on public.transactions ("updatedAt");
-create index if not exists idx_transactions_deleted_at on public.transactions ("deletedAt");
-create index if not exists idx_budgets_period on public.budgets (year, month);
+create table if not exists public.user_profile (
+  id text primary key,
+  user_id uuid unique references auth.users(id) on delete cascade,
+  name text not null default 'Hisab Kitab User',
+  email text not null default '',
+  phone text,
+  currency text not null default 'INR',
+  monthly_budget double precision not null default 0,
+  theme_preference text not null default 'dark' check (theme_preference in ('dark', 'light')),
+  notifications_enabled boolean not null default false,
+  biometric_enabled boolean not null default false,
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now()),
+  sync_status text not null default 'synced' check (sync_status in ('synced', 'pending', 'failed')),
+  last_synced_at timestamptz,
+  deleted_at timestamptz
+);
+
+create index if not exists idx_transactions_transaction_date on public.transactions (transaction_date desc);
+create index if not exists idx_transactions_category_id on public.transactions (category_id);
+create index if not exists idx_transactions_account_id on public.transactions (account_id);
+create index if not exists idx_transactions_user_updated_at on public.transactions (user_id, updated_at desc);
+
+drop trigger if exists set_accounts_updated_at on public.accounts;
+create trigger set_accounts_updated_at before update on public.accounts for each row execute function public.set_updated_at();
+drop trigger if exists set_categories_updated_at on public.categories;
+create trigger set_categories_updated_at before update on public.categories for each row execute function public.set_updated_at();
+drop trigger if exists set_transactions_updated_at on public.transactions;
+create trigger set_transactions_updated_at before update on public.transactions for each row execute function public.set_updated_at();
+drop trigger if exists set_budgets_updated_at on public.budgets;
+create trigger set_budgets_updated_at before update on public.budgets for each row execute function public.set_updated_at();
+drop trigger if exists set_goals_updated_at on public.goals;
+create trigger set_goals_updated_at before update on public.goals for each row execute function public.set_updated_at();
+drop trigger if exists set_assets_updated_at on public.assets;
+create trigger set_assets_updated_at before update on public.assets for each row execute function public.set_updated_at();
+drop trigger if exists set_liabilities_updated_at on public.liabilities;
+create trigger set_liabilities_updated_at before update on public.liabilities for each row execute function public.set_updated_at();
+drop trigger if exists set_net_worth_updated_at on public.net_worth_history;
+create trigger set_net_worth_updated_at before update on public.net_worth_history for each row execute function public.set_updated_at();
+drop trigger if exists set_user_profile_updated_at on public.user_profile;
+create trigger set_user_profile_updated_at before update on public.user_profile for each row execute function public.set_updated_at();
 
 alter table public.accounts enable row level security;
 alter table public.categories enable row level security;
@@ -144,12 +195,14 @@ alter table public.goals enable row level security;
 alter table public.assets enable row level security;
 alter table public.liabilities enable row level security;
 alter table public.net_worth_history enable row level security;
+alter table public.user_profile enable row level security;
 
-create policy "authenticated users manage own accounts" on public.accounts for all using (auth.uid() = "userId") with check (auth.uid() = "userId");
-create policy "authenticated users manage own categories" on public.categories for all using (auth.uid() = "userId" or "userId" is null) with check (auth.uid() = "userId" or "userId" is null);
-create policy "authenticated users manage own transactions" on public.transactions for all using (auth.uid() = "userId") with check (auth.uid() = "userId");
-create policy "authenticated users manage own budgets" on public.budgets for all using (auth.uid() = "userId") with check (auth.uid() = "userId");
-create policy "authenticated users manage own goals" on public.goals for all using (auth.uid() = "userId") with check (auth.uid() = "userId");
-create policy "authenticated users manage own assets" on public.assets for all using (auth.uid() = "userId") with check (auth.uid() = "userId");
-create policy "authenticated users manage own liabilities" on public.liabilities for all using (auth.uid() = "userId") with check (auth.uid() = "userId");
-create policy "authenticated users manage own net worth history" on public.net_worth_history for all using (auth.uid() = "userId") with check (auth.uid() = "userId");
+create policy "own_accounts" on public.accounts for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+create policy "own_categories" on public.categories for all using (auth.uid() = user_id or user_id is null) with check (auth.uid() = user_id or user_id is null);
+create policy "own_transactions" on public.transactions for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+create policy "own_budgets" on public.budgets for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+create policy "own_goals" on public.goals for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+create policy "own_assets" on public.assets for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+create policy "own_liabilities" on public.liabilities for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+create policy "own_net_worth_history" on public.net_worth_history for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+create policy "own_user_profile" on public.user_profile for all using (auth.uid() = user_id) with check (auth.uid() = user_id);

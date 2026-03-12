@@ -2,6 +2,7 @@ import * as LocalAuthentication from 'expo-local-authentication';
 import * as SecureStore from 'expo-secure-store';
 
 import { supabase } from '@/lib/supabase';
+import type { AuthCredentials } from '@/utils/types';
 
 const PIN_KEY = 'hisabkitab.pin';
 const BIOMETRIC_KEY = 'hisabkitab.biometrics';
@@ -49,9 +50,22 @@ export const authenticateBiometric = async (): Promise<boolean> => {
 };
 
 export const authService = {
+  signUp: async ({ email, password }: AuthCredentials) =>
+    supabase.auth.signUp({ email, password }),
+  signIn: async ({ email, password }: AuthCredentials) =>
+    supabase.auth.signInWithPassword({ email, password }),
   signInWithOtp: async (email: string) => supabase.auth.signInWithOtp({ email }),
-  verifyOtp: async (email: string, token: string) =>
-    supabase.auth.verifyOtp({ email, token, type: 'email' }),
+  verifyOtp: async (email: string, token: string) => supabase.auth.verifyOtp({ email, token, type: 'email' }),
+  requestPasswordReset: async (email: string) =>
+    supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: 'hisabkitab://reset-password',
+    }),
+  resetPassword: async (password: string) =>
+    supabase.auth.updateUser({
+      password,
+    }),
   signOut: async () => supabase.auth.signOut(),
   getSession: async () => supabase.auth.getSession(),
+  onAuthStateChange: (callback: Parameters<typeof supabase.auth.onAuthStateChange>[0]) =>
+    supabase.auth.onAuthStateChange(callback),
 };

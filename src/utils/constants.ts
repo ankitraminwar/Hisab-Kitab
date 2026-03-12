@@ -87,6 +87,7 @@ export const SYNCABLE_TABLES = [
   'assets',
   'liabilities',
   'net_worth_history',
+  'user_profile',
 ] as const;
 
 export type SyncableTable = (typeof SYNCABLE_TABLES)[number];

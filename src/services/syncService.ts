@@ -18,6 +18,7 @@ import type { SyncQueueItem } from '@/utils/types';
 
 class SyncService {
   private syncing = false;
+  private remoteSchemaAvailable = true;
 
   private unsubscribe?: () => void;
 
@@ -31,7 +32,7 @@ class SyncService {
       useAppStore.getState().setOnline(isOnline);
 
       if (isOnline) {
-        void this.sync('network-reconnected');
+        void this.requestSync('network-reconnected');
       }
     });
   }
@@ -51,6 +52,9 @@ class SyncService {
     if (!isOnline) {
       return;
     }
+    if (!this.remoteSchemaAvailable) {
+      return;
+    }
 
     this.syncing = true;
     useAppStore.getState().setSyncState({ syncInProgress: true, lastSyncError: null });
@@ -68,6 +72,15 @@ class SyncService {
       });
       console.log(`Sync completed: ${reason}`);
     } catch (error) {
+      if (this.isRemoteSchemaMissing(error)) {
+        this.remoteSchemaAvailable = false;
+        useAppStore.getState().setSyncState({
+          syncInProgress: false,
+          lastSyncError: 'Supabase schema is not deployed yet. Apply supabase/schema.sql and restart sync.',
+        });
+        return;
+      }
+
       useAppStore.getState().setSyncState({
         syncInProgress: false,
         lastSyncError: error instanceof Error ? error.message : 'Sync failed',
@@ -78,9 +91,29 @@ class SyncService {
     }
   }
 
+  async requestSync(reason = 'manual') {
+    try {
+      await this.sync(reason);
+    } catch (error) {
+      console.warn('Background sync failed', error);
+    }
+  }
+
+  private isRemoteSchemaMissing(error: unknown) {
+    return (
+      typeof error === 'object' &&
+      error !== null &&
+      'code' in error &&
+      error.code === 'PGRST205'
+    );
+  }
+
   private async pushPendingChanges() {
     const session = await supabase.auth.getSession();
     const userId = session.data.session?.user?.id ?? null;
+    if (!userId) {
+      return;
+    }
     const pendingItems = await listPendingSyncItems();
 
     for (const item of pendingItems) {
@@ -150,6 +183,11 @@ class SyncService {
   }
 
   private async pullRemoteChanges() {
+    const session = await supabase.auth.getSession();
+    if (!session.data.session?.user?.id) {
+      return;
+    }
+
     const lastSyncAt = await getLastSyncTimestamp();
 
     for (const table of getSyncableTables()) {
@@ -189,9 +227,5 @@ class SyncService {
 export const syncService = new SyncService();
 
 export const triggerBackgroundSync = async (reason: string) => {
-  try {
-    await syncService.sync(reason);
-  } catch (error) {
-    console.warn('Background sync failed', error);
-  }
+  await syncService.requestSync(reason);
 };

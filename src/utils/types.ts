@@ -5,6 +5,8 @@ export type LiabilityType = 'credit_card' | 'loan' | 'mortgage' | 'other';
 export type RecurringFrequency = 'daily' | 'weekly' | 'monthly' | 'yearly';
 export type CategoryType = 'expense' | 'income' | 'both';
 export type SyncStatus = 'synced' | 'pending' | 'failed';
+export type ThemePreference = 'dark' | 'light';
+export type PaymentMethod = 'cash' | 'bank_transfer' | 'upi' | 'wallet' | 'credit_card' | 'debit_card' | 'other';
 
 export interface SyncMetadata {
   userId?: string | null;
@@ -49,6 +51,7 @@ export interface Transaction extends SyncMetadata {
   notes?: string;
   tags: string[];
   date: string;
+  paymentMethod: PaymentMethod;
   isRecurring: boolean;
   recurringId?: string;
   createdAt: string;
@@ -139,6 +142,32 @@ export interface NetWorthHistory extends SyncMetadata {
   date: string;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface UserProfile extends SyncMetadata {
+  id: string;
+  name: string;
+  email: string;
+  phone?: string;
+  currency: string;
+  monthlyBudget: number;
+  themePreference: ThemePreference;
+  notificationsEnabled: boolean;
+  biometricEnabled: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface NotificationPreferences {
+  enabled: boolean;
+  dailyReminder: boolean;
+  budgetAlerts: boolean;
+  monthlyReportReminder: boolean;
+}
+
+export interface AuthCredentials {
+  email: string;
+  password: string;
 }
 
 export interface DashboardStats {

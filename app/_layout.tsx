@@ -5,27 +5,61 @@ import { StatusBar } from 'expo-status-bar';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { Ionicons } from '@expo/vector-icons';
+import type { Session } from '@supabase/supabase-js';
 
 import { initializeDatabase } from '@/database';
 import { queryClient } from '@/lib/queryClient';
-import { authenticateBiometric, getBiometricPreference } from '@/services/auth';
+import { authService, authenticateBiometric, getBiometricPreference } from '@/services/auth';
+import { applyNotificationPreferences } from '@/services/notifications';
+import { requestInitialPermissions } from '@/services/permissions';
 import { syncService } from '@/services/syncService';
+import { UserProfileService } from '@/services/dataServices';
 import { useAppStore } from '@/store/appStore';
 import { COLORS, SPACING, TYPOGRAPHY } from '@/utils/constants';
 
 export default function RootLayout() {
-  const { isLocked, setLocked, biometricsEnabled, setBiometrics } = useAppStore();
+  const {
+    isLocked,
+    setLocked,
+    biometricsEnabled,
+    setBiometrics,
+    theme,
+    setTheme,
+    setUserProfile,
+    setNotificationPreferences,
+  } = useAppStore();
   const [initializing, setInitializing] = useState(true);
+  const [session, setSession] = useState<Session | null>(null);
 
   useEffect(() => {
     const bootstrap = async () => {
       try {
         await initializeDatabase();
+        await requestInitialPermissions();
+        const currentSession = await authService.getSession();
+        setSession(currentSession.data.session ?? null);
         const biometricPreference = await getBiometricPreference();
+        const profile = await UserProfileService.getProfile();
+        if (profile) {
+          setTheme(profile.themePreference);
+          setUserProfile(profile);
+          setNotificationPreferences({
+            enabled: profile.notificationsEnabled,
+            dailyReminder: profile.notificationsEnabled,
+            budgetAlerts: true,
+            monthlyReportReminder: true,
+          });
+          await applyNotificationPreferences({
+            enabled: profile.notificationsEnabled,
+            dailyReminder: profile.notificationsEnabled,
+            budgetAlerts: true,
+            monthlyReportReminder: true,
+          });
+        }
         setBiometrics(biometricPreference);
         setLocked(biometricPreference);
         syncService.start();
-        void syncService.sync('app-start');
+        void syncService.requestSync('app-start');
       } catch (error) {
         console.error('Initialization failed', error);
         setLocked(false);
@@ -36,10 +70,18 @@ export default function RootLayout() {
 
     void bootstrap();
 
+    const subscription = authService.onAuthStateChange(async (_event, nextSession) => {
+      setSession(nextSession);
+      if (nextSession) {
+        void syncService.requestSync('auth-state-change');
+      }
+    });
+
     return () => {
+      subscription.data.subscription.unsubscribe();
       syncService.stop();
     };
-  }, [setBiometrics, setLocked]);
+  }, [setBiometrics, setLocked, setNotificationPreferences, setTheme, setUserProfile]);
 
   const handleAuthenticate = async () => {
     try {
@@ -79,10 +121,11 @@ export default function RootLayout() {
 
   return (
     <GestureHandlerRootView style={styles.root}>
-      <QueryClientProvider client={queryClient}>
-        <StatusBar style="light" backgroundColor={COLORS.bg} />
+        <QueryClientProvider client={queryClient}>
+        <StatusBar style={theme === 'dark' ? 'light' : 'dark'} backgroundColor={COLORS.bg} />
         <Stack screenOptions={{ headerShown: false, animation: 'slide_from_right' }}>
-          <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+          {!session ? <Stack.Screen name="auth" options={{ headerShown: false }} /> : null}
+          {session ? <Stack.Screen name="(tabs)" options={{ headerShown: false }} /> : null}
           <Stack.Screen name="transactions/add" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
           <Stack.Screen name="transactions/[id]" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
           <Stack.Screen name="accounts/index" options={{ animation: 'slide_from_right' }} />
