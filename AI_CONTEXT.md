@@ -41,3 +41,14 @@ Native Android and iOS are the supported targets. Web export is not the primary 
 ## SMS Caveat
 
 Android SMS ingestion uses `react-native-get-sms-android`, so it requires a native Android build and will not work in Expo Go. iOS cannot offer full SMS inbox access for this app category.
+
+## SMS library recommendation
+
+- `react-native-get-sms-android` is already in use and works best for bank message transaction importing in this codebase.
+- `react-native-sms-retriever` is best for OTP verification flows, not for reading full transaction SMS.
+- `react-native-android-sms-listener` offers real-time incoming events but still needs permissions and native Android support.
+- `@maniac-tech/react-native-expo-read-sms` is a good option if you want a more Expo-managed experience and only need read access (native build required for inbox read as well).
+
+## Migration scripts and rollback
+
+Use migration files in `supabase/migrations/` and include explicit `-- Up`/`-- Down` sections to document rollbacks. A new template migration has been added as `20260312_223000_theme_preference_updown.sql`.

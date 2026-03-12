@@ -12,8 +12,9 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Button } from '@/components/common';
+import { useTheme } from '@/hooks/useTheme';
 import { authService } from '@/services/auth';
-import { COLORS, RADIUS, SPACING, TYPOGRAPHY } from '@/utils/constants';
+import { RADIUS, SPACING, TYPOGRAPHY } from '@/utils/constants';
 
 type Mode = 'login' | 'signup' | 'forgot-password' | 'reset-password';
 
@@ -29,9 +30,11 @@ const copy: Record<Mode, { title: string; primary: string }> = {
 
 export default function AuthScreen({ mode }: { mode: Mode }) {
   const router = useRouter();
+  const { colors } = useTheme();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
 
   const submit = async () => {
     setLoading(true);
@@ -102,7 +105,10 @@ export default function AuthScreen({ mode }: { mode: Mode }) {
               autoCapitalize="none"
               keyboardType="email-address"
               placeholder="Email"
-              placeholderTextColor={COLORS.textMuted}
+              placeholderTextColor={colors.textMuted}
+              selectionColor={colors.primary}
+              cursorColor={colors.primary}
+              keyboardAppearance={colors.bg === '#08111F' ? 'dark' : 'light'}
               style={styles.input}
             />
           ) : null}
@@ -113,7 +119,10 @@ export default function AuthScreen({ mode }: { mode: Mode }) {
               onChangeText={setPassword}
               secureTextEntry
               placeholder="Password"
-              placeholderTextColor={COLORS.textMuted}
+              placeholderTextColor={colors.textMuted}
+              selectionColor={colors.primary}
+              cursorColor={colors.primary}
+              keyboardAppearance={colors.bg === '#08111F' ? 'dark' : 'light'}
               style={styles.input}
             />
           ) : null}
@@ -157,32 +166,41 @@ export default function AuthScreen({ mode }: { mode: Mode }) {
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: COLORS.bg },
-  wrapper: { flex: 1, justifyContent: 'center', padding: SPACING.md },
-  card: {
-    backgroundColor: COLORS.bgCard,
-    borderRadius: RADIUS.xl,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    padding: SPACING.lg,
-    gap: SPACING.sm,
-  },
-  title: { ...TYPOGRAPHY.h1, color: COLORS.textPrimary },
-  subtitle: {
-    ...TYPOGRAPHY.body,
-    color: COLORS.textSecondary,
-    marginBottom: SPACING.sm,
-  },
-  input: {
-    backgroundColor: COLORS.bgInput,
-    borderRadius: RADIUS.md,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    color: COLORS.textPrimary,
-    paddingHorizontal: SPACING.md,
-    paddingVertical: 14,
-  },
-  links: { marginTop: SPACING.sm, gap: 8 },
-  linkText: { color: COLORS.primary, fontWeight: '600' },
-});
+const createStyles = (colors: {
+  bg: string;
+  bgCard: string;
+  bgInput: string;
+  border: string;
+  primary: string;
+  textPrimary: string;
+  textSecondary: string;
+}) =>
+  StyleSheet.create({
+    container: { flex: 1, backgroundColor: colors.bg },
+    wrapper: { flex: 1, justifyContent: 'center', padding: SPACING.md },
+    card: {
+      backgroundColor: colors.bgCard,
+      borderRadius: RADIUS.xl,
+      borderWidth: 1,
+      borderColor: colors.border,
+      padding: SPACING.lg,
+      gap: SPACING.sm,
+    },
+    title: { ...TYPOGRAPHY.h1, color: colors.textPrimary },
+    subtitle: {
+      ...TYPOGRAPHY.body,
+      color: colors.textSecondary,
+      marginBottom: SPACING.sm,
+    },
+    input: {
+      backgroundColor: colors.bgInput,
+      borderRadius: RADIUS.md,
+      borderWidth: 1,
+      borderColor: colors.border,
+      color: colors.textPrimary,
+      paddingHorizontal: SPACING.md,
+      paddingVertical: 14,
+    },
+    links: { marginTop: SPACING.sm, gap: 8 },
+    linkText: { color: colors.primary, fontWeight: '600' },
+  });

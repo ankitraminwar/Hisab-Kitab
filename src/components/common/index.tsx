@@ -288,6 +288,10 @@ export const Button: React.FC<ButtonProps> = ({
         : variant === 'secondary'
           ? colors.bgElevated
           : 'transparent';
+  const contentColor =
+    variant === 'primary' || variant === 'danger'
+      ? colors.textInverse
+      : colors.textPrimary;
 
   return (
     <TouchableOpacity
@@ -306,18 +310,20 @@ export const Button: React.FC<ButtonProps> = ({
       activeOpacity={0.8}
     >
       {loading ? (
-        <ActivityIndicator size="small" color={colors.textPrimary} />
+        <ActivityIndicator size="small" color={contentColor} />
       ) : (
         <>
           {icon && (
             <Ionicons
               name={icon as any}
               size={18}
-              color={colors.textPrimary}
+              color={contentColor}
               style={{ marginRight: 8 }}
             />
           )}
-          <Text style={styles.buttonText}>{title}</Text>
+          <Text style={[styles.buttonText, { color: contentColor }]}>
+            {title}
+          </Text>
         </>
       )}
     </TouchableOpacity>
@@ -528,7 +534,6 @@ function createStyles(colors: any) {
     },
     buttonText: {
       ...TYPOGRAPHY.bodyMedium,
-      color: colors.textPrimary,
       fontWeight: '600',
     },
     fab: {

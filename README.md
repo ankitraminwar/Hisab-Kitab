@@ -86,3 +86,13 @@ npm run doctor
 - [ARCHITECTURE.md](./ARCHITECTURE.md)
 - [AI_CONTEXT.md](./AI_CONTEXT.md)
 - [SUPABASE_SETUP.md](./SUPABASE_SETUP.md)
+
+## AI & Development Notes
+
+- App is built with theme toggles in `Settings` (dark / light / system) via `src/hooks/useTheme.ts`.
+- Most screens use themed colors. Screens still using `COLORS` from `src/utils/constants.ts` are now upgraded to dynamic colors in light mode to avoid dark-only styling.
+- For future AI tools or code assistants, ask for ‘theme-based color override’ and ‘useTheme usage’ if a component appears hardcoded to `COLORS`.
+
+## SMS Import Package Recommendation
+
+The project is already wired to use `react-native-get-sms-android` in native Android builds. If you want better Expo managed workflow, use `@maniac-tech/react-native-expo-read-sms` (but this may require custom native config and not work in Expo Go without dev client). For OTP-only verification use `react-native-sms-retriever`.

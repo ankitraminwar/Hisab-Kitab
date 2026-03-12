@@ -13,13 +13,13 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import Animated, { FadeInDown } from 'react-native-reanimated';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Button, Card } from '@/components/common';
-import { exportService } from '@/services/exportService';
 import { authService, setBiometricPreference } from '@/services/auth';
 import { UserProfileService } from '@/services/dataServices';
+import { exportService } from '@/services/exportService';
 import { applyNotificationPreferences } from '@/services/notifications';
 import { importSmsTransactions } from '@/services/sms';
 import { syncService } from '@/services/syncService';

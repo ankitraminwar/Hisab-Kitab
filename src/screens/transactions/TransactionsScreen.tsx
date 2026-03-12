@@ -16,9 +16,11 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { EmptyState, FAB } from '@/components/common';
 import TransactionItem from '@/components/TransactionItem';
-import { useAppStore } from '@/store/appStore';
+import type { ThemeColors } from '@/hooks/useTheme';
+import { useTheme } from '@/hooks/useTheme';
 import { TransactionService } from '@/services/transactionService';
-import { COLORS, RADIUS, SPACING, TYPOGRAPHY } from '@/utils/constants';
+import { useAppStore } from '@/store/appStore';
+import { RADIUS, SPACING, TYPOGRAPHY } from '@/utils/constants';
 import type {
   Transaction,
   TransactionFilters,
@@ -37,6 +39,7 @@ const SEARCH_DEBOUNCE_MS = 300;
 
 export default function TransactionsScreen() {
   const router = useRouter();
+  const { colors } = useTheme();
   const dataRevision = useAppStore((state) => state.dataRevision);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [search, setSearch] = useState('');
@@ -154,6 +157,8 @@ export default function TransactionsScreen() {
     listData.push(...rows);
   });
 
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
+
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <Animated.View entering={FadeInDown.duration(400)} style={styles.header}>
@@ -165,7 +170,7 @@ export default function TransactionsScreen() {
           <Ionicons
             name="bar-chart-outline"
             size={20}
-            color={COLORS.textSecondary}
+            color={colors.textSecondary}
           />
         </TouchableOpacity>
       </Animated.View>
@@ -175,12 +180,12 @@ export default function TransactionsScreen() {
         style={styles.filters}
       >
         <View style={styles.searchContainer}>
-          <Ionicons name="search-outline" size={18} color={COLORS.textMuted} />
+          <Ionicons name="search-outline" size={18} color={colors.textMuted} />
           <TextInput
             value={search}
             onChangeText={setSearch}
             placeholder="Search transactions..."
-            placeholderTextColor={COLORS.textMuted}
+            placeholderTextColor={colors.textMuted}
             style={styles.searchInput}
             returnKeyType="search"
           />
@@ -189,7 +194,7 @@ export default function TransactionsScreen() {
               <Ionicons
                 name="close-circle"
                 size={18}
-                color={COLORS.textMuted}
+                color={colors.textMuted}
               />
             </TouchableOpacity>
           )}
@@ -259,72 +264,73 @@ export default function TransactionsScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: COLORS.bg },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: SPACING.md,
-    paddingVertical: SPACING.sm,
-  },
-  title: { ...TYPOGRAPHY.h2, color: COLORS.textPrimary },
-  headerButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: COLORS.bgCard,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  filters: {
-    paddingHorizontal: SPACING.md,
-    gap: SPACING.sm,
-    marginBottom: SPACING.sm,
-  },
-  searchContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: COLORS.bgInput,
-    borderRadius: RADIUS.md,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    paddingHorizontal: SPACING.md,
-    paddingVertical: 10,
-    gap: SPACING.sm,
-  },
-  searchInput: {
-    flex: 1,
-    color: COLORS.textPrimary,
-    ...TYPOGRAPHY.body,
-    paddingVertical: 0,
-  },
-  filterRow: { flexDirection: 'row', gap: SPACING.sm },
-  filterChip: {
-    paddingHorizontal: 14,
-    paddingVertical: 6,
-    borderRadius: RADIUS.full,
-    backgroundColor: COLORS.bgCard,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-  },
-  filterChipActive: {
-    backgroundColor: COLORS.primary,
-    borderColor: COLORS.primary,
-  },
-  filterChipText: {
-    ...TYPOGRAPHY.caption,
-    color: COLORS.textMuted,
-    fontWeight: '600',
-  },
-  filterChipTextActive: { color: '#fff' },
-  dateHeader: { paddingHorizontal: SPACING.md, paddingVertical: 8 },
-  dateText: {
-    ...TYPOGRAPHY.label,
-    color: COLORS.textMuted,
-    textTransform: 'uppercase',
-  },
-  list: { paddingBottom: 120 },
-});
+const createStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
+    container: { flex: 1, backgroundColor: colors.bg },
+    header: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      paddingHorizontal: SPACING.md,
+      paddingVertical: SPACING.sm,
+    },
+    title: { ...TYPOGRAPHY.h2, color: colors.textPrimary },
+    headerButton: {
+      width: 40,
+      height: 40,
+      borderRadius: 20,
+      backgroundColor: colors.bgCard,
+      borderWidth: 1,
+      borderColor: colors.border,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    filters: {
+      paddingHorizontal: SPACING.md,
+      gap: SPACING.sm,
+      marginBottom: SPACING.sm,
+    },
+    searchContainer: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: colors.bgInput,
+      borderRadius: RADIUS.md,
+      borderWidth: 1,
+      borderColor: colors.border,
+      paddingHorizontal: SPACING.md,
+      paddingVertical: 10,
+      gap: SPACING.sm,
+    },
+    searchInput: {
+      flex: 1,
+      color: colors.textPrimary,
+      ...TYPOGRAPHY.body,
+      paddingVertical: 0,
+    },
+    filterRow: { flexDirection: 'row', gap: SPACING.sm },
+    filterChip: {
+      paddingHorizontal: 14,
+      paddingVertical: 6,
+      borderRadius: RADIUS.full,
+      backgroundColor: colors.bgCard,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    filterChipActive: {
+      backgroundColor: colors.primary,
+      borderColor: colors.primary,
+    },
+    filterChipText: {
+      ...TYPOGRAPHY.caption,
+      color: colors.textMuted,
+      fontWeight: '600',
+    },
+    filterChipTextActive: { color: '#fff' },
+    dateHeader: { paddingHorizontal: SPACING.md, paddingVertical: 8 },
+    dateText: {
+      ...TYPOGRAPHY.label,
+      color: colors.textMuted,
+      textTransform: 'uppercase',
+    },
+    list: { paddingBottom: 120 },
+  });

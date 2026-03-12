@@ -1,4 +1,6 @@
-import DateTimePicker, { type DateTimePickerEvent } from '@react-native-community/datetimepicker';
+import DateTimePicker, {
+  type DateTimePickerEvent,
+} from '@react-native-community/datetimepicker';
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
@@ -16,25 +18,45 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Button } from '@/components/common';
+import { useTheme } from '@/hooks/useTheme';
 import { AccountService, CategoryService } from '@/services/dataServices';
 import { TransactionService } from '@/services/transactionService';
-import { COLORS, RADIUS, SPACING, TYPOGRAPHY } from '@/utils/constants';
-import type { Account, Category, PaymentMethod, TransactionType } from '@/utils/types';
+import { RADIUS, SPACING, TYPOGRAPHY } from '@/utils/constants';
+import type {
+  Account,
+  Category,
+  PaymentMethod,
+  TransactionType,
+} from '@/utils/types';
 
-const TRANSACTION_TYPES: { key: TransactionType; label: string; color: string }[] = [
-  { key: 'expense', label: 'Expense', color: COLORS.expense },
-  { key: 'income', label: 'Income', color: COLORS.income },
-  { key: 'transfer', label: 'Transfer', color: COLORS.transfer },
+const PAYMENT_METHODS: PaymentMethod[] = [
+  'cash',
+  'bank_transfer',
+  'upi',
+  'wallet',
+  'credit_card',
+  'debit_card',
+  'other',
 ];
-
-const PAYMENT_METHODS: PaymentMethod[] = ['cash', 'bank_transfer', 'upi', 'wallet', 'credit_card', 'debit_card', 'other'];
 
 const toDateString = (date: Date) => date.toISOString().slice(0, 10);
 
 export default function AddTransactionScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id?: string }>();
+  const { colors, isDark } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const isEditing = Boolean(id);
+
+  const transactionTypes: {
+    key: TransactionType;
+    label: string;
+    color: string;
+  }[] = [
+    { key: 'expense', label: 'Expense', color: colors.expense },
+    { key: 'income', label: 'Income', color: colors.income },
+    { key: 'transfer', label: 'Transfer', color: colors.transfer },
+  ];
 
   const [type, setType] = useState<TransactionType>('expense');
   const [amount, setAmount] = useState('');
@@ -44,20 +66,30 @@ export default function AddTransactionScreen() {
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('other');
-  const [selectedCategory, setSelectedCategory] = useState<Category | null>(null);
+  const [selectedCategory, setSelectedCategory] = useState<Category | null>(
+    null,
+  );
   const [selectedAccount, setSelectedAccount] = useState<Account | null>(null);
-  const [selectedToAccount, setSelectedToAccount] = useState<Account | null>(null);
+  const [selectedToAccount, setSelectedToAccount] = useState<Account | null>(
+    null,
+  );
   const [categories, setCategories] = useState<Category[]>([]);
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [loading, setLoading] = useState(false);
 
   const filteredCategories = useMemo(
-    () => categories.filter((category) => category.type === type || category.type === 'both'),
+    () =>
+      categories.filter(
+        (category) => category.type === type || category.type === 'both',
+      ),
     [categories, type],
   );
 
   const loadData = useCallback(async () => {
-    const [categoryRows, accountRows] = await Promise.all([CategoryService.getAll(), AccountService.getAll()]);
+    const [categoryRows, accountRows] = await Promise.all([
+      CategoryService.getAll(),
+      AccountService.getAll(),
+    ]);
     setCategories(categoryRows);
     setAccounts(accountRows);
     setSelectedAccount((current) => current ?? accountRows[0] ?? null);
@@ -80,9 +112,17 @@ export default function AddTransactionScreen() {
     setTags(transaction.tags.join(', '));
     setSelectedDate(new Date(transaction.date));
     setPaymentMethod(transaction.paymentMethod);
-    setSelectedCategory(categories.find((category) => category.id === transaction.categoryId) ?? null);
-    setSelectedAccount(accounts.find((account) => account.id === transaction.accountId) ?? null);
-    setSelectedToAccount(accounts.find((account) => account.id === transaction.toAccountId) ?? null);
+    setSelectedCategory(
+      categories.find((category) => category.id === transaction.categoryId) ??
+        null,
+    );
+    setSelectedAccount(
+      accounts.find((account) => account.id === transaction.accountId) ?? null,
+    );
+    setSelectedToAccount(
+      accounts.find((account) => account.id === transaction.toAccountId) ??
+        null,
+    );
   }, [accounts, categories, id]);
 
   useEffect(() => {
@@ -96,11 +136,18 @@ export default function AddTransactionScreen() {
     }
 
     setSelectedCategory((current) => {
-      if (current && filteredCategories.some((category) => category.id === current.id)) {
+      if (
+        current &&
+        filteredCategories.some((category) => category.id === current.id)
+      ) {
         return current;
       }
 
-      return filteredCategories.find((category) => category.name === 'Other') ?? filteredCategories[0] ?? null;
+      return (
+        filteredCategories.find((category) => category.name === 'Other') ??
+        filteredCategories[0] ??
+        null
+      );
     });
   }, [filteredCategories]);
 
@@ -129,11 +176,17 @@ export default function AddTransactionScreen() {
       return;
     }
     if (!selectedCategory) {
-      Alert.alert('Missing category', 'Choose a category for this transaction.');
+      Alert.alert(
+        'Missing category',
+        'Choose a category for this transaction.',
+      );
       return;
     }
     if (type === 'transfer' && !selectedToAccount) {
-      Alert.alert('Missing destination', 'Choose the destination account for this transfer.');
+      Alert.alert(
+        'Missing destination',
+        'Choose the destination account for this transfer.',
+      );
       return;
     }
 
@@ -147,7 +200,10 @@ export default function AddTransactionScreen() {
         toAccountId: type === 'transfer' ? selectedToAccount?.id : undefined,
         merchant: merchant.trim() || undefined,
         notes: notes.trim() || undefined,
-        tags: tags.split(',').map((tag) => tag.trim()).filter(Boolean),
+        tags: tags
+          .split(',')
+          .map((tag) => tag.trim())
+          .filter(Boolean),
         date: toDateString(selectedDate),
         paymentMethod,
         isRecurring: false,
@@ -160,7 +216,12 @@ export default function AddTransactionScreen() {
       }
       router.back();
     } catch (error) {
-      Alert.alert('Save failed', error instanceof Error ? error.message : 'Transaction could not be saved.');
+      Alert.alert(
+        'Save failed',
+        error instanceof Error
+          ? error.message
+          : 'Transaction could not be saved.',
+      );
     } finally {
       setLoading(false);
     }
@@ -168,24 +229,53 @@ export default function AddTransactionScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.flex}>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        style={styles.flex}
+      >
         <View style={styles.header}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.iconButton}>
-            <Ionicons name="chevron-back" size={24} color={COLORS.textPrimary} />
+          <TouchableOpacity
+            onPress={() => router.back()}
+            style={styles.iconButton}
+          >
+            <Ionicons
+              name="chevron-back"
+              size={24}
+              color={colors.textPrimary}
+            />
           </TouchableOpacity>
-          <Text style={styles.title}>{isEditing ? 'Edit Transaction' : 'Add Transaction'}</Text>
+          <Text style={styles.title}>
+            {isEditing ? 'Edit Transaction' : 'Add Transaction'}
+          </Text>
           <View style={styles.iconButtonPlaceholder} />
         </View>
 
-        <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+        <ScrollView
+          contentContainerStyle={styles.scroll}
+          showsVerticalScrollIndicator={false}
+        >
           <View style={styles.typeSelector}>
-            {TRANSACTION_TYPES.map((option) => (
+            {transactionTypes.map((option) => (
               <TouchableOpacity
                 key={option.key}
-                style={[styles.typeButton, type === option.key && { backgroundColor: option.color, borderColor: option.color }]}
+                style={[
+                  styles.typeButton,
+                  type === option.key && {
+                    backgroundColor: option.color,
+                    borderColor: option.color,
+                  },
+                ]}
                 onPress={() => setType(option.key)}
               >
-                <Text style={[styles.typeButtonText, type === option.key && styles.typeButtonTextActive]}>{option.label}</Text>
+                <Text
+                  style={[
+                    styles.typeButtonText,
+                    { color: colors.textMuted },
+                    type === option.key && styles.typeButtonTextActive,
+                  ]}
+                >
+                  {option.label}
+                </Text>
               </TouchableOpacity>
             ))}
           </View>
@@ -197,17 +287,23 @@ export default function AddTransactionScreen() {
               onChangeText={setAmount}
               keyboardType="numeric"
               placeholder="0"
-              placeholderTextColor={COLORS.textMuted}
+              placeholderTextColor={colors.textMuted}
+              selectionColor={colors.primary}
+              cursorColor={colors.primary}
+              keyboardAppearance={isDark ? 'dark' : 'light'}
               style={styles.amountInput}
             />
           </View>
 
-          <SelectionSection label="Category">
+          <SelectionSection label="Category" textMuted={colors.textMuted}>
             {filteredCategories.map((category) => (
               <Chip
                 key={category.id}
                 active={selectedCategory?.id === category.id}
                 activeColor={category.color}
+                baseColor={colors.textMuted}
+                backgroundColor={colors.bgCard}
+                borderColor={colors.border}
                 icon={category.icon}
                 label={category.name}
                 onPress={() => setSelectedCategory(category)}
@@ -215,12 +311,18 @@ export default function AddTransactionScreen() {
             ))}
           </SelectionSection>
 
-          <SelectionSection label={type === 'transfer' ? 'From account' : 'Account'}>
+          <SelectionSection
+            label={type === 'transfer' ? 'From account' : 'Account'}
+            textMuted={colors.textMuted}
+          >
             {accounts.map((account) => (
               <Chip
                 key={account.id}
                 active={selectedAccount?.id === account.id}
                 activeColor={account.color}
+                baseColor={colors.textMuted}
+                backgroundColor={colors.bgCard}
+                borderColor={colors.border}
                 icon={account.icon}
                 label={account.name}
                 onPress={() => setSelectedAccount(account)}
@@ -229,7 +331,7 @@ export default function AddTransactionScreen() {
           </SelectionSection>
 
           {type === 'transfer' ? (
-            <SelectionSection label="To account">
+            <SelectionSection label="To account" textMuted={colors.textMuted}>
               {accounts
                 .filter((account) => account.id !== selectedAccount?.id)
                 .map((account) => (
@@ -237,6 +339,9 @@ export default function AddTransactionScreen() {
                     key={account.id}
                     active={selectedToAccount?.id === account.id}
                     activeColor={account.color}
+                    baseColor={colors.textMuted}
+                    backgroundColor={colors.bgCard}
+                    borderColor={colors.border}
                     icon={account.icon}
                     label={account.name}
                     onPress={() => setSelectedToAccount(account)}
@@ -245,13 +350,18 @@ export default function AddTransactionScreen() {
             </SelectionSection>
           ) : null}
 
-          <SelectionSection label="Payment method">
+          <SelectionSection label="Payment method" textMuted={colors.textMuted}>
             {PAYMENT_METHODS.map((method) => (
               <Chip
                 key={method}
                 active={paymentMethod === method}
-                activeColor={COLORS.primary}
-                label={method.replace('_', ' ').replace(/\b\w/g, (match) => match.toUpperCase())}
+                activeColor={colors.primary}
+                baseColor={colors.textMuted}
+                backgroundColor={colors.bgCard}
+                borderColor={colors.border}
+                label={method
+                  .replace('_', ' ')
+                  .replace(/\b\w/g, (match) => match.toUpperCase())}
                 onPress={() => setPaymentMethod(method)}
               />
             ))}
@@ -259,28 +369,74 @@ export default function AddTransactionScreen() {
 
           <View style={styles.inputGroup}>
             <Text style={styles.sectionLabel}>Details</Text>
-            <InputField icon="calendar-outline" label="Date" value={toDateString(selectedDate)} onPress={() => setShowDatePicker(true)} />
-            <InputField icon="storefront-outline" label="Merchant / Payee" value={merchant} onChangeText={setMerchant} />
-            <InputField icon="pricetag-outline" label="Tags" value={tags} onChangeText={setTags} />
-            <InputField icon="document-text-outline" label="Notes" value={notes} onChangeText={setNotes} multiline />
+            <InputField
+              icon="calendar-outline"
+              label="Date"
+              value={toDateString(selectedDate)}
+              onPress={() => setShowDatePicker(true)}
+              colors={colors}
+              isDark={isDark}
+            />
+            <InputField
+              icon="storefront-outline"
+              label="Merchant / Payee"
+              value={merchant}
+              onChangeText={setMerchant}
+              colors={colors}
+              isDark={isDark}
+            />
+            <InputField
+              icon="pricetag-outline"
+              label="Tags"
+              value={tags}
+              onChangeText={setTags}
+              colors={colors}
+              isDark={isDark}
+            />
+            <InputField
+              icon="document-text-outline"
+              label="Notes"
+              value={notes}
+              onChangeText={setNotes}
+              multiline
+              colors={colors}
+              isDark={isDark}
+            />
           </View>
 
-          <Button title={isEditing ? 'Update Transaction' : 'Save Transaction'} onPress={() => void handleSave()} loading={loading} />
+          <Button
+            title={isEditing ? 'Update Transaction' : 'Save Transaction'}
+            onPress={() => void handleSave()}
+            loading={loading}
+          />
         </ScrollView>
       </KeyboardAvoidingView>
 
       {showDatePicker ? (
-        <DateTimePicker value={selectedDate} mode="date" display={Platform.OS === 'ios' ? 'spinner' : 'default'} onChange={onDateChange} />
+        <DateTimePicker
+          value={selectedDate}
+          mode="date"
+          display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+          onChange={onDateChange}
+        />
       ) : null}
     </SafeAreaView>
   );
 }
 
-const SelectionSection = ({ label, children }: { label: string; children: React.ReactNode }) => (
-  <View style={styles.section}>
-    <Text style={styles.sectionLabel}>{label}</Text>
+const SelectionSection = ({
+  label,
+  children,
+  textMuted,
+}: {
+  label: string;
+  children: React.ReactNode;
+  textMuted: string;
+}) => (
+  <View style={baseStyles.section}>
+    <Text style={[baseStyles.sectionLabel, { color: textMuted }]}>{label}</Text>
     <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-      <View style={styles.chipRow}>{children}</View>
+      <View style={baseStyles.chipRow}>{children}</View>
     </ScrollView>
   </View>
 );
@@ -288,12 +444,18 @@ const SelectionSection = ({ label, children }: { label: string; children: React.
 const Chip = ({
   active,
   activeColor,
+  baseColor,
+  backgroundColor,
+  borderColor,
   icon,
   label,
   onPress,
 }: {
   active: boolean;
   activeColor: string;
+  baseColor: string;
+  backgroundColor: string;
+  borderColor: string;
   icon?: string;
   label: string;
   onPress: () => void;
@@ -301,15 +463,30 @@ const Chip = ({
   <TouchableOpacity
     onPress={onPress}
     style={[
-      styles.chip,
+      baseStyles.chip,
+      { backgroundColor, borderColor },
       active && {
         borderColor: activeColor,
         backgroundColor: `${activeColor}20`,
       },
     ]}
   >
-    {icon ? <Ionicons name={icon as never} size={16} color={active ? activeColor : COLORS.textMuted} /> : null}
-    <Text style={[styles.chipText, active && { color: activeColor }]}>{label}</Text>
+    {icon ? (
+      <Ionicons
+        name={icon as never}
+        size={16}
+        color={active ? activeColor : baseColor}
+      />
+    ) : null}
+    <Text
+      style={[
+        baseStyles.chipText,
+        { color: baseColor },
+        active && { color: activeColor },
+      ]}
+    >
+      {label}
+    </Text>
   </TouchableOpacity>
 );
 
@@ -320,6 +497,8 @@ const InputField = ({
   onChangeText,
   multiline,
   onPress,
+  colors,
+  isDark,
 }: {
   icon: string;
   label: string;
@@ -327,83 +506,48 @@ const InputField = ({
   onChangeText?: (value: string) => void;
   multiline?: boolean;
   onPress?: () => void;
+  colors: {
+    bgInput: string;
+    border: string;
+    primary: string;
+    textMuted: string;
+    textPrimary: string;
+  };
+  isDark: boolean;
 }) => (
-  <TouchableOpacity activeOpacity={onPress ? 0.75 : 1} onPress={onPress} disabled={!onPress} style={styles.inputContainer}>
-    <Ionicons name={icon as never} size={18} color={COLORS.textMuted} />
+  <TouchableOpacity
+    activeOpacity={onPress ? 0.75 : 1}
+    onPress={onPress}
+    disabled={!onPress}
+    style={[
+      baseStyles.inputContainer,
+      { backgroundColor: colors.bgInput, borderColor: colors.border },
+    ]}
+  >
+    <Ionicons name={icon as never} size={18} color={colors.textMuted} />
     <TextInput
       value={value}
       onChangeText={onChangeText}
       editable={!onPress}
       placeholder={label}
-      placeholderTextColor={COLORS.textMuted}
-      style={[styles.input, multiline && styles.multilineInput]}
+      placeholderTextColor={colors.textMuted}
+      selectionColor={colors.primary}
+      cursorColor={colors.primary}
+      keyboardAppearance={isDark ? 'dark' : 'light'}
+      style={[
+        baseStyles.input,
+        { color: colors.textPrimary },
+        multiline && baseStyles.multilineInput,
+      ]}
       multiline={multiline}
     />
   </TouchableOpacity>
 );
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: COLORS.bg },
-  flex: { flex: 1 },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: SPACING.md,
-    paddingVertical: SPACING.sm,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.border,
-  },
-  iconButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: COLORS.bgCard,
-  },
-  iconButtonPlaceholder: { width: 40, height: 40 },
-  title: { ...TYPOGRAPHY.h3, color: COLORS.textPrimary },
-  scroll: { padding: SPACING.md, paddingBottom: 40 },
-  typeSelector: {
-    flexDirection: 'row',
-    gap: 8,
-    backgroundColor: COLORS.bgCard,
-    borderRadius: RADIUS.md,
-    padding: 4,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-  },
-  typeButton: {
-    flex: 1,
-    borderWidth: 1,
-    borderColor: 'transparent',
-    borderRadius: RADIUS.sm,
-    alignItems: 'center',
-    paddingVertical: 10,
-  },
-  typeButtonText: { ...TYPOGRAPHY.caption, color: COLORS.textMuted, fontWeight: '700' },
-  typeButtonTextActive: { color: '#fff' },
-  amountContainer: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    gap: 8,
-    marginVertical: SPACING.lg,
-  },
-  currencySymbol: { fontSize: 28, color: COLORS.textSecondary, fontWeight: '700' },
-  amountInput: {
-    minWidth: 120,
-    textAlign: 'center',
-    color: COLORS.textPrimary,
-    fontSize: 42,
-    fontWeight: '800',
-    letterSpacing: -1.5,
-  },
+const baseStyles = StyleSheet.create({
   section: { marginBottom: SPACING.md },
   sectionLabel: {
     ...TYPOGRAPHY.label,
-    color: COLORS.textMuted,
     marginBottom: SPACING.sm,
     textTransform: 'uppercase',
   },
@@ -415,19 +559,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: RADIUS.full,
-    backgroundColor: COLORS.bgCard,
     borderWidth: 1,
-    borderColor: COLORS.border,
   },
-  chipText: { ...TYPOGRAPHY.caption, color: COLORS.textMuted, fontWeight: '600' },
-  inputGroup: { marginBottom: SPACING.md },
+  chipText: { ...TYPOGRAPHY.caption, fontWeight: '600' },
   inputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    backgroundColor: COLORS.bgInput,
     borderWidth: 1,
-    borderColor: COLORS.border,
     borderRadius: RADIUS.md,
     paddingHorizontal: SPACING.md,
     paddingVertical: 12,
@@ -435,7 +574,6 @@ const styles = StyleSheet.create({
   },
   input: {
     flex: 1,
-    color: COLORS.textPrimary,
     ...TYPOGRAPHY.body,
     paddingVertical: 0,
   },
@@ -444,3 +582,82 @@ const styles = StyleSheet.create({
     textAlignVertical: 'top',
   },
 });
+
+const createStyles = (colors: {
+  bg: string;
+  bgCard: string;
+  border: string;
+  textPrimary: string;
+  textSecondary: string;
+  textMuted: string;
+}) =>
+  StyleSheet.create({
+    container: { flex: 1, backgroundColor: colors.bg },
+    flex: { flex: 1 },
+    header: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingHorizontal: SPACING.md,
+      paddingVertical: SPACING.sm,
+      borderBottomWidth: 1,
+      borderBottomColor: colors.border,
+    },
+    iconButton: {
+      width: 40,
+      height: 40,
+      borderRadius: 20,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: colors.bgCard,
+    },
+    iconButtonPlaceholder: { width: 40, height: 40 },
+    title: { ...TYPOGRAPHY.h3, color: colors.textPrimary },
+    scroll: { padding: SPACING.md, paddingBottom: 40 },
+    typeSelector: {
+      flexDirection: 'row',
+      gap: 8,
+      backgroundColor: colors.bgCard,
+      borderRadius: RADIUS.md,
+      padding: 4,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    typeButton: {
+      flex: 1,
+      borderWidth: 1,
+      borderColor: 'transparent',
+      borderRadius: RADIUS.sm,
+      alignItems: 'center',
+      paddingVertical: 10,
+    },
+    typeButtonText: { ...TYPOGRAPHY.caption, fontWeight: '700' },
+    typeButtonTextActive: { color: '#fff' },
+    amountContainer: {
+      flexDirection: 'row',
+      justifyContent: 'center',
+      alignItems: 'center',
+      gap: 8,
+      marginVertical: SPACING.lg,
+    },
+    currencySymbol: {
+      fontSize: 28,
+      color: colors.textSecondary,
+      fontWeight: '700',
+    },
+    amountInput: {
+      minWidth: 120,
+      textAlign: 'center',
+      color: colors.textPrimary,
+      fontSize: 42,
+      fontWeight: '800',
+      letterSpacing: -1.5,
+    },
+    inputGroup: { marginBottom: SPACING.md },
+    sectionLabel: {
+      ...TYPOGRAPHY.label,
+      color: colors.textMuted,
+      marginBottom: SPACING.sm,
+      textTransform: 'uppercase',
+    },
+  });
