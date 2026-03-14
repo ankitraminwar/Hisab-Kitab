@@ -1,9 +1,10 @@
 import React from 'react';
-import { Tabs } from 'expo-router';
+import { Pressable, StyleSheet } from 'react-native';
+import { Tabs, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { StyleSheet } from 'react-native';
 import Animated, {
   useAnimatedStyle,
+  useSharedValue,
   withSpring,
 } from 'react-native-reanimated';
 import { useTheme } from '../../src/hooks/useTheme';
@@ -29,6 +30,38 @@ const TabIcon: React.FC<{ name: string; color: string; focused: boolean }> = ({
   );
 };
 
+const CenterFAB: React.FC = () => {
+  const router = useRouter();
+  const { colors } = useTheme();
+  const scale = useSharedValue(1);
+
+  const animatedStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: scale.value }],
+  }));
+
+  return (
+    <Pressable
+      onPressIn={() => {
+        scale.value = withSpring(0.88, { damping: 10, stiffness: 300 });
+      }}
+      onPressOut={() => {
+        scale.value = withSpring(1, { damping: 10, stiffness: 300 });
+      }}
+      onPress={() => router.push('/transactions/add')}
+    >
+      <Animated.View
+        style={[
+          fabStyles.container,
+          { backgroundColor: colors.primary },
+          animatedStyle,
+        ]}
+      >
+        <Ionicons name="add" size={28} color="#fff" />
+      </Animated.View>
+    </Pressable>
+  );
+};
+
 export default function TabsLayout() {
   const { colors } = useTheme();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
@@ -40,17 +73,17 @@ export default function TabsLayout() {
         tabBarStyle: styles.tabBar,
         tabBarActiveTintColor: colors.primary,
         tabBarInactiveTintColor: colors.textMuted,
-        tabBarLabelStyle: { fontSize: 11, fontWeight: '600', marginBottom: 2 },
+        tabBarLabelStyle: { fontSize: 10, fontWeight: '600', marginBottom: 2 },
         tabBarItemStyle: { paddingTop: 4 },
       }}
     >
       <Tabs.Screen
         name="index"
         options={{
-          title: 'Home',
+          title: 'Dashboard',
           tabBarIcon: ({ color, focused }) => (
             <TabIcon
-              name={focused ? 'home' : 'home-outline'}
+              name={focused ? 'grid' : 'grid-outline'}
               color={color}
               focused={focused}
             />
@@ -60,7 +93,7 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="transactions"
         options={{
-          title: 'Transactions',
+          title: 'History',
           tabBarIcon: ({ color, focused }) => (
             <TabIcon
               name={focused ? 'receipt' : 'receipt-outline'}
@@ -71,12 +104,24 @@ export default function TabsLayout() {
         }}
       />
       <Tabs.Screen
+        name="add-placeholder"
+        options={{
+          title: '',
+          tabBarButton: () => <CenterFAB />,
+        }}
+        listeners={{
+          tabPress: (e) => {
+            e.preventDefault();
+          },
+        }}
+      />
+      <Tabs.Screen
         name="budgets"
         options={{
           title: 'Budgets',
           tabBarIcon: ({ color, focused }) => (
             <TabIcon
-              name={focused ? 'pie-chart' : 'pie-chart-outline'}
+              name={focused ? 'business' : 'business-outline'}
               color={color}
               focused={focused}
             />
@@ -84,29 +129,29 @@ export default function TabsLayout() {
         }}
       />
       <Tabs.Screen
-        name="goals"
+        name="profile"
         options={{
-          title: 'Goals',
+          title: 'Profile',
           tabBarIcon: ({ color, focused }) => (
             <TabIcon
-              name={focused ? 'flag' : 'flag-outline'}
+              name={focused ? 'person' : 'person-outline'}
               color={color}
               focused={focused}
             />
           ),
+        }}
+      />
+      {/* Hidden tabs accessible via navigation but not shown in tab bar */}
+      <Tabs.Screen
+        name="goals"
+        options={{
+          href: null,
         }}
       />
       <Tabs.Screen
         name="reports"
         options={{
-          title: 'Reports',
-          tabBarIcon: ({ color, focused }) => (
-            <TabIcon
-              name={focused ? 'bar-chart' : 'bar-chart-outline'}
-              color={color}
-              focused={focused}
-            />
-          ),
+          href: null,
         }}
       />
     </Tabs>
@@ -123,7 +168,23 @@ const iconStyles = StyleSheet.create({
   },
 });
 
-const createStyles = (colors: any) =>
+const fabStyles = StyleSheet.create({
+  container: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: -24,
+    shadowColor: '#8B5CF6',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+});
+
+const createStyles = (colors: { bgCard: string; border: string }) =>
   StyleSheet.create({
     tabBar: {
       backgroundColor: colors.bgCard,

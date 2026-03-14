@@ -20,14 +20,10 @@ export type RecurringFrequency = 'daily' | 'weekly' | 'monthly' | 'yearly';
 export type CategoryType = 'expense' | 'income' | 'both';
 export type SyncStatus = 'synced' | 'pending' | 'failed';
 export type ThemePreference = 'dark' | 'light' | 'system';
-export type PaymentMethod =
-  | 'cash'
-  | 'bank_transfer'
-  | 'upi'
-  | 'wallet'
-  | 'credit_card'
-  | 'debit_card'
-  | 'other';
+export type PaymentMethod = string;
+
+export type SplitMethod = 'equal' | 'exact' | 'percent';
+export type SplitStatus = 'pending' | 'paid' | 'declined';
 
 export interface SyncMetadata {
   userId?: string | null;
@@ -138,6 +134,28 @@ export interface Liability extends SyncMetadata {
   updatedAt: string;
 }
 
+export interface SplitExpense extends SyncMetadata {
+  id: string;
+  transactionId: string;
+  paidByUserId: string;
+  totalAmount: number;
+  splitMethod: SplitMethod;
+  notes?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface SplitMember extends SyncMetadata {
+  id: string;
+  splitExpenseId: string;
+  name: string;
+  shareAmount: number;
+  sharePercent?: number;
+  status: SplitStatus;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface RecurringTemplate extends SyncMetadata {
   id: string;
   amount: number;
@@ -175,6 +193,7 @@ export interface UserProfile extends SyncMetadata {
   themePreference: ThemePreference;
   notificationsEnabled: boolean;
   biometricEnabled: boolean;
+  avatar?: string;
   createdAt: string;
   updatedAt: string;
 }

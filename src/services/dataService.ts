@@ -1,9 +1,9 @@
-import { getDatabase, enqueueSync } from '@/database';
-import { supabase } from '@/lib/supabase';
+import { getDatabase, enqueueSync } from '../database';
+import { supabase } from '../lib/supabase';
 import type { SQLiteBindValue } from 'expo-sqlite';
-import { triggerBackgroundSync } from '@/services/syncService';
-import { useAppStore } from '@/store/appStore';
-import { generateId } from '@/utils/constants';
+import { triggerBackgroundSync } from './syncService';
+import { useAppStore } from '../store/appStore';
+import { generateId } from '../utils/constants';
 import type {
   Account,
   Asset,
@@ -13,7 +13,7 @@ import type {
   Liability,
   NetWorthHistory,
   UserProfile,
-} from '@/utils/types';
+} from '../utils/types';
 
 const bindValue = (value: unknown): SQLiteBindValue => {
   if (
@@ -24,7 +24,7 @@ const bindValue = (value: unknown): SQLiteBindValue => {
     typeof value === 'boolean' ||
     value instanceof Uint8Array
   ) {
-    return value ?? null;
+    return (value ?? null) as SQLiteBindValue;
   }
 
   return JSON.stringify(value);
@@ -347,6 +347,40 @@ export const BudgetService = {
       budget as unknown as Record<string, unknown>,
     );
     return budget.id;
+  },
+
+  async update(
+    id: string,
+    data: Partial<Pick<Budget, 'limit_amount' | 'alertAt'>>,
+  ) {
+    const existing = await getDatabase().getFirstAsync<Budget>(
+      'SELECT * FROM budgets WHERE id = ?',
+      [id],
+    );
+    if (!existing) {
+      throw new Error('Budget not found');
+    }
+
+    const updatedAt = new Date().toISOString();
+    const budget = {
+      ...existing,
+      ...data,
+      updatedAt,
+      syncStatus: 'pending' as const,
+    };
+
+    await getDatabase().runAsync(
+      `UPDATE budgets
+       SET limit_amount = COALESCE(?, limit_amount), alertAt = COALESCE(?, alertAt), updatedAt = ?, syncStatus = 'pending'
+       WHERE id = ?`,
+      [data.limit_amount ?? null, data.alertAt ?? null, updatedAt, id],
+    );
+
+    await queueEntitySync(
+      'budgets',
+      id,
+      budget as unknown as Record<string, unknown>,
+    );
   },
 
   async delete(id: string) {
@@ -812,5 +846,40 @@ export const UserProfileService = {
     } as Record<string, unknown>);
 
     return profile;
+  },
+};
+
+export const PaymentMethodService = {
+  async getAll(): Promise<
+    { id: string; name: string; icon: string; isCustom: boolean }[]
+  > {
+    const rows = await getDatabase().getAllAsync<{
+      id: string;
+      name: string;
+      icon: string;
+      isCustom: number;
+    }>(
+      'SELECT * FROM payment_methods WHERE deletedAt IS NULL ORDER BY isCustom ASC, name ASC',
+    );
+    return rows.map((row) => ({ ...row, isCustom: Boolean(row.isCustom) }));
+  },
+
+  async create(name: string, icon = 'card'): Promise<string> {
+    const now = new Date().toISOString();
+    const id = generateId();
+    await getDatabase().runAsync(
+      `INSERT INTO payment_methods (id, name, icon, isCustom, createdAt, updatedAt, syncStatus)
+       VALUES (?, ?, ?, 1, ?, ?, 'pending')`,
+      [id, name, icon, now, now],
+    );
+    await queueEntitySync('payment_methods', id, {
+      id,
+      name,
+      icon,
+      isCustom: 1,
+      createdAt: now,
+      updatedAt: now,
+    });
+    return id;
   },
 };

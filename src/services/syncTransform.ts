@@ -1,4 +1,4 @@
-import type { SyncableTable } from '@/utils/constants';
+import type { SyncableTable } from '../utils/constants';
 
 const baseLocalToRemote: Record<string, string> = {
   userId: 'user_id',
@@ -56,6 +56,20 @@ const tableLocalToRemote: Partial<
     themePreference: 'theme_preference',
     notificationsEnabled: 'notifications_enabled',
     biometricEnabled: 'biometric_enabled',
+  },
+  split_expenses: {
+    transactionId: 'transaction_id',
+    paidByUserId: 'paid_by_user_id',
+    totalAmount: 'total_amount',
+    splitMethod: 'split_method',
+  },
+  split_members: {
+    splitExpenseId: 'split_expense_id',
+    shareAmount: 'share_amount',
+    sharePercent: 'share_percent',
+  },
+  payment_methods: {
+    isCustom: 'is_custom',
   },
 };
 

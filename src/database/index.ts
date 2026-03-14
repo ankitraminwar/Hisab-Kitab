@@ -1,11 +1,11 @@
 import * as SQLite from 'expo-sqlite';
-
+import { runMigrations } from '../services/MigrationRunner';
 import {
   generateId,
   SYNCABLE_TABLES,
   type SyncableTable,
-} from '@/utils/constants';
-import type { SyncQueueItem, SyncStatus } from '@/utils/types';
+} from '../utils/constants';
+import type { SyncQueueItem, SyncStatus } from '../utils/types';
 
 let db: SQLite.SQLiteDatabase | null = null;
 let initialized = false;
@@ -19,7 +19,7 @@ const normalizeBindValue = (value: unknown): SQLite.SQLiteBindValue => {
     typeof value === 'boolean' ||
     value instanceof Uint8Array
   ) {
-    return value ?? null;
+    return (value ?? null) as SQLite.SQLiteBindValue;
   }
 
   return JSON.stringify(value);
@@ -186,6 +186,40 @@ const transactionalTables = [
     value TEXT NOT NULL,
     updatedAt TEXT NOT NULL
   )`,
+  `CREATE TABLE IF NOT EXISTS split_expenses (
+    id TEXT PRIMARY KEY,
+    transaction_id TEXT NOT NULL,
+    paid_by_user_id TEXT NOT NULL,
+    total_amount REAL NOT NULL,
+    split_method TEXT NOT NULL CHECK(split_method IN ('equal', 'exact', 'percent')),
+    notes TEXT,
+    createdAt TEXT NOT NULL,
+    updatedAt TEXT NOT NULL,
+    ${baseSyncColumns},
+    FOREIGN KEY (transaction_id) REFERENCES transactions(id) ON DELETE CASCADE
+  )`,
+  `CREATE TABLE IF NOT EXISTS split_members (
+    id TEXT PRIMARY KEY,
+    split_expense_id TEXT NOT NULL,
+    name TEXT NOT NULL,
+    share_amount REAL NOT NULL,
+    share_percent REAL,
+    status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending', 'paid', 'dismissed')),
+    createdAt TEXT NOT NULL,
+    updatedAt TEXT NOT NULL,
+    ${baseSyncColumns},
+    FOREIGN KEY (split_expense_id) REFERENCES split_expenses(id) ON DELETE CASCADE
+  )`,
+  `CREATE TABLE IF NOT EXISTS payment_methods (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    icon TEXT NOT NULL DEFAULT 'card',
+    color TEXT NOT NULL DEFAULT '#8B5CF6',
+    isCustom INTEGER DEFAULT 0,
+    createdAt TEXT NOT NULL,
+    updatedAt TEXT NOT NULL,
+    ${baseSyncColumns}
+  )`,
 ];
 
 const indexes = [
@@ -201,6 +235,8 @@ const indexes = [
   `CREATE INDEX IF NOT EXISTS idx_budgets_month_year ON budgets(month, year)`,
   `CREATE INDEX IF NOT EXISTS idx_sync_queue_entity_record ON sync_queue(entity, recordId)`,
   `CREATE INDEX IF NOT EXISTS idx_sync_queue_retryCount ON sync_queue(retryCount, updatedAt)`,
+  `CREATE INDEX IF NOT EXISTS idx_split_expenses_transaction ON split_expenses(transaction_id)`,
+  `CREATE INDEX IF NOT EXISTS idx_split_members_split_id ON split_members(split_expense_id)`,
 ];
 
 const defaultCategories = [
@@ -322,8 +358,39 @@ export const initializeDatabase = async (): Promise<void> => {
     await database.execAsync(statement);
   }
 
+  await runMigrations(database);
+  await ensureSyncStateSchema(database);
+
   await seedDefaultData(database);
   initialized = true;
+};
+
+const ensureSyncStateSchema = async (database: SQLite.SQLiteDatabase) => {
+  const columns = await database.getAllAsync<{ name: string }>(
+    `PRAGMA table_info(sync_state)`,
+  );
+
+  if (columns.some((column) => column.name === 'key')) {
+    return;
+  }
+
+  // Backfill existing installs where sync_state was created without a key column.
+  await database.execAsync(
+    `CREATE TABLE IF NOT EXISTS sync_state_next (
+      key TEXT PRIMARY KEY,
+      value TEXT NOT NULL,
+      updatedAt TEXT NOT NULL
+    );`,
+  );
+
+  await database.execAsync(
+    `INSERT OR REPLACE INTO sync_state_next (key, value, updatedAt)
+     SELECT 'lastSuccessfulSyncAt', value, updatedAt FROM sync_state
+     WHERE value IS NOT NULL;`,
+  );
+
+  await database.execAsync('DROP TABLE sync_state;');
+  await database.execAsync('ALTER TABLE sync_state_next RENAME TO sync_state;');
 };
 
 const seedDefaultData = async (database: SQLite.SQLiteDatabase) => {
@@ -348,6 +415,28 @@ const seedDefaultData = async (database: SQLite.SQLiteDatabase) => {
           now,
           now,
         ],
+      );
+    }
+  }
+
+  const pmCount = await database.getFirstAsync<{ count: number }>(
+    'SELECT COUNT(*) as count FROM payment_methods',
+  );
+
+  if ((pmCount?.count ?? 0) === 0) {
+    const now = new Date().toISOString();
+    const defaults = [
+      { name: 'Cash', icon: 'cash' },
+      { name: 'UPI', icon: 'qr-code' },
+      { name: 'Credit Card', icon: 'card' },
+      { name: 'Debit Card', icon: 'card-outline' },
+      { name: 'Bank Transfer', icon: 'business' },
+    ];
+    for (const pm of defaults) {
+      await database.runAsync(
+        `INSERT INTO payment_methods (id, name, icon, createdAt, updatedAt, syncStatus)
+         VALUES (?, ?, ?, ?, ?, 'synced')`,
+        [generateId(), pm.name, pm.icon, now, now],
       );
     }
   }

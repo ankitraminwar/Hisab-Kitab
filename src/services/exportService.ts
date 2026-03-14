@@ -1,10 +1,13 @@
 import { documentDirectory, writeAsStringAsync } from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
+import { DataService } from '../services/dataServices';
+import { TransactionService } from '../services/transactionService';
 
-import { DataService } from '@/services/dataServices';
-import { TransactionService } from '@/services/transactionService';
-
-const shareFile = async (filename: string, content: string, mimeType: string) => {
+const shareFile = async (
+  filename: string,
+  content: string,
+  mimeType: string,
+) => {
   if (!documentDirectory) {
     throw new Error('Local file storage is unavailable');
   }
@@ -31,6 +34,10 @@ export const exportService = {
   },
   exportFullBackupJson: async () => {
     const payload = await DataService.exportAllData();
-    return shareFile('hisab-kitab-backup.json', JSON.stringify(payload, null, 2), 'application/json');
+    return shareFile(
+      'hisab-kitab-backup.json',
+      JSON.stringify(payload, null, 2),
+      'application/json',
+    );
   },
 };

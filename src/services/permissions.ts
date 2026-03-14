@@ -7,21 +7,22 @@ export interface PermissionStatusSnapshot {
   localStorage: boolean;
 }
 
-export const requestInitialPermissions = async (): Promise<PermissionStatusSnapshot> => {
-  const [notificationPermission, hasBiometricHardware] = await Promise.all([
-    Notifications.getPermissionsAsync().then(async (permission) => {
-      if (permission.granted) {
-        return true;
-      }
-      const requested = await Notifications.requestPermissionsAsync();
-      return requested.granted;
-    }),
-    LocalAuthentication.hasHardwareAsync(),
-  ]);
+export const requestInitialPermissions =
+  async (): Promise<PermissionStatusSnapshot> => {
+    const [notificationPermission, hasBiometricHardware] = await Promise.all([
+      Notifications.getPermissionsAsync().then(async (permission) => {
+        if (permission.granted) {
+          return true;
+        }
+        const requested = await Notifications.requestPermissionsAsync();
+        return requested.granted;
+      }),
+      LocalAuthentication.hasHardwareAsync(),
+    ]);
 
-  return {
-    notifications: notificationPermission,
-    biometrics: hasBiometricHardware,
-    localStorage: true,
+    return {
+      notifications: notificationPermission,
+      biometrics: hasBiometricHardware,
+      localStorage: true,
+    };
   };
-};

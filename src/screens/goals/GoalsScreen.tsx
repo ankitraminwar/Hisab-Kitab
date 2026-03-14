@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   View,
   Text,
@@ -12,17 +12,17 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import {
-  COLORS,
   SPACING,
   RADIUS,
   TYPOGRAPHY,
   formatCurrency,
 } from '../../utils/constants';
-import { GoalService } from '../../services/dataServices';
-import { Goal } from '../../utils/types';
+import { GoalService } from '../../services/dataService';
+import type { Goal } from '../../utils/types';
 import { Card, ProgressBar, EmptyState, Button } from '../../components/common';
 import { differenceInDays } from 'date-fns';
 import { useAppStore } from '../../store/appStore';
+import { useTheme, type ThemeColors } from '../../hooks/useTheme';
 
 const GOAL_COLORS = [
   '#7C3AED',
@@ -47,6 +47,8 @@ const GOAL_ICONS = [
 ];
 
 export default function GoalsScreen() {
+  const { colors, isDark } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const dataRevision = useAppStore((state) => state.dataRevision);
   const [goals, setGoals] = useState<Goal[]>([]);
   const [showAdd, setShowAdd] = useState(false);
@@ -54,24 +56,41 @@ export default function GoalsScreen() {
   const [fundAmount, setFundAmount] = useState('');
 
   useEffect(() => {
-    loadGoals();
+    void loadGoals();
   }, [dataRevision]);
 
   const loadGoals = async () => {
     const data = await GoalService.getAll();
-    setGoals(data);
+    setGoals(
+      data.sort((a, b) => {
+        // Sort completed goals to the bottom
+        const aDone = a.currentAmount >= a.targetAmount;
+        const bDone = b.currentAmount >= b.targetAmount;
+        if (aDone && !bDone) return 1;
+        if (!aDone && bDone) return -1;
+        return (
+          new Date(a.deadline || a.createdAt).getTime() -
+          new Date(b.deadline || b.createdAt).getTime()
+        );
+      }),
+    );
   };
 
-  const handleAddFunds = async () => {
-    if (!selectedGoal || !fundAmount || parseFloat(fundAmount) <= 0) return;
-    await GoalService.addFunds(selectedGoal.id, parseFloat(fundAmount));
-    setSelectedGoal(null);
+  const handleFund = async () => {
+    if (!selectedGoal || !fundAmount || Number(fundAmount) <= 0) return;
+
+    await GoalService.addFunds(selectedGoal.id, Number(fundAmount));
     setFundAmount('');
-    loadGoals();
+    setSelectedGoal(null);
+    void loadGoals();
   };
 
-  const active = goals.filter((g) => !g.isCompleted);
-  const completed = goals.filter((g) => g.isCompleted);
+  const totalTarget = goals.reduce((s, g) => s + g.targetAmount, 0);
+  const totalSaved = goals.reduce(
+    (s, g) => s + Math.min(g.currentAmount, g.targetAmount),
+    0,
+  );
+  const overallProgress = totalTarget > 0 ? totalSaved / totalTarget : 0;
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -79,9 +98,9 @@ export default function GoalsScreen() {
         <Text style={styles.title}>Savings Goals</Text>
         <TouchableOpacity
           onPress={() => setShowAdd(true)}
-          style={styles.addBtn}
+          style={styles.addButton}
         >
-          <Ionicons name="add" size={22} color={COLORS.primary} />
+          <Ionicons name="add" size={24} color={colors.primary} />
         </TouchableOpacity>
       </Animated.View>
 
@@ -89,117 +108,146 @@ export default function GoalsScreen() {
         contentContainerStyle={styles.scroll}
         showsVerticalScrollIndicator={false}
       >
-        {/* Summary */}
         {goals.length > 0 && (
-          <Animated.View entering={FadeInDown.duration(500).delay(100)}>
-            <View style={styles.summaryRow}>
-              <Card style={styles.summaryCard}>
-                <Text style={styles.summaryLabel}>Active Goals</Text>
-                <Text style={styles.summaryValue}>{active.length}</Text>
-              </Card>
-              <Card style={styles.summaryCard}>
-                <Text style={styles.summaryLabel}>Total Target</Text>
-                <Text style={styles.summaryValue}>
-                  {formatCurrency(
-                    goals.reduce((s, g) => s + g.targetAmount, 0),
-                  )}
-                </Text>
-              </Card>
-              <Card style={styles.summaryCard}>
-                <Text style={styles.summaryLabel}>Saved</Text>
-                <Text style={[styles.summaryValue, { color: COLORS.income }]}>
-                  {formatCurrency(
-                    goals.reduce((s, g) => s + g.currentAmount, 0),
-                  )}
-                </Text>
-              </Card>
-            </View>
+          <Animated.View entering={FadeInDown.duration(400).delay(100)}>
+            <Card style={styles.summaryCard}>
+              <View style={styles.summaryHeader}>
+                <View>
+                  <Text style={styles.summaryTitle}>Total Saved</Text>
+                  <Text style={styles.summaryAmount}>
+                    {formatCurrency(totalSaved)}
+                  </Text>
+                </View>
+                <View
+                  style={[
+                    styles.progressBadge,
+                    { backgroundColor: colors.primary + '20' },
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.progressBadgeText,
+                      { color: colors.primary },
+                    ]}
+                  >
+                    {Math.round(overallProgress * 100)}%
+                  </Text>
+                </View>
+              </View>
+              <ProgressBar
+                progress={overallProgress}
+                color={colors.primary}
+                height={8}
+              />
+              <Text style={styles.summaryFooter}>
+                of {formatCurrency(totalTarget)} target
+              </Text>
+            </Card>
           </Animated.View>
         )}
 
-        {active.length === 0 && completed.length === 0 ? (
-          <EmptyState
-            icon="flag-outline"
-            title="No savings goals"
-            subtitle="Set a goal and start saving towards it"
-            action="Create Goal"
-            onAction={() => setShowAdd(true)}
-          />
-        ) : (
-          <>
-            {active.length > 0 && (
-              <>
-                <Text style={styles.sectionTitle}>Active Goals</Text>
-                {active.map((goal, index) => (
-                  <Animated.View
-                    key={goal.id}
-                    entering={FadeInDown.duration(400).delay(200 + index * 60)}
-                  >
-                    <GoalCard
-                      goal={goal}
-                      onAddFunds={() => setSelectedGoal(goal)}
-                      onDelete={async () => {
-                        await GoalService.delete(goal.id);
-                        loadGoals();
-                      }}
-                    />
-                  </Animated.View>
-                ))}
-              </>
-            )}
-            {completed.length > 0 && (
-              <>
-                <Text style={[styles.sectionTitle, { marginTop: SPACING.md }]}>
-                  Completed 🎉
-                </Text>
-                {completed.map((goal) => (
-                  <GoalCard key={goal.id} goal={goal} completed />
-                ))}
-              </>
-            )}
-          </>
-        )}
-        <View style={{ height: 80 }} />
+        <Animated.View entering={FadeInDown.duration(400).delay(200)}>
+          {goals.length === 0 ? (
+            <EmptyState
+              icon="flag-outline"
+              title="No goals set"
+              subtitle="Set a savings goal to start tracking your progress."
+              action="Create Goal"
+              onAction={() => setShowAdd(true)}
+            />
+          ) : (
+            <View style={styles.goalsList}>
+              {goals.map((goal) => (
+                <GoalCard
+                  key={goal.id}
+                  goal={goal}
+                  onFund={() => setSelectedGoal(goal)}
+                  colors={colors}
+                />
+              ))}
+            </View>
+          )}
+        </Animated.View>
+        <View style={{ height: 100 }} />
       </ScrollView>
 
-      {/* Add Funds Modal */}
-      <Modal
-        visible={!!selectedGoal}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setSelectedGoal(null)}
-      >
-        <View style={modalStyles.overlay}>
-          <View style={modalStyles.sheet}>
-            <View style={modalStyles.handle} />
-            <Text style={modalStyles.title}>
-              Add Funds to {selectedGoal?.name}
+      {/* Fund Goal Modal */}
+      <Modal visible={!!selectedGoal} animationType="fade" transparent>
+        <View style={StyleSheet.absoluteFillObject}>
+          <View
+            style={[
+              StyleSheet.absoluteFillObject,
+              { backgroundColor: 'rgba(0,0,0,0.6)' },
+            ]}
+          />
+          <View
+            style={{
+              backgroundColor: colors.bgCard,
+              borderRadius: RADIUS.xl,
+              padding: SPACING.xl,
+              width: '90%',
+              alignSelf: 'center',
+              marginTop: '30%',
+              borderWidth: 1,
+              borderColor: colors.border,
+            }}
+          >
+            <View
+              style={{
+                flexDirection: 'row',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                marginBottom: SPACING.sm,
+              }}
+            >
+              <Text style={{ ...TYPOGRAPHY.h3, color: colors.textPrimary }}>
+                Add Funds
+              </Text>
+              <TouchableOpacity
+                onPress={() => {
+                  setSelectedGoal(null);
+                  setFundAmount('');
+                }}
+              >
+                <Ionicons name="close" size={24} color={colors.textSecondary} />
+              </TouchableOpacity>
+            </View>
+
+            <Text
+              style={{
+                ...TYPOGRAPHY.body,
+                color: colors.textSecondary,
+                marginBottom: SPACING.lg,
+              }}
+            >
+              Funding: {selectedGoal?.name}
             </Text>
-            <Text style={modalStyles.goalInfo}>
-              {formatCurrency(selectedGoal?.currentAmount || 0)} /{' '}
-              {formatCurrency(selectedGoal?.targetAmount || 0)}
-            </Text>
+
             <TextInput
+              style={{
+                backgroundColor: colors.bgInput,
+                borderWidth: 1,
+                borderColor: colors.border,
+                borderRadius: RADIUS.md,
+                padding: SPACING.md,
+                color: colors.textPrimary,
+                ...TYPOGRAPHY.body,
+                marginBottom: SPACING.lg,
+              }}
+              keyboardType="numeric"
               value={fundAmount}
               onChangeText={setFundAmount}
-              keyboardType="numeric"
-              placeholder="Amount (₹)"
-              placeholderTextColor={COLORS.textMuted}
-              style={modalStyles.input}
+              placeholder="0.00"
+              placeholderTextColor={colors.textMuted}
+              autoFocus
+              keyboardAppearance={isDark ? 'dark' : 'light'}
             />
-            <View style={modalStyles.actions}>
-              <Button
-                title="Cancel"
-                onPress={() => setSelectedGoal(null)}
-                variant="ghost"
-                style={{ flex: 1 }}
-              />
-              <Button
-                title="Add Funds"
-                onPress={handleAddFunds}
-                style={{ flex: 1 }}
-              />
-            </View>
+
+            <Button
+              title="Add Funds"
+              onPress={() => void handleFund()}
+              disabled={!fundAmount}
+            />
           </View>
         </View>
       </Modal>
@@ -208,224 +256,221 @@ export default function GoalsScreen() {
         visible={showAdd}
         onClose={() => setShowAdd(false)}
         onSave={() => {
-          loadGoals();
+          void loadGoals();
           setShowAdd(false);
         }}
+        colors={colors}
+        isDark={isDark}
       />
     </SafeAreaView>
   );
 }
 
-const GoalCard: React.FC<{
+const GoalCard = ({
+  goal,
+  onFund,
+  colors,
+}: {
   goal: Goal;
-  onAddFunds?: () => void;
-  onDelete?: () => void;
-  completed?: boolean;
-}> = ({ goal, onAddFunds, onDelete, completed }) => {
-  const progress =
-    goal.targetAmount > 0 ? goal.currentAmount / goal.targetAmount : 0;
+  onFund: () => void;
+  colors: ThemeColors;
+}) => {
+  const styles = useMemo(() => cardStyles(colors), [colors]);
+  const progress = goal.currentAmount / goal.targetAmount;
+  const isCompleted = progress >= 1;
   const daysLeft = goal.deadline
-    ? differenceInDays(new Date(goal.deadline), new Date())
-    : null;
+    ? Math.max(0, differenceInDays(new Date(goal.deadline), new Date()))
+    : 'No deadline';
 
   return (
-    <Card style={styles.goalCard}>
-      <View style={styles.goalTop}>
-        <View style={[styles.goalIcon, { backgroundColor: goal.color + '20' }]}>
-          <Ionicons name={goal.icon as any} size={22} color={goal.color} />
-        </View>
-        <View style={styles.goalInfo}>
-          <Text style={styles.goalName}>{goal.name}</Text>
-          {daysLeft !== null && !completed && (
-            <Text
-              style={[
-                styles.goalDeadline,
-                { color: daysLeft < 30 ? COLORS.warning : COLORS.textMuted },
-              ]}
-            >
-              {daysLeft > 0 ? `${daysLeft} days left` : 'Overdue'}
+    <Card style={[styles.card, isCompleted ? { opacity: 0.7 } : {}] as any}>
+      <View style={styles.header}>
+        <View style={styles.iconInfo}>
+          <View
+            style={[
+              styles.iconContainer,
+              { backgroundColor: `${goal.color || colors.primary}15` },
+            ]}
+          >
+            <Ionicons
+              name={(goal.icon || 'flag') as never}
+              size={20}
+              color={goal.color || colors.primary}
+            />
+          </View>
+          <View>
+            <Text style={styles.name}>{goal.name}</Text>
+            <Text style={styles.deadline}>
+              {isCompleted ? 'Completed 🎉' : `${daysLeft} days left`}
             </Text>
-          )}
-          {completed && (
-            <Text style={{ color: COLORS.income, ...TYPOGRAPHY.caption }}>
-              ✓ Completed!
-            </Text>
-          )}
+          </View>
         </View>
-        <View style={{ alignItems: 'flex-end' }}>
-          <Text style={[styles.goalAmount, { color: goal.color }]}>
+      </View>
+
+      <View style={styles.progressContainer}>
+        <View style={styles.progressLabels}>
+          <Text style={styles.current}>
             {formatCurrency(goal.currentAmount)}
           </Text>
-          <Text style={styles.goalTarget}>
-            of {formatCurrency(goal.targetAmount)}
+          <Text style={styles.target}>
+            {Math.round(progress * 100)}% of {formatCurrency(goal.targetAmount)}
           </Text>
         </View>
+        <ProgressBar
+          progress={progress}
+          color={isCompleted ? colors.income : goal.color || colors.primary}
+          height={8}
+        />
       </View>
 
-      <ProgressBar
-        progress={progress}
-        color={goal.color}
-        height={8}
-        style={{ marginVertical: SPACING.sm }}
-      />
-
-      <View style={styles.goalFooter}>
-        <Text style={styles.goalPercent}>
-          {(progress * 100).toFixed(1)}% saved
-        </Text>
-        {!completed && (
-          <View style={styles.goalActions}>
-            <TouchableOpacity
-              onPress={onAddFunds}
-              style={[
-                styles.goalBtn,
-                {
-                  backgroundColor: goal.color + '20',
-                  borderColor: goal.color + '40',
-                },
-              ]}
-            >
-              <Ionicons name="add" size={14} color={goal.color} />
-              <Text style={[styles.goalBtnText, { color: goal.color }]}>
-                Add Funds
-              </Text>
-            </TouchableOpacity>
-            {onDelete && (
-              <TouchableOpacity onPress={onDelete} style={styles.deleteBtn}>
-                <Ionicons
-                  name="trash-outline"
-                  size={14}
-                  color={COLORS.textMuted}
-                />
-              </TouchableOpacity>
-            )}
-          </View>
-        )}
-      </View>
+      {!isCompleted && (
+        <TouchableOpacity
+          style={[styles.fundButton, { backgroundColor: colors.bgElevated }]}
+          onPress={onFund}
+        >
+          <Ionicons
+            name="add-circle-outline"
+            size={18}
+            color={colors.primary}
+          />
+          <Text style={[styles.fundText, { color: colors.primary }]}>
+            Add Funds
+          </Text>
+        </TouchableOpacity>
+      )}
     </Card>
   );
 };
 
-const AddGoalModal: React.FC<{
+const AddGoalModal = ({
+  visible,
+  onClose,
+  onSave,
+  colors,
+  isDark,
+}: {
   visible: boolean;
   onClose: () => void;
   onSave: () => void;
-}> = ({ visible, onClose, onSave }) => {
+  colors: ThemeColors;
+  isDark: boolean;
+}) => {
+  const styles = useMemo(() => modalStyles(colors), [colors]);
   const [name, setName] = useState('');
-  const [target, setTarget] = useState('');
-  const [deadline, setDeadline] = useState('');
+  const [targetAmount, setTargetAmount] = useState('');
   const [color, setColor] = useState(GOAL_COLORS[0]);
   const [icon, setIcon] = useState(GOAL_ICONS[0]);
   const [loading, setLoading] = useState(false);
 
   const handleSave = async () => {
-    if (!name || !target) return;
+    if (!name || !targetAmount) return;
+
     setLoading(true);
+    const targetDate = new Date();
+    targetDate.setMonth(targetDate.getMonth() + 6); // Default 6 months for now
+
     await GoalService.create({
       name,
-      targetAmount: parseFloat(target),
+      targetAmount: Number(targetAmount),
       currentAmount: 0,
-      deadline: deadline || undefined,
-      icon,
+      deadline: targetDate.toISOString().slice(0, 10),
       color,
+      icon,
       isCompleted: false,
     });
+
     setLoading(false);
     setName('');
-    setTarget('');
-    setDeadline('');
+    setTargetAmount('');
     onSave();
   };
 
   return (
-    <Modal
-      visible={visible}
-      transparent
-      animationType="slide"
-      onRequestClose={onClose}
-    >
-      <View style={modalStyles.overlay}>
-        <View style={[modalStyles.sheet, { maxHeight: '90%' }]}>
-          <View style={modalStyles.handle} />
-          <ScrollView showsVerticalScrollIndicator={false}>
-            <Text style={modalStyles.title}>New Savings Goal</Text>
+    <Modal visible={visible} animationType="slide" transparent>
+      <View style={styles.overlay}>
+        <View style={styles.sheet}>
+          <View style={styles.handle} />
+          <Text style={styles.title}>New Goal</Text>
 
+          <ScrollView showsVerticalScrollIndicator={false}>
             <TextInput
+              style={styles.input}
+              placeholder="Goal Name (e.g. New Car)"
+              placeholderTextColor={colors.textMuted}
               value={name}
               onChangeText={setName}
-              placeholder="Goal name (e.g. Emergency Fund)"
-              placeholderTextColor={COLORS.textMuted}
-              style={modalStyles.input}
-            />
-            <TextInput
-              value={target}
-              onChangeText={setTarget}
-              keyboardType="numeric"
-              placeholder="Target amount (₹)"
-              placeholderTextColor={COLORS.textMuted}
-              style={modalStyles.input}
-            />
-            <TextInput
-              value={deadline}
-              onChangeText={setDeadline}
-              placeholder="Deadline (YYYY-MM-DD, optional)"
-              placeholderTextColor={COLORS.textMuted}
-              style={modalStyles.input}
             />
 
-            <Text style={modalStyles.label}>Color</Text>
-            <View style={modalStyles.colorRow}>
+            <TextInput
+              style={styles.input}
+              placeholder="Target Amount"
+              placeholderTextColor={colors.textMuted}
+              keyboardType="numeric"
+              value={targetAmount}
+              onChangeText={setTargetAmount}
+              keyboardAppearance={isDark ? 'dark' : 'light'}
+            />
+
+            <Text style={styles.label}>Style</Text>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              style={styles.selector}
+            >
               {GOAL_COLORS.map((c) => (
                 <TouchableOpacity
                   key={c}
                   onPress={() => setColor(c)}
                   style={[
-                    modalStyles.colorDot,
-                    {
-                      backgroundColor: c,
-                      borderWidth: color === c ? 3 : 0,
-                      borderColor: '#fff',
-                    },
+                    styles.colorOption,
+                    { backgroundColor: c },
+                    color === c && styles.selectedOption,
                   ]}
                 />
               ))}
-            </View>
+            </ScrollView>
 
-            <Text style={modalStyles.label}>Icon</Text>
-            <View style={modalStyles.iconRow}>
-              {GOAL_ICONS.map((ic) => (
+            <Text style={styles.label}>Icon</Text>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              style={styles.selector}
+            >
+              {GOAL_ICONS.map((i) => (
                 <TouchableOpacity
-                  key={ic}
-                  onPress={() => setIcon(ic)}
+                  key={i}
+                  onPress={() => setIcon(i)}
                   style={[
-                    modalStyles.iconBtn,
-                    icon === ic && {
-                      backgroundColor: color,
-                      borderColor: color,
-                    },
+                    styles.iconOption,
+                    { backgroundColor: colors.bgElevated },
+                    icon === i && [
+                      styles.selectedOption,
+                      { borderColor: color },
+                    ],
                   ]}
                 >
                   <Ionicons
-                    name={ic as any}
-                    size={20}
-                    color={icon === ic ? '#fff' : COLORS.textMuted}
+                    name={i as never}
+                    size={24}
+                    color={icon === i ? color : colors.textMuted}
                   />
                 </TouchableOpacity>
               ))}
-            </View>
+            </ScrollView>
 
-            <View style={[modalStyles.actions, { marginTop: SPACING.md }]}>
+            <View style={styles.actions}>
               <Button
                 title="Cancel"
+                variant="secondary"
                 onPress={onClose}
-                variant="ghost"
-                style={{ flex: 1 }}
+                style={styles.flex1}
               />
               <Button
-                title="Create Goal"
-                onPress={handleSave}
+                title="Save Goal"
+                onPress={() => void handleSave()}
                 loading={loading}
-                style={{ flex: 1 }}
+                style={styles.flex1}
+                disabled={!name || !targetAmount}
               />
             </View>
           </ScrollView>
@@ -435,158 +480,200 @@ const AddGoalModal: React.FC<{
   );
 };
 
-const modalStyles = StyleSheet.create({
-  overlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.6)',
-    justifyContent: 'flex-end',
-  },
-  sheet: {
-    backgroundColor: COLORS.bgCard,
-    borderTopLeftRadius: RADIUS.xl,
-    borderTopRightRadius: RADIUS.xl,
-    padding: SPACING.lg,
-    paddingBottom: 40,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-  },
-  handle: {
-    width: 40,
-    height: 4,
-    backgroundColor: COLORS.border,
-    borderRadius: 2,
-    alignSelf: 'center',
-    marginBottom: SPACING.md,
-  },
-  title: {
-    ...TYPOGRAPHY.h3,
-    color: COLORS.textPrimary,
-    marginBottom: SPACING.md,
-  },
-  goalInfo: {
-    ...TYPOGRAPHY.body,
-    color: COLORS.textSecondary,
-    marginBottom: SPACING.md,
-  },
-  label: {
-    ...TYPOGRAPHY.label,
-    color: COLORS.textMuted,
-    marginBottom: SPACING.sm,
-    textTransform: 'uppercase',
-  },
-  input: {
-    backgroundColor: COLORS.bgInput,
-    borderRadius: RADIUS.md,
-    padding: SPACING.md,
-    color: COLORS.textPrimary,
-    ...TYPOGRAPHY.body,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    marginBottom: SPACING.sm,
-  },
-  colorRow: { flexDirection: 'row', gap: 12, marginBottom: SPACING.md },
-  colorDot: { width: 32, height: 32, borderRadius: 16 },
-  iconRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-    marginBottom: SPACING.md,
-  },
-  iconBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: COLORS.bgElevated,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-  },
-  actions: { flexDirection: 'row', gap: SPACING.sm },
-});
+const cardStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
+    card: { padding: SPACING.lg, marginBottom: SPACING.md },
+    header: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'flex-start',
+      marginBottom: SPACING.md,
+    },
+    iconInfo: { flexDirection: 'row', alignItems: 'center', gap: SPACING.md },
+    iconContainer: {
+      width: 44,
+      height: 44,
+      borderRadius: RADIUS.lg,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    name: {
+      ...TYPOGRAPHY.bodyMedium,
+      color: colors.textPrimary,
+      fontWeight: '700',
+    },
+    deadline: {
+      ...TYPOGRAPHY.caption,
+      color: colors.textSecondary,
+      marginTop: 4,
+    },
+    progressContainer: { marginBottom: SPACING.md },
+    progressLabels: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'flex-end',
+      marginBottom: 8,
+    },
+    current: { ...TYPOGRAPHY.h3, color: colors.textPrimary },
+    target: {
+      ...TYPOGRAPHY.caption,
+      color: colors.textMuted,
+      fontWeight: '600',
+    },
+    fundButton: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 8,
+      paddingVertical: 12,
+      borderRadius: RADIUS.md,
+      marginTop: SPACING.sm,
+    },
+    fundText: { fontSize: 13, fontWeight: '700' },
+  });
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: COLORS.bg },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: SPACING.md,
-    paddingVertical: SPACING.sm,
-  },
-  title: { ...TYPOGRAPHY.h2, color: COLORS.textPrimary },
-  addBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: COLORS.primary + '20',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: COLORS.primary + '40',
-  },
-  scroll: { paddingHorizontal: SPACING.md },
-  summaryRow: {
-    flexDirection: 'row',
-    gap: SPACING.sm,
-    marginBottom: SPACING.md,
-  },
-  summaryCard: { flex: 1, alignItems: 'center' },
-  summaryLabel: {
-    ...TYPOGRAPHY.caption,
-    color: COLORS.textMuted,
-    textAlign: 'center',
-  },
-  summaryValue: {
-    ...TYPOGRAPHY.bodyMedium,
-    color: COLORS.textPrimary,
-    fontWeight: '700',
-    marginTop: 4,
-    textAlign: 'center',
-  },
-  sectionTitle: {
-    ...TYPOGRAPHY.h3,
-    color: COLORS.textPrimary,
-    marginBottom: SPACING.sm,
-  },
-  goalCard: { marginBottom: SPACING.sm },
-  goalTop: { flexDirection: 'row', alignItems: 'center', gap: SPACING.sm },
-  goalIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexShrink: 0,
-  },
-  goalInfo: { flex: 1 },
-  goalName: { ...TYPOGRAPHY.bodyMedium, color: COLORS.textPrimary },
-  goalDeadline: { ...TYPOGRAPHY.caption },
-  goalAmount: { ...TYPOGRAPHY.bodyMedium, fontWeight: '700' },
-  goalTarget: { ...TYPOGRAPHY.caption, color: COLORS.textMuted },
-  goalFooter: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  goalPercent: { ...TYPOGRAPHY.caption, color: COLORS.textMuted },
-  goalActions: { flexDirection: 'row', gap: 8 },
-  goalBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: RADIUS.full,
-    borderWidth: 1,
-  },
-  goalBtnText: { ...TYPOGRAPHY.caption, fontWeight: '600' },
-  deleteBtn: {
-    width: 28,
-    height: 28,
-    borderRadius: 8,
-    backgroundColor: COLORS.bgElevated,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-});
+const modalStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
+    overlay: {
+      flex: 1,
+      backgroundColor: 'rgba(0,0,0,0.5)',
+      justifyContent: 'flex-end',
+    },
+    sheet: {
+      backgroundColor: colors.bg,
+      borderTopLeftRadius: RADIUS.lg,
+      borderTopRightRadius: RADIUS.lg,
+      padding: SPACING.lg,
+      maxHeight: '90%',
+    },
+    modalContent: {
+      backgroundColor: colors.bgCard,
+      borderRadius: RADIUS.xl,
+      padding: SPACING.xl,
+      width: '90%',
+      alignSelf: 'center',
+      top: '30%',
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)' },
+    handle: {
+      width: 40,
+      height: 4,
+      backgroundColor: colors.border,
+      borderRadius: 2,
+      alignSelf: 'center',
+      marginBottom: SPACING.md,
+    },
+    title: {
+      ...TYPOGRAPHY.h2,
+      color: colors.textPrimary,
+      marginBottom: SPACING.lg,
+    },
+    modalHeader: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      marginBottom: SPACING.sm,
+    },
+    modalTitle: { ...TYPOGRAPHY.h3, color: colors.textPrimary },
+    modalSubtitle: {
+      ...TYPOGRAPHY.body,
+      color: colors.textSecondary,
+      marginBottom: SPACING.lg,
+    },
+    input: {
+      backgroundColor: colors.bgInput,
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: RADIUS.md,
+      padding: SPACING.md,
+      color: colors.textPrimary,
+      ...TYPOGRAPHY.body,
+      marginBottom: SPACING.lg,
+    },
+    label: {
+      ...TYPOGRAPHY.label,
+      color: colors.textMuted,
+      marginBottom: SPACING.sm,
+      marginTop: SPACING.md,
+    },
+    selector: { flexDirection: 'row', marginBottom: SPACING.md },
+    colorOption: {
+      width: 40,
+      height: 40,
+      borderRadius: 20,
+      marginRight: SPACING.md,
+    },
+    iconOption: {
+      width: 48,
+      height: 48,
+      borderRadius: RADIUS.md,
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginRight: SPACING.md,
+      borderWidth: 2,
+      borderColor: 'transparent',
+    },
+    selectedOption: { borderWidth: 3, borderColor: colors.textPrimary },
+    actions: {
+      flexDirection: 'row',
+      gap: SPACING.md,
+      marginTop: SPACING.lg,
+      marginBottom: SPACING.xl,
+    },
+    flex1: { flex: 1 },
+  });
+
+const createStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
+    container: { flex: 1, backgroundColor: colors.bg },
+    header: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      paddingHorizontal: SPACING.md,
+      paddingTop: SPACING.sm,
+      paddingBottom: SPACING.md,
+    },
+    title: { ...TYPOGRAPHY.h2, color: colors.textPrimary },
+    addButton: {
+      width: 40,
+      height: 40,
+      alignItems: 'center',
+      justifyContent: 'center',
+      borderRadius: RADIUS.full,
+      backgroundColor: colors.primary + '15',
+    },
+    scroll: { paddingHorizontal: SPACING.md },
+    summaryCard: {
+      padding: SPACING.lg,
+      marginBottom: SPACING.xl,
+      backgroundColor: colors.bgCard,
+    },
+    summaryHeader: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'flex-start',
+      marginBottom: SPACING.lg,
+    },
+    summaryTitle: {
+      ...TYPOGRAPHY.body,
+      color: colors.textSecondary,
+      marginBottom: 4,
+    },
+    summaryAmount: { ...TYPOGRAPHY.h1, color: colors.textPrimary },
+    progressBadge: {
+      paddingHorizontal: 8,
+      paddingVertical: 4,
+      borderRadius: 4,
+    },
+    progressBadgeText: { fontSize: 12, fontWeight: '700' },
+    summaryFooter: {
+      ...TYPOGRAPHY.caption,
+      color: colors.textMuted,
+      marginTop: SPACING.sm,
+      textAlign: 'right',
+    },
+    goalsList: { gap: SPACING.sm },
+  });

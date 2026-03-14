@@ -2,97 +2,88 @@
 
 Offline-first personal finance manager built with Expo, React Native, TypeScript, SQLite, and Supabase.
 
+## Features
+
+- **Dashboard** — Income/expense summary, savings progress, budget alerts, spending charts, quick actions
+- **Transactions** — Add/edit income & expenses with categories, accounts, tags, notes
+- **Split Expenses** — Split bills with friends (equal/exact/percent), track payments
+- **Budgets** — Monthly category budgets with progress tracking
+- **Goals** — Savings goals with target amounts and deadlines
+- **Reports** — Spending distribution charts, category breakdowns
+- **SMS Import** — Auto-import bank/UPI transactions from SMS (Android native builds)
+- **Accounts** — Manage bank accounts and wallets
+- **Cloud Sync** — Real-time sync with Supabase (offline-first, works without internet)
+- **Dark/Light Theme** — System-aware theming
+- **Biometric Lock** — Fingerprint/face unlock
+- **Data Export** — CSV and JSON export
+
 ## Stack
 
-- Expo Router
-- SQLite for primary local persistence
-- Supabase auth and cloud sync
-- Expo Notifications, Secure Store, Local Authentication, File System, Sharing
-- Zustand and React Query
-
-## Current App Flow
-
-- App startup route is `/`
-- Unauthenticated users are redirected to `/login`
-- Sign-up / reset flows live under `/auth/*`
-- Local SQLite data is cleared on logout
-- Supabase sync only runs for authenticated users
-- Local changes are written first and then queued for background sync
-- When internet returns, queued changes are pushed to Supabase automatically
-- First authenticated session can prompt for biometric unlock
-- If a logged-in user has no local `user_profile`, one is created automatically
-
-## SMS Import Status
-
-- Android uses `react-native-get-sms-android` to read inbox SMS in native builds
-- Bank/payment SMS messages are parsed into local expense or income transactions
-- Imported SMS transactions are tagged to prevent duplicates
-- Background SMS polling runs roughly every 60 seconds on Android
-- If the device is online, imported SMS transactions are synced to Supabase automatically
-- The app remains offline-first: SMS imports are stored locally even when offline
-- iOS does not support full SMS inbox access for third-party apps
-- Expo Go cannot use this feature because the package requires a native Android build
+- **Expo** ~54.0.0 + **React Native** 0.81.5
+- **expo-router** for file-based navigation
+- **expo-sqlite** for local persistence
+- **Supabase** for auth, cloud database, edge functions
+- **Zustand** + **React Query** for state management
+- **react-native-reanimated** for animations
+- **@shopify/react-native-skia** for charts
 
 ## Local Setup
 
 1. Create `.env`:
 
 ```env
-EXPO_PUBLIC_SUPABASE_URL=...
-EXPO_PUBLIC_SUPABASE_ANON_KEY=...
+EXPO_PUBLIC_SUPABASE_URL=your-project-url
+EXPO_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
 ```
 
-2. Install dependencies:
+2. Install and start:
 
 ```bash
 npm install
-```
-
-3. Start Expo:
-
-```bash
 npm run start
 ```
 
-For Android SMS import, use a native Android build or dev client instead of Expo Go.
-
-## Required Backend Step
-
-The mobile app will not sync until the Supabase schema is deployed.
-
-Apply:
-
-- [supabase/schema.sql](./supabase/schema.sql)
-- [supabase/migrations/20260312_221818_bank_sms_auto_sync_profile_bootstrap.sql](./supabase/migrations/20260312_221818_bank_sms_auto_sync_profile_bootstrap.sql)
-
-If the schema is not deployed, the app now falls back to local-only mode and reports the sync error instead of crashing.
-
-After applying the schema, restart the app with a clean cache:
+3. For SMS import, use a native Android build (not Expo Go):
 
 ```bash
-npx expo start -c
+npx expo run:android
 ```
 
-## Validation Commands
+## Backend Setup
+
+Apply Supabase schema before sync will work:
 
 ```bash
-npm run typecheck
-npm run lint
-npm run doctor
+# Apply in Supabase SQL editor:
+supabase/schema.sql
+supabase/migrations/20260312_221818_bank_sms_auto_sync_profile_bootstrap.sql
+supabase/migrations/20260312_223000_theme_preference_updown.sql
+supabase/migrations/20260314_004000_add_split_expenses.sql
+supabase/migrations/20260315_add_split_tables.sql
+```
+
+Deploy edge function:
+
+```bash
+supabase functions deploy send-email
+# Set secret: RESEND_API_KEY
+```
+
+Enable email/password auth in Supabase dashboard.
+
+Without backend setup, app works in local-only mode.
+
+## Commands
+
+```bash
+npm run start        # Start Expo dev server
+npm run typecheck    # TypeScript check (npx tsc --noEmit)
+npm run lint         # ESLint
+npm run doctor       # Expo doctor
 ```
 
 ## Docs
 
-- [ARCHITECTURE.md](./ARCHITECTURE.md)
-- [AI_CONTEXT.md](./AI_CONTEXT.md)
-- [SUPABASE_SETUP.md](./SUPABASE_SETUP.md)
-
-## AI & Development Notes
-
-- App is built with theme toggles in `Settings` (dark / light / system) via `src/hooks/useTheme.ts`.
-- Most screens use themed colors. Screens still using `COLORS` from `src/utils/constants.ts` are now upgraded to dynamic colors in light mode to avoid dark-only styling.
-- For future AI tools or code assistants, ask for ‘theme-based color override’ and ‘useTheme usage’ if a component appears hardcoded to `COLORS`.
-
-## SMS Import Package Recommendation
-
-The project is already wired to use `react-native-get-sms-android` in native Android builds. If you want better Expo managed workflow, use `@maniac-tech/react-native-expo-read-sms` (but this may require custom native config and not work in Expo Go without dev client). For OTP-only verification use `react-native-sms-retriever`.
+- [AI_CONTEXT.md](./AI_CONTEXT.md) — AI agent reference (read this first for coding)
+- [ARCHITECTURE.md](./ARCHITECTURE.md) — Technical architecture details
+- [SUPABASE_SETUP.md](./SUPABASE_SETUP.md) — Backend setup guide
