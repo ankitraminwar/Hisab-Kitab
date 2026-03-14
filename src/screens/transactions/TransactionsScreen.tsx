@@ -1,265 +1,211 @@
-import { Ionicons } from '@expo/vector-icons';
-import { FlashList } from '@shopify/flash-list';
-import { format } from 'date-fns';
-import { useRouter } from 'expo-router';
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  Alert,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
   View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  RefreshControl,
+  FlatList,
 } from 'react-native';
-import Animated, { FadeInDown, FadeInRight } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
-
-import { EmptyState, FAB } from '@/components/common';
-import TransactionItem from '@/components/TransactionItem';
-import type { ThemeColors } from '@/hooks/useTheme';
-import { useTheme } from '@/hooks/useTheme';
-import { TransactionService } from '@/services/transactionService';
-import { useAppStore } from '@/store/appStore';
-import { RADIUS, SPACING, TYPOGRAPHY } from '@/utils/constants';
+import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
+import Animated, { FadeInDown } from 'react-native-reanimated';
+import { format } from 'date-fns';
+import {
+  SPACING,
+  RADIUS,
+  TYPOGRAPHY,
+  formatCurrency,
+} from '../../utils/constants';
+import { TransactionService } from '../../services/transactionService';
+import { useAppStore } from '../../store/appStore';
+import { SearchBar } from '../../components/common';
+import TransactionItem from '../../components/TransactionItem';
 import type {
   Transaction,
-  TransactionFilters,
   TransactionType,
-} from '@/utils/types';
+  TransactionFilters,
+  Category,
+  Account,
+} from '../../utils/types';
+import { useTheme, type ThemeColors } from '../../hooks/useTheme';
 
-const TYPE_FILTERS: { key: TransactionType | 'all'; label: string }[] = [
-  { key: 'all', label: 'All' },
-  { key: 'expense', label: 'Expenses' },
-  { key: 'income', label: 'Income' },
-  { key: 'transfer', label: 'Transfers' },
+type FilterType = 'all' | 'expense' | 'income' | 'transfer';
+type ListItem =
+  | { type: 'header'; title: string; key: string }
+  | { type: 'transaction'; data: Transaction; key: string };
+
+const FILTER_CHIPS: { key: string; label: string; icon: string }[] = [
+  { key: 'category', label: 'Category', icon: 'chevron-down' },
+  { key: 'account', label: 'Account', icon: 'chevron-down' },
+  { key: 'date', label: 'Date', icon: 'chevron-down' },
 ];
-
-const PAGE_SIZE = 30;
-const SEARCH_DEBOUNCE_MS = 300;
 
 export default function TransactionsScreen() {
   const router = useRouter();
   const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+
   const dataRevision = useAppStore((state) => state.dataRevision);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [search, setSearch] = useState('');
-  const [debouncedSearch, setDebouncedSearch] = useState('');
-  const [typeFilter, setTypeFilter] = useState<TransactionType | 'all'>('all');
-  const [loading, setLoading] = useState(false);
-  const [hasMore, setHasMore] = useState(true);
-  const loadingRef = useRef(false);
-  const offsetRef = useRef(0);
-  const searchTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(
-    undefined,
-  );
+  const [refreshing, setRefreshing] = useState(false);
+  const [filterType, setFilterType] = useState<TransactionType | undefined>();
+  const [filterCat, setFilterCat] = useState<string | undefined>();
+  const [filterAcc, setFilterAcc] = useState<string | undefined>();
+  const [filterMonth, setFilterMonth] = useState<string | undefined>();
 
-  useEffect(() => {
-    if (searchTimerRef.current) {
-      clearTimeout(searchTimerRef.current);
-    }
-    searchTimerRef.current = setTimeout(() => {
-      setDebouncedSearch(search);
-    }, SEARCH_DEBOUNCE_MS);
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [accounts, setAccounts] = useState<Account[]>([]);
 
-    return () => {
-      if (searchTimerRef.current) {
-        clearTimeout(searchTimerRef.current);
-      }
+  const loadData = useCallback(async () => {
+    const filters: TransactionFilters = {
+      type: filterType,
+      categoryId: filterCat,
+      accountId: filterAcc,
     };
-  }, [search]);
-
-  const loadTransactions = useCallback(
-    async (reset: boolean) => {
-      if (loadingRef.current) {
-        return;
-      }
-
-      loadingRef.current = true;
-      setLoading(true);
-      try {
-        const filters: TransactionFilters = {};
-        if (typeFilter !== 'all') {
-          filters.type = typeFilter;
-        }
-        if (debouncedSearch.trim()) {
-          filters.search = debouncedSearch.trim();
-        }
-
-        const offset = reset ? 0 : offsetRef.current;
-        const rows = await TransactionService.getAll(
-          filters,
-          PAGE_SIZE,
-          offset,
-        );
-
-        if (reset) {
-          setTransactions(rows);
-          offsetRef.current = rows.length;
-        } else {
-          setTransactions((current) => [...current, ...rows]);
-          offsetRef.current += rows.length;
-        }
-        setHasMore(rows.length === PAGE_SIZE);
-      } finally {
-        loadingRef.current = false;
-        setLoading(false);
-      }
-    },
-    [debouncedSearch, typeFilter],
-  );
+    const results = await TransactionService.getAll(filters);
+    setTransactions(results);
+  }, [filterType, filterCat, filterAcc]);
 
   useEffect(() => {
-    void loadTransactions(true);
-  }, [dataRevision, loadTransactions]);
+    void loadData();
+  }, [dataRevision, loadData]);
 
-  const handleLoadMore = useCallback(() => {
-    if (hasMore && !loadingRef.current) {
-      void loadTransactions(false);
-    }
-  }, [hasMore, loadTransactions]);
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await loadData();
+    setRefreshing(false);
+  };
 
-  const handleDelete = useCallback(
-    (transaction: Transaction) => {
-      Alert.alert(
-        'Delete transaction',
-        `Delete ₹${transaction.amount} transaction?`,
-        [
-          { text: 'Cancel', style: 'cancel' },
-          {
-            text: 'Delete',
-            style: 'destructive',
-            onPress: async () => {
-              await TransactionService.delete(transaction.id);
-              void loadTransactions(true);
-            },
-          },
-        ],
-      );
-    },
-    [loadTransactions],
-  );
+  // Filter by search
+  const filtered = useMemo(() => {
+    if (!search.trim()) return transactions;
+    const q = search.toLowerCase();
+    return transactions.filter(
+      (t) =>
+        t.merchant?.toLowerCase().includes(q) ||
+        t.categoryName?.toLowerCase().includes(q) ||
+        t.notes?.toLowerCase().includes(q),
+    );
+  }, [transactions, search]);
 
-  const grouped = transactions.reduce<Record<string, Transaction[]>>(
-    (accumulator, transaction) => {
-      const dateKey = transaction.date.slice(0, 10);
-      if (!accumulator[dateKey]) {
-        accumulator[dateKey] = [];
+  // Group by month
+  const listData = useMemo((): ListItem[] => {
+    const items: ListItem[] = [];
+    let currentMonth = '';
+    for (const tx of filtered) {
+      const monthKey = format(new Date(tx.date), 'MMMM yyyy').toUpperCase();
+      if (monthKey !== currentMonth) {
+        currentMonth = monthKey;
+        items.push({
+          type: 'header',
+          title: monthKey,
+          key: `header-${monthKey}`,
+        });
       }
-      accumulator[dateKey].push(transaction);
-      return accumulator;
-    },
-    {},
-  );
+      items.push({ type: 'transaction', data: tx, key: tx.id });
+    }
+    return items;
+  }, [filtered]);
 
-  const listData: (string | Transaction)[] = [];
-  Object.entries(grouped).forEach(([dateKey, rows]) => {
-    listData.push(dateKey);
-    listData.push(...rows);
-  });
-
-  const styles = React.useMemo(() => createStyles(colors), [colors]);
+  const renderItem = ({ item }: { item: ListItem }) => {
+    if (item.type === 'header') {
+      return (
+        <View style={styles.monthHeader}>
+          <Text style={styles.monthText}>{item.title}</Text>
+        </View>
+      );
+    }
+    return (
+      <View style={styles.txCardWrapper}>
+        <TransactionItem
+          item={item.data}
+          onPress={() => router.push(`/transactions/${item.data.id}`)}
+        />
+      </View>
+    );
+  };
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
+      {/* Header */}
       <Animated.View entering={FadeInDown.duration(400)} style={styles.header}>
+        <TouchableOpacity style={styles.menuBtn}>
+          <Ionicons name="menu" size={22} color={colors.textPrimary} />
+        </TouchableOpacity>
         <Text style={styles.title}>Transactions</Text>
-        <TouchableOpacity
-          onPress={() => router.push('/reports')}
-          style={styles.headerButton}
-        >
+        <TouchableOpacity style={styles.menuBtn}>
           <Ionicons
-            name="bar-chart-outline"
-            size={20}
+            name="notifications-outline"
+            size={22}
             color={colors.textSecondary}
           />
         </TouchableOpacity>
       </Animated.View>
 
+      {/* Search */}
       <Animated.View
         entering={FadeInDown.duration(400).delay(100)}
-        style={styles.filters}
+        style={styles.searchWrap}
       >
-        <View style={styles.searchContainer}>
-          <Ionicons name="search-outline" size={18} color={colors.textMuted} />
-          <TextInput
-            value={search}
-            onChangeText={setSearch}
-            placeholder="Search transactions..."
-            placeholderTextColor={colors.textMuted}
-            style={styles.searchInput}
-            returnKeyType="search"
-          />
-          {search.length > 0 && (
-            <TouchableOpacity onPress={() => setSearch('')}>
-              <Ionicons
-                name="close-circle"
-                size={18}
-                color={colors.textMuted}
-              />
-            </TouchableOpacity>
-          )}
-        </View>
-        <View style={styles.filterRow}>
-          {TYPE_FILTERS.map((filter) => (
-            <TouchableOpacity
-              key={filter.key}
-              style={[
-                styles.filterChip,
-                typeFilter === filter.key && styles.filterChipActive,
-              ]}
-              onPress={() => setTypeFilter(filter.key)}
-            >
-              <Text
-                style={[
-                  styles.filterChipText,
-                  typeFilter === filter.key && styles.filterChipTextActive,
-                ]}
-              >
-                {filter.label}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </View>
+        <SearchBar
+          placeholder="Search transactions..."
+          value={search}
+          onChangeText={setSearch}
+        />
       </Animated.View>
 
-      {transactions.length === 0 && !loading ? (
-        <Animated.View entering={FadeInRight.duration(500).delay(200)}>
-          <EmptyState
-            icon="receipt-outline"
-            title="No transactions found"
-            subtitle="Adjust the filters or add a new transaction."
-          />
-        </Animated.View>
-      ) : (
-        <FlashList<string | Transaction>
-          data={listData}
-          drawDistance={300}
-          renderItem={({ item }) =>
-            typeof item === 'string' ? (
-              <View style={styles.dateHeader}>
-                <Text style={styles.dateText}>
-                  {format(new Date(item), 'EEEE, d MMMM')}
-                </Text>
-              </View>
-            ) : (
-              <TransactionItem
-                item={item}
-                onPress={() => router.push(`/transactions/${item.id}`)}
-                onLongPress={() => handleDelete(item)}
-              />
-            )
-          }
-          keyExtractor={(item) =>
-            typeof item === 'string' ? `header-${item}` : item.id
-          }
-          getItemType={(item) => (typeof item === 'string' ? 'header' : 'row')}
-          onEndReached={handleLoadMore}
-          onEndReachedThreshold={0.3}
-          contentContainerStyle={styles.list}
-        />
-      )}
+      {/* Filter Chips */}
+      <Animated.View
+        entering={FadeInDown.duration(400).delay(150)}
+        style={styles.filterRow}
+      >
+        {FILTER_CHIPS.map((chip) => (
+          <TouchableOpacity key={chip.key} style={styles.filterChip}>
+            <Text style={styles.filterChipText}>{chip.label}</Text>
+            <Ionicons
+              name={chip.icon as never}
+              size={14}
+              color={colors.textMuted}
+            />
+          </TouchableOpacity>
+        ))}
+      </Animated.View>
 
-      <FAB onPress={() => router.push('/transactions/add')} />
+      {/* Transaction List */}
+      <FlatList
+        data={listData}
+        renderItem={renderItem}
+        keyExtractor={(item) => item.key}
+        contentContainerStyle={{
+          paddingHorizontal: SPACING.md,
+          paddingBottom: 100,
+        }}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={colors.primary}
+          />
+        }
+        ListEmptyComponent={
+          <View style={styles.emptyState}>
+            <Ionicons
+              name="receipt-outline"
+              size={48}
+              color={colors.textMuted}
+            />
+            <Text style={styles.emptyTitle}>No transactions found</Text>
+            <Text style={styles.emptySubtitle}>
+              {search
+                ? 'Try a different search term'
+                : 'Tap + to add your first transaction'}
+            </Text>
+          </View>
+        }
+      />
     </SafeAreaView>
   );
 }
@@ -269,68 +215,78 @@ const createStyles = (colors: ThemeColors) =>
     container: { flex: 1, backgroundColor: colors.bg },
     header: {
       flexDirection: 'row',
-      justifyContent: 'space-between',
       alignItems: 'center',
+      justifyContent: 'space-between',
       paddingHorizontal: SPACING.md,
       paddingVertical: SPACING.sm,
     },
-    title: { ...TYPOGRAPHY.h2, color: colors.textPrimary },
-    headerButton: {
+    menuBtn: {
       width: 40,
       height: 40,
-      borderRadius: 20,
-      backgroundColor: colors.bgCard,
-      borderWidth: 1,
-      borderColor: colors.border,
       alignItems: 'center',
       justifyContent: 'center',
+      borderRadius: 20,
     },
-    filters: {
-      paddingHorizontal: SPACING.md,
+    title: {
+      ...TYPOGRAPHY.h3,
+      color: colors.textPrimary,
+      fontWeight: '800',
+    },
+    searchWrap: { paddingHorizontal: SPACING.md, marginBottom: SPACING.sm },
+    filterRow: {
+      flexDirection: 'row',
       gap: SPACING.sm,
+      paddingHorizontal: SPACING.md,
       marginBottom: SPACING.sm,
     },
-    searchContainer: {
+    filterChip: {
       flexDirection: 'row',
       alignItems: 'center',
-      backgroundColor: colors.bgInput,
-      borderRadius: RADIUS.md,
-      borderWidth: 1,
-      borderColor: colors.border,
-      paddingHorizontal: SPACING.md,
-      paddingVertical: 10,
-      gap: SPACING.sm,
-    },
-    searchInput: {
-      flex: 1,
-      color: colors.textPrimary,
-      ...TYPOGRAPHY.body,
-      paddingVertical: 0,
-    },
-    filterRow: { flexDirection: 'row', gap: SPACING.sm },
-    filterChip: {
+      gap: 4,
       paddingHorizontal: 14,
-      paddingVertical: 6,
+      paddingVertical: 8,
       borderRadius: RADIUS.full,
       backgroundColor: colors.bgCard,
       borderWidth: 1,
       borderColor: colors.border,
     },
-    filterChipActive: {
-      backgroundColor: colors.primary,
-      borderColor: colors.primary,
-    },
     filterChipText: {
       ...TYPOGRAPHY.caption,
-      color: colors.textMuted,
+      color: colors.textSecondary,
       fontWeight: '600',
     },
-    filterChipTextActive: { color: '#fff' },
-    dateHeader: { paddingHorizontal: SPACING.md, paddingVertical: 8 },
-    dateText: {
-      ...TYPOGRAPHY.label,
+    monthHeader: {
+      paddingVertical: SPACING.sm,
+      paddingHorizontal: 4,
+      marginTop: SPACING.sm,
+    },
+    monthText: {
+      fontSize: 11,
+      fontWeight: '800',
       color: colors.textMuted,
+      letterSpacing: 1.5,
       textTransform: 'uppercase',
     },
-    list: { paddingBottom: 120 },
+    txCardWrapper: {
+      backgroundColor: colors.bgCard,
+      borderRadius: RADIUS.lg,
+      borderWidth: 1,
+      borderColor: colors.border,
+      marginBottom: SPACING.sm,
+      overflow: 'hidden',
+    },
+    emptyState: {
+      alignItems: 'center',
+      paddingVertical: 60,
+      gap: SPACING.sm,
+    },
+    emptyTitle: {
+      ...TYPOGRAPHY.bodyMedium,
+      color: colors.textPrimary,
+      fontWeight: '700',
+    },
+    emptySubtitle: {
+      ...TYPOGRAPHY.caption,
+      color: colors.textMuted,
+    },
   });

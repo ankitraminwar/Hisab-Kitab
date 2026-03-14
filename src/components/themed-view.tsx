@@ -10,11 +10,19 @@ export type ThemedViewProps = ViewProps & {
   type?: ThemeColor;
 };
 
-export function ThemedView({ style, lightColor, darkColor, type, ...otherProps }: ThemedViewProps) {
+export function ThemedView({
+  style,
+  lightColor,
+  darkColor,
+  type,
+  ...otherProps
+}: ThemedViewProps) {
   const theme = useTheme();
   const scheme = useAppStore((state) => state.theme);
   const backgroundColor =
-    scheme === 'dark' ? darkColor ?? theme[type ?? 'background'] : lightColor ?? theme[type ?? 'background'];
+    scheme === 'dark'
+      ? (darkColor ?? theme[type ?? 'background'])
+      : (lightColor ?? theme[type ?? 'background']);
 
   return <View style={[{ backgroundColor }, style]} {...otherProps} />;
 }

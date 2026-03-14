@@ -1,0 +1,222 @@
+import React, { useMemo, useState } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  TextInput,
+  TouchableOpacity,
+  KeyboardAvoidingView,
+  Platform,
+  Alert,
+} from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
+
+import { ScreenHeader } from '../../components/common/ScreenHeader';
+import { useTheme, type ThemeColors } from '../../hooks/useTheme';
+import { useAppStore } from '../../store/appStore';
+import { UserProfileService } from '../../services/dataServices';
+import { SPACING, RADIUS, TYPOGRAPHY } from '../../utils/constants';
+
+export default function EditProfileScreen() {
+  const router = useRouter();
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+
+  const { userProfile, setUserProfile } = useAppStore();
+
+  const [name, setName] = useState(userProfile?.name || '');
+  const [isSaving, setIsSaving] = useState(false);
+
+  const handleSave = async () => {
+    if (!name.trim()) {
+      Alert.alert('Error', 'Name cannot be empty.');
+      return;
+    }
+
+    setIsSaving(true);
+    try {
+      if (!userProfile) throw new Error('No profile loaded');
+      const updatedProfile = await UserProfileService.upsertProfile({
+        userId: userProfile.userId,
+        name: name.trim(),
+      });
+      setUserProfile(updatedProfile);
+      router.back();
+    } catch (error) {
+      Alert.alert('Error', 'Could not save profile details. Try again.');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  return (
+    <SafeAreaView style={styles.container} edges={['top']}>
+      <ScreenHeader title="Edit Profile" />
+
+      <KeyboardAvoidingView
+        style={styles.keyboardView}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      >
+        <View style={styles.content}>
+          <View style={styles.avatarSection}>
+            <View style={styles.avatar}>
+              <Ionicons name="person" size={48} color={colors.primary} />
+            </View>
+            <TouchableOpacity style={styles.changePhotoBtn}>
+              <Text style={styles.changePhotoText}>Change Photo</Text>
+            </TouchableOpacity>
+          </View>
+
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>FULL NAME</Text>
+            <View style={styles.inputWrap}>
+              <Ionicons
+                name="person-outline"
+                size={20}
+                color={colors.textMuted}
+              />
+              <TextInput
+                value={name}
+                onChangeText={setName}
+                style={styles.input}
+                placeholder="Rahul"
+                placeholderTextColor={colors.textMuted}
+                autoFocus
+              />
+            </View>
+          </View>
+
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>EMAIL ADDRESS</Text>
+            <View style={[styles.inputWrap, styles.inputWrapDisabled]}>
+              <Ionicons
+                name="mail-outline"
+                size={20}
+                color={colors.textMuted}
+              />
+              <TextInput
+                value={userProfile?.email || ''}
+                style={[styles.input, { color: colors.textMuted }]}
+                editable={false}
+              />
+            </View>
+            <Text style={styles.helpText}>
+              Email cannot be changed directly.
+            </Text>
+          </View>
+
+          <View style={styles.spacer} />
+
+          <TouchableOpacity
+            style={[styles.saveBtn, isSaving && { opacity: 0.7 }]}
+            onPress={() => void handleSave()}
+            disabled={isSaving}
+          >
+            <Text style={styles.saveText}>
+              {isSaving ? 'Saving...' : 'Save Changes'}
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </KeyboardAvoidingView>
+    </SafeAreaView>
+  );
+}
+
+const createStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: colors.bg,
+    },
+    keyboardView: {
+      flex: 1,
+    },
+    content: {
+      flex: 1,
+      padding: SPACING.lg,
+    },
+    avatarSection: {
+      alignItems: 'center',
+      marginBottom: SPACING.xl,
+    },
+    avatar: {
+      width: 100,
+      height: 100,
+      borderRadius: 50,
+      backgroundColor: colors.primary + '20',
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginBottom: SPACING.md,
+      borderWidth: 2,
+      borderColor: colors.primary + '50',
+    },
+    changePhotoBtn: {
+      paddingVertical: SPACING.sm,
+      paddingHorizontal: SPACING.md,
+    },
+    changePhotoText: {
+      color: colors.primary,
+      fontWeight: '700',
+      fontSize: 14,
+    },
+    inputGroup: {
+      marginBottom: SPACING.lg,
+    },
+    label: {
+      fontSize: 10,
+      fontWeight: '800',
+      letterSpacing: 1,
+      color: colors.textMuted,
+      marginBottom: SPACING.sm,
+    },
+    inputWrap: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: colors.bgCard,
+      borderRadius: RADIUS.md,
+      borderWidth: 1,
+      borderColor: colors.border,
+      paddingHorizontal: SPACING.md,
+      height: 56,
+      gap: SPACING.sm,
+    },
+    inputWrapDisabled: {
+      backgroundColor: colors.bgElevated,
+    },
+    input: {
+      flex: 1,
+      ...TYPOGRAPHY.body,
+      color: colors.textPrimary,
+      fontWeight: '600',
+    },
+    helpText: {
+      fontSize: 11,
+      color: colors.textMuted,
+      marginTop: SPACING.sm,
+      paddingHorizontal: SPACING.sm,
+    },
+    spacer: {
+      flex: 1,
+    },
+    saveBtn: {
+      backgroundColor: colors.primary,
+      borderRadius: RADIUS.md,
+      height: 56,
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginBottom: SPACING.lg,
+      shadowColor: colors.primary,
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.3,
+      shadowRadius: 8,
+      elevation: 4,
+    },
+    saveText: {
+      color: '#FFF',
+      fontSize: 16,
+      fontWeight: '700',
+      letterSpacing: 0.5,
+    },
+  });

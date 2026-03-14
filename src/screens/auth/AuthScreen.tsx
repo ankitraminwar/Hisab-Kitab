@@ -108,7 +108,7 @@ export default function AuthScreen({ mode }: { mode: Mode }) {
               placeholderTextColor={colors.textMuted}
               selectionColor={colors.primary}
               cursorColor={colors.primary}
-              keyboardAppearance={colors.bg === '#08111F' ? 'dark' : 'light'}
+              keyboardAppearance={colors.bg === '#0F0F1A' ? 'dark' : 'light'}
               style={styles.input}
             />
           ) : null}
@@ -122,7 +122,7 @@ export default function AuthScreen({ mode }: { mode: Mode }) {
               placeholderTextColor={colors.textMuted}
               selectionColor={colors.primary}
               cursorColor={colors.primary}
-              keyboardAppearance={colors.bg === '#08111F' ? 'dark' : 'light'}
+              keyboardAppearance={colors.bg === '#0F0F1A' ? 'dark' : 'light'}
               style={styles.input}
             />
           ) : null}

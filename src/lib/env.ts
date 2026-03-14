@@ -1,6 +1,8 @@
 const requiredEnv = {
   supabaseUrl: process.env.EXPO_PUBLIC_SUPABASE_URL,
-  supabaseAnonKey: process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ?? process.env.EXPO_PUBLIC_SUPABASE_KEY,
+  supabaseAnonKey:
+    process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ??
+    process.env.EXPO_PUBLIC_SUPABASE_KEY,
 };
 
 const missingKeys = Object.entries(requiredEnv)

@@ -174,65 +174,6 @@ export default function RootLayout() {
     }
   }, [initializing, router, segments, session]);
 
-  useEffect(() => {
-    if (
-      initializing ||
-      !session ||
-      biometricsEnabled ||
-      biometricsPrompted ||
-      biometricPromptVisibleRef.current
-    ) {
-      return;
-    }
-
-    biometricPromptVisibleRef.current = true;
-
-    Alert.alert(
-      'Enable biometrics?',
-      'Use your device fingerprint or face unlock each time you open the app.',
-      [
-        {
-          text: 'Not now',
-          style: 'cancel',
-          onPress: () => {
-            biometricPromptVisibleRef.current = false;
-            void setBiometricPrompted(true).then(() =>
-              setBiometricsPromptedState(true),
-            );
-          },
-        },
-        {
-          text: 'Enable',
-          onPress: async () => {
-            biometricPromptVisibleRef.current = false;
-            const success = await authenticateBiometric();
-            if (success) {
-              await setBiometricPreference(true);
-              setBiometrics(true);
-              setLocked(true);
-              const updatedProfile = await UserProfileService.upsertProfile({
-                biometricEnabled: true,
-              });
-              setUserProfile(updatedProfile);
-            }
-            await setBiometricPrompted(true);
-            setBiometricsPromptedState(true);
-          },
-        },
-      ],
-      { cancelable: false },
-    );
-  }, [
-    biometricsEnabled,
-    biometricsPrompted,
-    initializing,
-    session,
-    setBiometrics,
-    setBiometricsPromptedState,
-    setLocked,
-    setUserProfile,
-  ]);
-
   const handleAuthenticate = async () => {
     try {
       const success = await authenticateBiometric();
@@ -300,6 +241,14 @@ export default function RootLayout() {
           <Stack.Screen
             name="settings/index"
             options={{ animation: 'slide_from_right' }}
+          />
+          <Stack.Screen
+            name="sms-import"
+            options={{ presentation: 'modal', animation: 'slide_from_bottom' }}
+          />
+          <Stack.Screen
+            name="split-expense/[id]"
+            options={{ presentation: 'modal', animation: 'slide_from_bottom' }}
           />
         </Stack>
       </QueryClientProvider>

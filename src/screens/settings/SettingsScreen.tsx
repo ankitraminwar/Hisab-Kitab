@@ -1,737 +1,468 @@
-import { Ionicons } from '@expo/vector-icons';
-import * as LocalAuthentication from 'expo-local-authentication';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
-  ActivityIndicator,
-  Alert,
-  Modal,
-  ScrollView,
-  StyleSheet,
-  Switch,
-  Text,
-  TextInput,
-  TouchableOpacity,
   View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  TouchableOpacity,
+  Switch,
+  Alert,
+  Image,
 } from 'react-native';
-import Animated, { FadeInDown } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
+import Animated, { FadeInDown } from 'react-native-reanimated';
+import * as LocalAuthentication from 'expo-local-authentication';
+import { useRouter } from 'expo-router';
 
-import { Button, Card } from '@/components/common';
-import { authService, setBiometricPreference } from '@/services/auth';
-import { UserProfileService } from '@/services/dataServices';
-import { exportService } from '@/services/exportService';
-import { applyNotificationPreferences } from '@/services/notifications';
-import { importSmsTransactions } from '@/services/sms';
-import { syncService } from '@/services/syncService';
+import { ScreenHeader } from '@/components/common/ScreenHeader';
+import { useTheme, type ThemeColors } from '@/hooks/useTheme';
 import { useAppStore } from '@/store/appStore';
-import { COLORS, RADIUS, SPACING, TYPOGRAPHY } from '@/utils/constants';
-import type {
-  NotificationPreferences,
-  ThemePreference,
-  UserProfile,
-} from '@/utils/types';
-
-const buildNotificationPreferences = (
-  enabled: boolean,
-  current: NotificationPreferences,
-): NotificationPreferences => ({
-  enabled,
-  dailyReminder: enabled ? current.dailyReminder : false,
-  budgetAlerts: enabled ? current.budgetAlerts : false,
-  monthlyReportReminder: enabled ? current.monthlyReportReminder : false,
-});
+import { authService, setBiometricPreference } from '@/services/auth';
+import { syncService } from '@/services/syncService';
+import { exportService } from '@/services/exportService';
+import { importSmsTransactions } from '@/services/sms';
+import { SPACING, RADIUS, TYPOGRAPHY } from '@/utils/constants';
 
 export default function SettingsScreen() {
-  const {
-    biometricsEnabled,
-    setBiometrics,
-    theme,
-    setTheme,
-    userProfile,
-    setUserProfile,
-    notificationPreferences,
-    setNotificationPreferences,
-  } = useAppStore();
-  const [profileModalVisible, setProfileModalVisible] = useState(false);
-  const [draftProfile, setDraftProfile] = useState<UserProfile | null>(null);
+  const router = useRouter();
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+
+  const { theme, setTheme, biometricsEnabled, setBiometrics, userProfile } =
+    useAppStore();
+
   const [biometricsAvailable, setBiometricsAvailable] = useState(false);
-  const [saving, setSaving] = useState(false);
+  const [smsEnabled, setSmsEnabled] = useState(true); // placeholder, assuming SMS is always enabled for now unless managed in store
 
   useEffect(() => {
-    LocalAuthentication.hasHardwareAsync()
-      .then(setBiometricsAvailable)
-      .catch(() => setBiometricsAvailable(false));
+    const checkBiometrics = async () => {
+      const hasHardware = await LocalAuthentication.hasHardwareAsync();
+      const isEnrolled = await LocalAuthentication.isEnrolledAsync();
+      setBiometricsAvailable(hasHardware && isEnrolled);
+    };
+    void checkBiometrics();
   }, []);
 
-  useEffect(() => {
-    if (userProfile) {
-      setDraftProfile(userProfile);
-      return;
-    }
-
-    void UserProfileService.getProfile().then((profile) => {
-      if (profile) {
-        setUserProfile(profile);
-        setDraftProfile(profile);
-      }
-    });
-  }, [setUserProfile, userProfile]);
-
-  const persistProfile = async (patch: Partial<UserProfile>) => {
-    setSaving(true);
-    try {
-      const updated = await UserProfileService.upsertProfile({
-        ...userProfile,
-        ...patch,
-      });
-      setUserProfile(updated);
-      return updated;
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const handleThemeChange = async (nextTheme: ThemePreference) => {
-    setTheme(nextTheme);
-    const updated = await persistProfile({ themePreference: nextTheme });
-    setDraftProfile(updated);
-  };
-
-  const handleToggleBiometrics = async (enabled: boolean) => {
-    if (enabled) {
+  const handleBiometricToggle = async (value: boolean) => {
+    if (value && biometricsAvailable) {
       const result = await LocalAuthentication.authenticateAsync({
-        promptMessage: 'Enable biometric lock',
-        fallbackLabel: 'Use device passcode',
+        promptMessage: 'Enable Biometric Login',
       });
-      if (!result.success) {
-        return;
+      if (result.success) {
+        setBiometrics(true);
+        void setBiometricPreference(true);
       }
+    } else {
+      setBiometrics(false);
+      void setBiometricPreference(false);
     }
-
-    await setBiometricPreference(enabled);
-    setBiometrics(enabled);
-    const updated = await persistProfile({ biometricEnabled: enabled });
-    setDraftProfile(updated);
   };
 
-  const handleNotificationsToggle = async (enabled: boolean) => {
-    const nextPreferences = buildNotificationPreferences(
-      enabled,
-      notificationPreferences,
-    );
-    const granted = await applyNotificationPreferences(nextPreferences);
-    const resolved = granted
-      ? nextPreferences
-      : buildNotificationPreferences(false, notificationPreferences);
-    setNotificationPreferences(resolved);
-    const updated = await persistProfile({
-      notificationsEnabled: resolved.enabled,
-    });
-    setDraftProfile(updated);
-  };
-
-  const updateNotificationChannel = async (
-    key: keyof Omit<NotificationPreferences, 'enabled'>,
-    enabled: boolean,
-  ) => {
-    const next = {
-      ...notificationPreferences,
-      enabled: true,
-      [key]: enabled,
-    };
-    const granted = await applyNotificationPreferences(next);
-    const resolved = granted
-      ? next
-      : {
-          ...next,
-          enabled: false,
-          dailyReminder: false,
-          budgetAlerts: false,
-          monthlyReportReminder: false,
-        };
-    setNotificationPreferences(resolved);
-    const updated = await persistProfile({
-      notificationsEnabled: resolved.enabled,
-    });
-    setDraftProfile(updated);
-  };
-
-  const saveProfileChanges = async () => {
-    if (!draftProfile) {
-      return;
-    }
-
-    const updated = await persistProfile({
-      name: draftProfile.name,
-      email: draftProfile.email,
-      phone: draftProfile.phone,
-      currency: draftProfile.currency,
-      monthlyBudget: Number.isFinite(draftProfile.monthlyBudget)
-        ? draftProfile.monthlyBudget
-        : 0,
-    });
-    setDraftProfile(updated);
-    setProfileModalVisible(false);
-  };
-
-  const handleExport = async (mode: 'csv' | 'json') => {
+  const handleSync = async () => {
     try {
-      if (mode === 'csv') {
-        await exportService.exportTransactionsCsv();
-      } else {
-        await exportService.exportFullBackupJson();
-      }
-    } catch (error) {
-      Alert.alert(
-        'Export failed',
-        error instanceof Error ? error.message : 'Unable to export data',
-      );
+      await syncService.sync('manual');
+      Alert.alert('Success', 'Data synced successfully to the cloud.');
+    } catch {
+      Alert.alert('Sync Failed', 'Could not sync data. Check your connection.');
     }
+  };
+
+  const handleExport = () => {
+    Alert.alert('Export Format', 'Choose data format to export:', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'CSV (Transactions)',
+        onPress: async () => {
+          try {
+            const uri = await exportService.exportTransactionsCsv();
+            if (uri) Alert.alert('Success', `Data exported to:\n${uri}`);
+          } catch {
+            Alert.alert('Export Failed', 'Could not export CSV data.');
+          }
+        },
+      },
+      {
+        text: 'JSON (Full Backup)',
+        onPress: async () => {
+          try {
+            const uri = await exportService.exportFullBackupJson();
+            if (uri) Alert.alert('Success', `Backup exported to:\n${uri}`);
+          } catch {
+            Alert.alert('Export Failed', 'Could not export JSON backup.');
+          }
+        },
+      },
+    ]);
   };
 
   const handleSmsImport = async () => {
     try {
-      const result = await importSmsTransactions();
-      Alert.alert('SMS Import', result.message);
-    } catch (error) {
-      Alert.alert(
-        'SMS Import Failed',
-        error instanceof Error ? error.message : 'Unable to import SMS data',
-      );
+      const count = await importSmsTransactions();
+      Alert.alert('SMS Import', `Found ${count} new transactions from SMS.`);
+    } catch {
+      Alert.alert('Import Failed', 'Could not import SMS transactions.');
     }
   };
 
-  const profile = draftProfile ?? userProfile;
+  const handleLogout = () => {
+    Alert.alert('Logout', 'Are you sure you want to log out?', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Logout',
+        style: 'destructive',
+        onPress: async () => {
+          await authService.signOut();
+        },
+      },
+    ]);
+  };
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      <View style={styles.header}>
-        <Text style={styles.title}>Settings</Text>
-      </View>
+      <ScreenHeader title="Settings" rightIcon="help-circle-outline" />
 
       <ScrollView
         contentContainerStyle={styles.scroll}
         showsVerticalScrollIndicator={false}
       >
-        <Card style={styles.profileCard} glow>
-          <View style={styles.profileIcon}>
-            <Ionicons name="person" size={28} color={COLORS.primary} />
-          </View>
-          <View style={styles.profileContent}>
-            <Text style={styles.profileName}>
-              {profile?.name ?? 'Hisab Kitab User'}
-            </Text>
-            <Text style={styles.profileSub}>
-              {profile?.email || 'Set up your synced profile'}
-            </Text>
-          </View>
+        <Animated.View entering={FadeInDown.duration(400)}>
+          {/* Account Section */}
+          <Text style={styles.sectionTitle}>ACCOUNT</Text>
           <TouchableOpacity
-            onPress={() => setProfileModalVisible(true)}
-            style={styles.actionChip}
+            style={styles.profileCard}
+            onPress={() => router.push('/profile/edit')}
           >
-            <Text style={styles.actionChipText}>Edit</Text>
+            <View style={[styles.avatar, styles.avatarPlaceholder]}>
+              <Ionicons name="person" size={24} color={colors.primary} />
+            </View>
+            <View style={styles.profileInfo}>
+              <Text style={styles.profileName}>
+                {userProfile?.name || 'My Account'}
+              </Text>
+              <Text style={styles.profileEmail}>
+                {userProfile?.email || 'user@example.com'}
+              </Text>
+            </View>
+            <Ionicons
+              name="chevron-forward"
+              size={20}
+              color={colors.textMuted}
+            />
           </TouchableOpacity>
-        </Card>
+        </Animated.View>
 
-        <SettingsSection title="Appearance">
-          <SettingsRow
-            icon="contrast-outline"
-            iconColor="#8B5CF6"
-            label="Theme"
-            subtitle={
-              theme === 'dark' ? 'Dark mode active' : 'Light mode active'
-            }
-            right={
-              <View style={styles.themeToggle}>
-                <ThemeChip
-                  label="Dark"
-                  active={theme === 'dark'}
-                  onPress={() => void handleThemeChange('dark')}
-                />
-                <ThemeChip
-                  label="Light"
-                  active={theme === 'light'}
-                  onPress={() => void handleThemeChange('light')}
+        <Animated.View entering={FadeInDown.duration(400).delay(100)}>
+          {/* Preferences Section */}
+          <Text style={styles.sectionTitle}>PREFERENCES</Text>
+
+          {/* Theme Toggle */}
+          <View style={styles.prefRow}>
+            <View style={styles.prefLeft}>
+              <View style={styles.iconBox}>
+                <Ionicons
+                  name="moon-outline"
+                  size={20}
+                  color={colors.primary}
                 />
               </View>
-            }
-          />
-        </SettingsSection>
-
-        <SettingsSection title="Security">
-          {biometricsAvailable && (
-            <SettingsRow
-              icon="finger-print"
-              iconColor="#06B6D4"
-              label="Biometric Lock"
-              subtitle="Use fingerprint or Face ID when supported"
-              right={
-                <Switch
-                  value={biometricsEnabled}
-                  onValueChange={(value) => void handleToggleBiometrics(value)}
-                  trackColor={{ true: COLORS.primary }}
-                />
-              }
-            />
-          )}
-        </SettingsSection>
-
-        <SettingsSection title="Notifications">
-          <SettingsRow
-            icon="notifications-outline"
-            iconColor="#EAB308"
-            label="Enable Notifications"
-            subtitle="Disable gracefully if permission is denied"
-            right={
-              <Switch
-                value={notificationPreferences.enabled}
-                onValueChange={(value) => void handleNotificationsToggle(value)}
-                trackColor={{ true: COLORS.primary }}
-              />
-            }
-          />
-          <SettingsRow
-            icon="today-outline"
-            iconColor="#22C55E"
-            label="Daily Spending Reminder"
-            right={
-              <Switch
-                value={notificationPreferences.dailyReminder}
-                onValueChange={(value) =>
-                  void updateNotificationChannel('dailyReminder', value)
-                }
-                disabled={!notificationPreferences.enabled}
-                trackColor={{ true: COLORS.primary }}
-              />
-            }
-          />
-          <SettingsRow
-            icon="alert-circle-outline"
-            iconColor="#F97316"
-            label="Budget Limit Alert"
-            right={
-              <Switch
-                value={notificationPreferences.budgetAlerts}
-                onValueChange={(value) =>
-                  void updateNotificationChannel('budgetAlerts', value)
-                }
-                disabled={!notificationPreferences.enabled}
-                trackColor={{ true: COLORS.primary }}
-              />
-            }
-          />
-          <SettingsRow
-            icon="calendar-outline"
-            iconColor="#3B82F6"
-            label="Monthly Report Reminder"
-            right={
-              <Switch
-                value={notificationPreferences.monthlyReportReminder}
-                onValueChange={(value) =>
-                  void updateNotificationChannel('monthlyReportReminder', value)
-                }
-                disabled={!notificationPreferences.enabled}
-                trackColor={{ true: COLORS.primary }}
-              />
-            }
-          />
-        </SettingsSection>
-
-        <Animated.View entering={FadeInDown.duration(400).delay(200)}>
-          <SettingsSection title="Sync">
-            <SyncStatusRow />
-          </SettingsSection>
-        </Animated.View>
-
-        <Animated.View entering={FadeInDown.duration(400).delay(300)}>
-          <SettingsSection title="Data & Backup">
-            <SettingsRow
-              icon="chatbox-ellipses-outline"
-              iconColor="#8B5CF6"
-              label="Import Bank SMS"
-              subtitle="Requests SMS read permission on Android. Native inbox parsing is not available in this build yet."
-              onPress={() => void handleSmsImport()}
-              showChevron
-            />
-            <SettingsRow
-              icon="download-outline"
-              iconColor="#22C55E"
-              label="Export CSV"
-              subtitle="Share paginated transaction history as CSV"
-              onPress={() => void handleExport('csv')}
-              showChevron
-            />
-            <SettingsRow
-              icon="document-text-outline"
-              iconColor="#3B82F6"
-              label="Export JSON"
-              subtitle="Share full offline backup as JSON"
-              onPress={() => void handleExport('json')}
-              showChevron
-            />
-          </SettingsSection>
-        </Animated.View>
-
-        <Animated.View entering={FadeInDown.duration(400).delay(400)}>
-          <SettingsSection title="Account">
-            <SettingsRow
-              icon="log-out-outline"
-              iconColor="#F43F5E"
-              label="Logout"
-              subtitle="Sign out, block app access, and clear all local cached data"
-              onPress={() => void authService.signOut()}
-              showChevron
-            />
-          </SettingsSection>
-        </Animated.View>
-      </ScrollView>
-
-      <Modal
-        visible={profileModalVisible}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setProfileModalVisible(false)}
-      >
-        <View style={modalStyles.overlay}>
-          <View style={modalStyles.sheet}>
-            <Text style={modalStyles.title}>Profile</Text>
-            <ProfileInput
-              label="Name"
-              value={profile?.name ?? ''}
-              onChangeText={(value) =>
-                setDraftProfile((current) =>
-                  current ? { ...current, name: value } : current,
-                )
-              }
-            />
-            <ProfileInput
-              label="Email"
-              value={profile?.email ?? ''}
-              onChangeText={(value) =>
-                setDraftProfile((current) =>
-                  current ? { ...current, email: value } : current,
-                )
-              }
-              keyboardType="email-address"
-            />
-            <ProfileInput
-              label="Phone"
-              value={profile?.phone ?? ''}
-              onChangeText={(value) =>
-                setDraftProfile((current) =>
-                  current ? { ...current, phone: value } : current,
-                )
-              }
-              keyboardType="phone-pad"
-            />
-            <ProfileInput
-              label="Currency"
-              value={profile?.currency ?? 'INR'}
-              onChangeText={(value) =>
-                setDraftProfile((current) =>
-                  current
-                    ? { ...current, currency: value.toUpperCase() }
-                    : current,
-                )
-              }
-            />
-            <ProfileInput
-              label="Monthly Budget"
-              value={String(profile?.monthlyBudget ?? 0)}
-              onChangeText={(value) =>
-                setDraftProfile((current) =>
-                  current
-                    ? { ...current, monthlyBudget: Number(value) || 0 }
-                    : current,
-                )
-              }
-              keyboardType="numeric"
-            />
-            <View style={modalStyles.actions}>
-              <Button
-                title="Cancel"
-                onPress={() => setProfileModalVisible(false)}
-                variant="ghost"
-                style={{ flex: 1 }}
-              />
-              <Button
-                title="Save"
-                onPress={() => void saveProfileChanges()}
-                loading={saving}
-                style={{ flex: 1 }}
-              />
+              <Text style={styles.prefTitle}>Appearance</Text>
+            </View>
+            <View style={styles.themeToggleBg}>
+              {(['light', 'dark', 'system'] as const).map((t) => {
+                const isActive = theme === t;
+                return (
+                  <TouchableOpacity
+                    key={t}
+                    onPress={() => setTheme(t)}
+                    style={[styles.themeBtn, isActive && styles.themeBtnActive]}
+                  >
+                    <Text
+                      style={[
+                        styles.themeBtnText,
+                        { color: isActive ? colors.primary : colors.textMuted },
+                      ]}
+                    >
+                      {t.charAt(0).toUpperCase() + t.slice(1)}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
             </View>
           </View>
-        </View>
-      </Modal>
+
+          {/* SMS Toggle */}
+          <View style={styles.prefRow}>
+            <View style={styles.prefLeft}>
+              <View style={styles.iconBox}>
+                <Ionicons
+                  name="chatbubble-ellipses-outline"
+                  size={20}
+                  color={colors.primary}
+                />
+              </View>
+              <View>
+                <Text style={styles.prefTitle}>SMS Auto-import</Text>
+                <Text style={styles.prefSub}>Sync transactions from SMS</Text>
+              </View>
+            </View>
+            <Switch
+              value={smsEnabled}
+              onValueChange={setSmsEnabled}
+              trackColor={{ false: colors.bgElevated, true: colors.primary }}
+              thumbColor="#FFFFFF"
+              disabled={!__DEV__} // Just mock toggle unless implemented globally
+            />
+          </View>
+          <TouchableOpacity
+            onPress={() => router.push('/sms-import')}
+            style={{ paddingHorizontal: SPACING.lg, paddingBottom: SPACING.lg }}
+          >
+            <Text
+              style={{ fontSize: 13, color: colors.primary, fontWeight: '700' }}
+            >
+              Run manual SMS check now
+            </Text>
+          </TouchableOpacity>
+
+          {/* Biometrics Toggle */}
+          <View style={styles.prefRow}>
+            <View style={styles.prefLeft}>
+              <View style={styles.iconBox}>
+                <Ionicons
+                  name="finger-print-outline"
+                  size={20}
+                  color={colors.primary}
+                />
+              </View>
+              <Text style={styles.prefTitle}>Biometric Lock</Text>
+            </View>
+            <Switch
+              value={biometricsEnabled}
+              onValueChange={(val) => void handleBiometricToggle(val)}
+              disabled={!biometricsAvailable}
+              trackColor={{ false: colors.bgElevated, true: colors.primary }}
+              thumbColor="#FFFFFF"
+            />
+          </View>
+        </Animated.View>
+
+        <Animated.View entering={FadeInDown.duration(400).delay(200)}>
+          {/* Data & Sync Section */}
+          <Text style={styles.sectionTitle}>DATA & SYNC</Text>
+
+          {/* Bank Accounts */}
+          <TouchableOpacity
+            style={styles.prefRow}
+            onPress={() => router.push('/accounts')}
+          >
+            <View style={styles.prefLeft}>
+              <View style={styles.iconBox}>
+                <Ionicons
+                  name="card-outline"
+                  size={20}
+                  color={colors.primary}
+                />
+              </View>
+              <Text style={styles.prefTitle}>Bank Accounts</Text>
+            </View>
+            <Ionicons
+              name="chevron-forward"
+              size={20}
+              color={colors.textMuted}
+            />
+          </TouchableOpacity>
+
+          {/* Cloud Sync */}
+          <View style={styles.prefRow}>
+            <View style={styles.prefLeft}>
+              <View style={styles.iconBox}>
+                <Ionicons
+                  name="cloud-done-outline"
+                  size={20}
+                  color={colors.primary}
+                />
+              </View>
+              <View>
+                <Text style={styles.prefTitle}>Cloud Backup</Text>
+                <Text style={styles.prefSub}>Last synced: Just now</Text>
+              </View>
+            </View>
+            <TouchableOpacity
+              onPress={() => void handleSync()}
+              style={styles.actionBtn}
+            >
+              <Text style={styles.actionBtnText}>Sync Now</Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Export */}
+          <TouchableOpacity style={styles.prefRow} onPress={handleExport}>
+            <View style={styles.prefLeft}>
+              <View style={styles.iconBox}>
+                <Ionicons
+                  name="download-outline"
+                  size={20}
+                  color={colors.primary}
+                />
+              </View>
+              <Text style={styles.prefTitle}>Export Data</Text>
+            </View>
+            <View style={styles.exportBadges}>
+              <View style={styles.badge}>
+                <Text style={styles.badgeText}>CSV</Text>
+              </View>
+              <View style={styles.badge}>
+                <Text style={styles.badgeText}>JSON</Text>
+              </View>
+              <Ionicons
+                name="chevron-forward"
+                size={16}
+                color={colors.textMuted}
+              />
+            </View>
+          </TouchableOpacity>
+        </Animated.View>
+
+        <Animated.View
+          entering={FadeInDown.duration(400).delay(300)}
+          style={styles.logoutWrapper}
+        >
+          <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout}>
+            <Ionicons name="log-out-outline" size={20} color={colors.expense} />
+            <Text style={styles.logoutText}>Logout</Text>
+          </TouchableOpacity>
+          <Text style={styles.versionText}>Hisab-Kitab v2.4.1 (Stable)</Text>
+        </Animated.View>
+        <View style={{ height: 100 }} />
+      </ScrollView>
     </SafeAreaView>
   );
 }
 
-const SyncStatusRow = () => {
-  const { syncInProgress, lastSyncAt, lastSyncError, isOnline } = useAppStore();
-  const [syncing, setSyncing] = useState(false);
-
-  const handleSync = async () => {
-    setSyncing(true);
-    try {
-      await syncService.requestSync('manual');
-    } finally {
-      setSyncing(false);
-    }
-  };
-
-  return (
-    <View style={styles.row}>
-      <View style={[styles.rowIcon, { backgroundColor: '#06B6D420' }]}>
-        <Ionicons name="sync-outline" size={18} color="#06B6D4" />
-      </View>
-      <View style={styles.rowContent}>
-        <Text style={styles.rowLabel}>Cloud Sync</Text>
-        {lastSyncError ? (
-          <Text
-            style={[styles.rowSub, { color: COLORS.expense }]}
-            numberOfLines={2}
-          >
-            {lastSyncError}
-          </Text>
-        ) : lastSyncAt ? (
-          <Text style={styles.rowSub}>
-            Last synced: {new Date(lastSyncAt).toLocaleString()}
-          </Text>
-        ) : (
-          <Text style={styles.rowSub}>Not synced yet</Text>
-        )}
-      </View>
-      {syncing || syncInProgress ? (
-        <ActivityIndicator size="small" color={COLORS.primary} />
-      ) : (
-        <TouchableOpacity
-          onPress={() => void handleSync()}
-          disabled={!isOnline}
-          style={[styles.syncButton, !isOnline && { opacity: 0.4 }]}
-        >
-          <Text style={styles.syncButtonText}>Sync Now</Text>
-        </TouchableOpacity>
-      )}
-    </View>
-  );
-};
-
-const ThemeChip = ({
-  label,
-  active,
-  onPress,
-}: {
-  label: string;
-  active: boolean;
-  onPress: () => void;
-}) => (
-  <TouchableOpacity
-    onPress={onPress}
-    style={[styles.themeChip, active && styles.themeChipActive]}
-  >
-    <Text style={[styles.themeChipText, active && styles.themeChipTextActive]}>
-      {label}
-    </Text>
-  </TouchableOpacity>
-);
-
-const SettingsSection = ({
-  title,
-  children,
-}: {
-  title: string;
-  children: React.ReactNode;
-}) => (
-  <View style={styles.section}>
-    <Text style={styles.sectionTitle}>{title}</Text>
-    <Card style={styles.sectionCard}>{children}</Card>
-  </View>
-);
-
-const SettingsRow = ({
-  icon,
-  iconColor,
-  label,
-  subtitle,
-  onPress,
-  right,
-  showChevron,
-}: {
-  icon: string;
-  iconColor: string;
-  label: string;
-  subtitle?: string;
-  onPress?: () => void;
-  right?: React.ReactNode;
-  showChevron?: boolean;
-}) => (
-  <TouchableOpacity
-    style={styles.row}
-    onPress={onPress}
-    disabled={!onPress}
-    activeOpacity={onPress ? 0.7 : 1}
-  >
-    <View style={[styles.rowIcon, { backgroundColor: `${iconColor}20` }]}>
-      <Ionicons name={icon as never} size={18} color={iconColor} />
-    </View>
-    <View style={styles.rowContent}>
-      <Text style={styles.rowLabel}>{label}</Text>
-      {subtitle ? <Text style={styles.rowSub}>{subtitle}</Text> : null}
-    </View>
-    {right ??
-      (showChevron ? (
-        <Ionicons name="chevron-forward" size={16} color={COLORS.textMuted} />
-      ) : null)}
-  </TouchableOpacity>
-);
-
-const ProfileInput = ({
-  label,
-  value,
-  onChangeText,
-  keyboardType,
-}: {
-  label: string;
-  value: string;
-  onChangeText: (value: string) => void;
-  keyboardType?: 'default' | 'email-address' | 'phone-pad' | 'numeric';
-}) => (
-  <View style={modalStyles.inputGroup}>
-    <Text style={modalStyles.label}>{label}</Text>
-    <TextInput
-      value={value}
-      onChangeText={onChangeText}
-      keyboardType={keyboardType}
-      autoCapitalize={keyboardType === 'email-address' ? 'none' : 'sentences'}
-      style={modalStyles.input}
-      placeholderTextColor={COLORS.textMuted}
-    />
-  </View>
-);
-
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: COLORS.bg },
-  header: { paddingHorizontal: SPACING.md, paddingVertical: SPACING.sm },
-  title: { ...TYPOGRAPHY.h2, color: COLORS.textPrimary },
-  scroll: { paddingHorizontal: SPACING.md, paddingBottom: 96 },
-  profileCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: SPACING.md,
-    marginBottom: SPACING.lg,
-  },
-  profileIcon: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: `${COLORS.primary}20`,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  profileContent: { flex: 1 },
-  profileName: { ...TYPOGRAPHY.h3, color: COLORS.textPrimary },
-  profileSub: { ...TYPOGRAPHY.caption, color: COLORS.textMuted, marginTop: 2 },
-  actionChip: {
-    borderWidth: 1,
-    borderColor: `${COLORS.primary}40`,
-    backgroundColor: `${COLORS.primary}20`,
-    borderRadius: RADIUS.full,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-  },
-  actionChipText: {
-    ...TYPOGRAPHY.caption,
-    color: COLORS.primary,
-    fontWeight: '600',
-  },
-  section: { marginBottom: SPACING.md },
-  sectionTitle: {
-    ...TYPOGRAPHY.label,
-    color: COLORS.textMuted,
-    marginBottom: SPACING.sm,
-    textTransform: 'uppercase',
-  },
-  sectionCard: { padding: 0 },
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: SPACING.sm,
-    paddingHorizontal: SPACING.md,
-    paddingVertical: 14,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.border,
-  },
-  rowIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  rowContent: { flex: 1 },
-  rowLabel: { ...TYPOGRAPHY.bodyMedium, color: COLORS.textPrimary },
-  rowSub: { ...TYPOGRAPHY.caption, color: COLORS.textMuted, marginTop: 1 },
-  themeToggle: { flexDirection: 'row', gap: 8 },
-  themeChip: {
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: RADIUS.full,
-    backgroundColor: COLORS.bgElevated,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-  },
-  themeChipActive: {
-    borderColor: COLORS.primary,
-    backgroundColor: `${COLORS.primary}20`,
-  },
-  themeChipText: { ...TYPOGRAPHY.caption, color: COLORS.textMuted },
-  themeChipTextActive: { color: COLORS.primary, fontWeight: '600' },
-  syncButton: {
-    borderWidth: 1,
-    borderColor: COLORS.primary + '40',
-    backgroundColor: COLORS.primary + '20',
-    borderRadius: RADIUS.full,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-  },
-  syncButtonText: {
-    ...TYPOGRAPHY.caption,
-    color: COLORS.primary,
-    fontWeight: '600',
-  },
-});
-
-const modalStyles = StyleSheet.create({
-  overlay: {
-    flex: 1,
-    justifyContent: 'flex-end',
-    backgroundColor: 'rgba(0,0,0,0.5)',
-  },
-  sheet: {
-    backgroundColor: COLORS.bgCard,
-    borderTopLeftRadius: RADIUS.xl,
-    borderTopRightRadius: RADIUS.xl,
-    padding: SPACING.lg,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-  },
-  title: {
-    ...TYPOGRAPHY.h3,
-    color: COLORS.textPrimary,
-    marginBottom: SPACING.md,
-  },
-  inputGroup: { marginBottom: SPACING.sm },
-  label: { ...TYPOGRAPHY.caption, color: COLORS.textMuted, marginBottom: 6 },
-  input: {
-    backgroundColor: COLORS.bgInput,
-    borderRadius: RADIUS.md,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    color: COLORS.textPrimary,
-    paddingHorizontal: SPACING.md,
-    paddingVertical: 12,
-  },
-  actions: { flexDirection: 'row', gap: SPACING.sm, marginTop: SPACING.md },
-});
+const createStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
+    container: { flex: 1, backgroundColor: colors.bg },
+    scroll: { paddingBottom: 40 },
+    sectionTitle: {
+      ...TYPOGRAPHY.label,
+      color: colors.textMuted,
+      marginLeft: SPACING.md,
+      marginTop: SPACING.lg,
+      marginBottom: SPACING.sm,
+      fontWeight: '800',
+      letterSpacing: 1.5,
+    },
+    profileCard: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: colors.bgCard,
+      padding: SPACING.md,
+      marginHorizontal: SPACING.md,
+      borderRadius: RADIUS.lg,
+      borderWidth: 1,
+      borderColor: colors.border,
+      gap: SPACING.md,
+    },
+    avatar: {
+      width: 56,
+      height: 56,
+      borderRadius: 28,
+      borderWidth: 2,
+      borderColor: colors.primary + '40',
+    },
+    avatarPlaceholder: {
+      backgroundColor: colors.bgElevated,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    profileInfo: { flex: 1 },
+    profileName: {
+      ...TYPOGRAPHY.body,
+      color: colors.textPrimary,
+      fontWeight: '700',
+    },
+    profileEmail: { fontSize: 13, color: colors.textSecondary, marginTop: 2 },
+    prefRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingHorizontal: SPACING.md,
+      minHeight: 56,
+    },
+    prefLeft: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: SPACING.md,
+      flex: 1,
+    },
+    iconBox: {
+      width: 40,
+      height: 40,
+      borderRadius: RADIUS.md,
+      backgroundColor: colors.primary + '15',
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    prefTitle: {
+      ...TYPOGRAPHY.body,
+      color: colors.textPrimary,
+      fontWeight: '600',
+    },
+    prefSub: { fontSize: 11, color: colors.textMuted, marginTop: 2 },
+    themeToggleBg: {
+      flexDirection: 'row',
+      backgroundColor: colors.bgElevated,
+      padding: 4,
+      borderRadius: RADIUS.md,
+    },
+    themeBtn: {
+      paddingHorizontal: 12,
+      paddingVertical: 6,
+      borderRadius: 6,
+    },
+    themeBtnActive: {
+      backgroundColor: colors.bgCard,
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 1 },
+      shadowOpacity: 0.1,
+      shadowRadius: 1,
+      elevation: 2,
+    },
+    themeBtnText: { fontSize: 12, fontWeight: '700' },
+    actionBtn: {
+      paddingHorizontal: 12,
+      paddingVertical: 6,
+      borderRadius: RADIUS.md,
+      borderWidth: 1,
+      borderColor: colors.primary + '40',
+    },
+    actionBtnText: { fontSize: 13, fontWeight: '700', color: colors.primary },
+    exportBadges: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+    badge: {
+      backgroundColor: colors.bgElevated,
+      paddingHorizontal: 6,
+      paddingVertical: 3,
+      borderRadius: 4,
+    },
+    badgeText: { fontSize: 10, fontWeight: '800', color: colors.textMuted },
+    logoutWrapper: { paddingHorizontal: SPACING.md, paddingTop: SPACING.xl },
+    logoutBtn: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 10,
+      backgroundColor: colors.expense + '15',
+      paddingVertical: SPACING.md,
+      borderRadius: RADIUS.lg,
+      borderWidth: 1,
+      borderColor: colors.expense + '30',
+    },
+    logoutText: { fontSize: 16, fontWeight: '700', color: colors.expense },
+    versionText: {
+      textAlign: 'center',
+      fontSize: 12,
+      color: colors.textMuted,
+      marginTop: SPACING.lg,
+    },
+  });

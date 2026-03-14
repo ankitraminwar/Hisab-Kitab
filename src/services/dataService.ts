@@ -349,6 +349,40 @@ export const BudgetService = {
     return budget.id;
   },
 
+  async update(
+    id: string,
+    data: Partial<Pick<Budget, 'limit_amount' | 'alertAt'>>,
+  ) {
+    const existing = await getDatabase().getFirstAsync<Budget>(
+      'SELECT * FROM budgets WHERE id = ?',
+      [id],
+    );
+    if (!existing) {
+      throw new Error('Budget not found');
+    }
+
+    const updatedAt = new Date().toISOString();
+    const budget = {
+      ...existing,
+      ...data,
+      updatedAt,
+      syncStatus: 'pending' as const,
+    };
+
+    await getDatabase().runAsync(
+      `UPDATE budgets
+       SET limit_amount = COALESCE(?, limit_amount), alertAt = COALESCE(?, alertAt), updatedAt = ?, syncStatus = 'pending'
+       WHERE id = ?`,
+      [data.limit_amount ?? null, data.alertAt ?? null, updatedAt, id],
+    );
+
+    await queueEntitySync(
+      'budgets',
+      id,
+      budget as unknown as Record<string, unknown>,
+    );
+  },
+
   async delete(id: string) {
     const deletedAt = new Date().toISOString();
     await getDatabase().runAsync(
