@@ -6,8 +6,8 @@ import Animated, {
   useSharedValue,
   withSpring,
 } from 'react-native-reanimated';
-import { useTheme } from '@/hooks/useTheme';
-import { RADIUS, TYPOGRAPHY } from '@/utils/constants';
+import { useTheme } from '../../hooks/useTheme';
+import { RADIUS, TYPOGRAPHY } from '../../utils/constants';
 
 interface NumericKeypadProps {
   onDigit: (digit: string) => void;

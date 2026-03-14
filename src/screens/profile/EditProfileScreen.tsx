@@ -1,23 +1,23 @@
-import React, { useMemo, useState } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  TextInput,
-  TouchableOpacity,
-  KeyboardAvoidingView,
-  Platform,
-  Alert,
-} from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import React, { useMemo, useState } from 'react';
+import {
+  KeyboardAvoidingView,
+  Platform,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+} from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { CustomPopup } from '../../components/common';
 import { ScreenHeader } from '../../components/common/ScreenHeader';
 import { useTheme, type ThemeColors } from '../../hooks/useTheme';
-import { useAppStore } from '../../store/appStore';
 import { UserProfileService } from '../../services/dataServices';
-import { SPACING, RADIUS, TYPOGRAPHY } from '../../utils/constants';
+import { useAppStore } from '../../store/appStore';
+import { RADIUS, SPACING, TYPOGRAPHY } from '../../utils/constants';
 
 export default function EditProfileScreen() {
   const router = useRouter();
@@ -28,10 +28,21 @@ export default function EditProfileScreen() {
 
   const [name, setName] = useState(userProfile?.name || '');
   const [isSaving, setIsSaving] = useState(false);
+  const [popupConfig, setPopupConfig] = useState<{
+    visible: boolean;
+    title: string;
+    message: string;
+    type: 'success' | 'error' | 'info';
+  }>({ visible: false, title: '', message: '', type: 'info' });
 
   const handleSave = async () => {
     if (!name.trim()) {
-      Alert.alert('Error', 'Name cannot be empty.');
+      setPopupConfig({
+        visible: true,
+        title: 'Error',
+        message: 'Name cannot be empty.',
+        type: 'error',
+      });
       return;
     }
 
@@ -44,8 +55,13 @@ export default function EditProfileScreen() {
       });
       setUserProfile(updatedProfile);
       router.back();
-    } catch (error) {
-      Alert.alert('Error', 'Could not save profile details. Try again.');
+    } catch {
+      setPopupConfig({
+        visible: true,
+        title: 'Error',
+        message: 'Could not save profile details. Try again.',
+        type: 'error',
+      });
     } finally {
       setIsSaving(false);
     }
@@ -120,6 +136,13 @@ export default function EditProfileScreen() {
           </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
+      <CustomPopup
+        visible={popupConfig.visible}
+        title={popupConfig.title}
+        message={popupConfig.message}
+        type={popupConfig.type}
+        onClose={() => setPopupConfig((prev) => ({ ...prev, visible: false }))}
+      />
     </SafeAreaView>
   );
 }

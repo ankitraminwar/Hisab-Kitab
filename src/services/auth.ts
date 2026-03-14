@@ -1,8 +1,8 @@
 import * as LocalAuthentication from 'expo-local-authentication';
 import * as SecureStore from 'expo-secure-store';
 
-import { supabase } from '@/lib/supabase';
-import type { AuthCredentials } from '@/utils/types';
+import { supabase } from '../lib/supabase';
+import type { AuthCredentials } from '../utils/types';
 
 const PIN_KEY = 'hisabkitab.pin';
 const BIOMETRIC_KEY = 'hisabkitab.biometrics';
@@ -84,8 +84,31 @@ export const authService = {
     supabase.auth.updateUser({
       password,
     }),
-  signOut: async () => supabase.auth.signOut(),
-  getSession: async () => supabase.auth.getSession(),
+  signOut: async () => {
+    try {
+      return await supabase.auth.signOut();
+    } catch (error) {
+      return {
+        error:
+          error instanceof Error
+            ? error
+            : new Error('Sign out failed unexpectedly'),
+      };
+    }
+  },
+  getSession: async () => {
+    try {
+      return await supabase.auth.getSession();
+    } catch (error) {
+      return {
+        data: { session: null },
+        error:
+          error instanceof Error
+            ? error
+            : new Error('Failed to retrieve auth session'),
+      };
+    }
+  },
   onAuthStateChange: (
     callback: Parameters<typeof supabase.auth.onAuthStateChange>[0],
   ) => supabase.auth.onAuthStateChange(callback),

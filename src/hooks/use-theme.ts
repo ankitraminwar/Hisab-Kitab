@@ -1,4 +1,4 @@
-import { useTheme as useAppTheme } from '@/hooks/useTheme';
+import { useTheme as useAppTheme } from './useTheme';
 
 export function useTheme() {
   const { colors } = useAppTheme();

@@ -1,54 +1,161 @@
-# AI Context
+# AI Context — Hisab Kitab
 
-## Purpose
+> Primary reference for AI coding agents. Read this before modifying any code.
 
-This repo is an Expo mobile finance app with offline-first storage and optional Supabase cloud sync.
+## What This App Is
 
-## Important Constraints
+Offline-first personal finance manager for Android/iOS. Expo + React Native + TypeScript + SQLite + Supabase.
 
-- Do not put service-role keys, database passwords, or Resend secrets in the app.
-- Only `EXPO_PUBLIC_SUPABASE_URL` and `EXPO_PUBLIC_SUPABASE_ANON_KEY` belong in `.env`.
-- Local SQLite is the source of truth while offline.
-- Remote sync only runs for authenticated users.
-- Local writes should not wait for Supabase; they must queue and sync later.
-- Remote Supabase tables use snake_case; local SQLite tables use camelCase.
-- Unauthenticated users should be sent to `/login`, not directly into tab routes.
-- Logged-in users should always have a `user_profile` row locally and remotely.
+## Tech Stack
 
-## Critical Files
+| Layer      | Technology                                          |
+| ---------- | --------------------------------------------------- |
+| Framework  | Expo ~54.0.0, React Native 0.81.5                   |
+| Routing    | expo-router ~6.0.23 (file-based, typed routes)      |
+| Local DB   | expo-sqlite ~16.0.10 (source of truth)              |
+| Remote DB  | Supabase (PostgreSQL + Auth + Edge Functions)       |
+| State      | Zustand (`src/store/appStore.ts`) + React Query     |
+| Styling    | StyleSheet with dynamic theme via `useTheme()` hook |
+| Animations | react-native-reanimated, expo-linear-gradient       |
+| Charts     | @shopify/react-native-skia                          |
+| Lists      | @shopify/flash-list                                 |
 
-- [app/\_layout.tsx](./app/_layout.tsx)
-- [app/login.tsx](./app/login.tsx)
-- [src/database/index.ts](./src/database/index.ts)
-- [src/services/syncService.ts](./src/services/syncService.ts)
-- [src/services/syncTransform.ts](./src/services/syncTransform.ts)
-- [src/services/transactionService.ts](./src/services/transactionService.ts)
-- [src/services/dataService.ts](./src/services/dataService.ts)
-- [src/services/auth.ts](./src/services/auth.ts)
-- [src/services/sms.ts](./src/services/sms.ts)
-- [src/screens/settings/SettingsScreen.tsx](./src/screens/settings/SettingsScreen.tsx)
-- [supabase/schema.sql](./supabase/schema.sql)
-- [supabase/migrations/20260312_221818_bank_sms_auto_sync_profile_bootstrap.sql](./supabase/migrations/20260312_221818_bank_sms_auto_sync_profile_bootstrap.sql)
+## Hard Rules
 
-## Known Operational Caveat
+1. **Offline-first**: Write to SQLite first, queue for sync. Never block on network.
+2. **No secrets in app code**: Only `EXPO_PUBLIC_SUPABASE_URL` and `EXPO_PUBLIC_SUPABASE_ANON_KEY` in `.env`.
+3. **Column naming**: Local SQLite = camelCase, Supabase = snake_case. Mapping in `src/services/syncTransform.ts`.
+4. **Auth gating**: Unauthenticated users → `/login`. Every authenticated user must have a `user_profile` row.
+5. **Theme**: All screens must use `useTheme()` colors, never hardcoded `COLORS`. Styles via `createStyles(colors)` pattern.
+6. **Popups**: Use `CustomPopup` component, never `Alert.alert`.
+7. **IDs**: All entity IDs are `TEXT` (UUID strings from `generateId()`).
+8. **Native features**: SMS import requires native Android build (not Expo Go). iOS cannot read SMS inbox.
 
-If Supabase migrations are not applied, sync requests return `PGRST205`. The app is coded to keep working locally and surface that state rather than crashing.
+## Project Structure
 
-## Mobile Target
+```
+app/                          # Expo Router file-based routes
+  _layout.tsx                 # Root Stack with auth gating, biometric lock
+  (tabs)/                     # Bottom tabs: Dashboard, History, FAB, Budgets, Profile
+    _layout.tsx               # Tab config — goals & reports tabs hidden (href: null)
+  auth/                       # Login, signup, forgot/reset password
+  transactions/               # add.tsx (modal), [id].tsx (edit modal)
+  split-expense/[id].tsx      # Split create (id='new') or detail (id=splitId)
+  splits/index.tsx            # Split list screen
+  accounts/index.tsx          # Bank accounts
+  settings/index.tsx          # App settings
+  sms-import.tsx              # SMS import (modal)
 
-Native Android and iOS are the supported targets. Web export is not the primary target because `expo-sqlite` web support requires extra handling.
+src/
+  components/
+    common/                   # Button, Card, FAB, EmptyState, CustomPopup, etc.
+    TransactionItem.tsx       # Shared transaction row component
+  database/index.ts           # SQLite schema, table creation, enqueueSync()
+  hooks/useTheme.ts           # Theme hook → ThemeColors object
+  screens/                    # Screen implementations (domain-grouped)
+    dashboard/                # DashboardScreen (hero card, quick actions, charts)
+    transactions/             # AddTransactionScreen, TransactionsScreen
+    split/                    # SplitExpenseScreen (create+detail), SplitListScreen
+    budgets/                  # BudgetsScreen
+    goals/                    # GoalsScreen
+    reports/                  # ReportsScreen, NetWorthScreen
+    settings/                 # SettingsScreen
+    auth/                     # AuthScreen (login/signup/forgot/reset)
+    sms/                      # SmsImportScreen
+    accounts/                 # AccountsScreen
+    notifications/            # NotificationsScreen
+    profile/                  # EditProfileScreen
+  services/
+    transactionService.ts     # Transaction CRUD
+    splitService.ts           # Split expenses CRUD (createSplit, getAll, getById, markSharePaid, deleteSplit)
+    syncService.ts            # Push/pull sync with Supabase
+    syncTransform.ts          # camelCase ↔ snake_case column maps
+    auth.ts                   # Supabase auth + biometric helpers
+    sms.ts                    # Android SMS polling & bank message parsing
+    dataServices.ts           # UserProfileService, CategoryService, AccountService, etc.
+    notifications.ts          # Expo notification scheduling
+    exportService.ts          # CSV/JSON data export
+  store/appStore.ts           # Zustand: theme, auth, dashboard state, dataRevision
+  utils/
+    constants.ts              # SPACING, RADIUS, TYPOGRAPHY, COLORS, formatCurrency, generateId, SYNCABLE_TABLES
+    types.ts                  # TypeScript interfaces (Transaction, SplitExpense, SplitMember, Budget, etc.)
 
-## SMS Caveat
+supabase/
+  schema.sql                  # Full idempotent base schema
+  migrations/                 # Incremental SQL migrations
+  functions/send-email/       # Resend email edge function
 
-Android SMS ingestion uses `react-native-get-sms-android`, so it requires a native Android build and will not work in Expo Go. iOS cannot offer full SMS inbox access for this app category.
+stitch_designs/               # Reference UI mockups (PNG) — light + dark per screen
+```
 
-## SMS library recommendation
+## SQLite Tables
 
-- `react-native-get-sms-android` is already in use and works best for bank message transaction importing in this codebase.
-- `react-native-sms-retriever` is best for OTP verification flows, not for reading full transaction SMS.
-- `react-native-android-sms-listener` offers real-time incoming events but still needs permissions and native Android support.
-- `@maniac-tech/react-native-expo-read-sms` is a good option if you want a more Expo-managed experience and only need read access (native build required for inbox read as well).
+`accounts`, `categories`, `transactions`, `budgets`, `goals`, `assets`, `liabilities`, `net_worth_history`, `user_profile`, `recurring_templates`, `split_expenses`, `split_members`, `payment_methods`, `sync_queue`, `sync_state`
 
-## Migration scripts and rollback
+## Sync System
 
-Use migration files in `supabase/migrations/` and include explicit `-- Up`/`-- Down` sections to document rollbacks. A new template migration has been added as `20260312_223000_theme_preference_updown.sql`.
+- Local writes call `enqueueSync(table, id, 'upsert'|'delete')` → adds to `sync_queue`.
+- `syncService` pushes pending queue items → pulls remote changes by `updated_at`.
+- Only tables in `SYNCABLE_TABLES` (constants.ts) are synced.
+- Soft-delete: `deletedAt` timestamp, not row removal.
+- Unreachable Supabase → app works locally; sync retries on reconnect.
+
+## Key Patterns
+
+- **dataRevision**: Zustand counter bumped after writes. Screens subscribe to trigger re-fetches.
+- **Screen structure**: `SafeAreaView` → header → `ScrollView` → sections, styled via `useMemo(() => createStyles(colors), [colors])`.
+- **Route params**: `useLocalSearchParams<{ id: string }>()` for dynamic routes.
+- **Modals**: Transaction add/edit and split screens use `presentation: 'modal'` in `_layout.tsx`.
+- **Animations**: `Animated.View` with `FadeInDown` from reanimated for staggered section entry.
+
+## Navigation Map
+
+| Route                   | Screen                      | Type       |
+| ----------------------- | --------------------------- | ---------- |
+| `/`                     | DashboardScreen             | Tab        |
+| `/(tabs)/transactions`  | TransactionsScreen          | Tab        |
+| `/(tabs)/budgets`       | BudgetsScreen               | Tab        |
+| `/(tabs)/profile`       | SettingsScreen              | Tab        |
+| `/(tabs)/goals`         | GoalsScreen                 | Hidden tab |
+| `/(tabs)/reports`       | ReportsScreen               | Hidden tab |
+| `/transactions/add`     | AddTransactionScreen        | Modal      |
+| `/transactions/[id]`    | AddTransactionScreen (edit) | Modal      |
+| `/split-expense/new`    | SplitExpenseScreen (create) | Modal      |
+| `/split-expense/[id]`   | SplitExpenseScreen (detail) | Modal      |
+| `/splits`               | SplitListScreen             | Screen     |
+| `/accounts`             | AccountsScreen              | Screen     |
+| `/settings`             | SettingsScreen              | Screen     |
+| `/sms-import`           | SmsImportScreen             | Modal      |
+| `/login`                | AuthScreen                  | Screen     |
+| `/auth/signup`          | AuthScreen                  | Screen     |
+| `/auth/forgot-password` | AuthScreen                  | Screen     |
+| `/auth/reset-password`  | AuthScreen                  | Screen     |
+| `/notifications`        | NotificationsScreen         | Screen     |
+| `/profile/edit`         | EditProfileScreen           | Screen     |
+
+## Entry Points to Split Expenses
+
+Split feature is reachable from 3 places:
+
+1. **Dashboard** → Quick Actions row → "Split Expense" card → `/splits`
+2. **Settings** → DATA & SYNC section → "Split Expenses" → `/splits`
+3. **Transaction Detail** → "Split This Expense" button → `/split-expense/new?txId={transactionId}`
+
+## Design References
+
+`stitch_designs/` has PNG mockups per screen (light + dark variants). Check corresponding folder when modifying UI.
+
+## Supabase Migrations (apply in order)
+
+1. `schema.sql` — Full idempotent base schema
+2. `20260312_221818_bank_sms_auto_sync_profile_bootstrap.sql` — Profile bootstrap + tables
+3. `20260312_223000_theme_preference_updown.sql` — Theme preference column
+4. `20260314_004000_add_split_expenses.sql` — Local split tables
+5. `20260315_add_split_tables.sql` — Remote split tables with RLS
+
+## Caveats
+
+- If Supabase migrations aren't applied, sync returns `PGRST205`. App continues locally.
+- SMS import only works on native Android builds, not Expo Go or iOS.
+- `NetWorthScreen` exists but has no route — not yet linked.
+- `NotificationsScreen` route exists but has no discoverable entry point from UI.

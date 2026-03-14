@@ -12,7 +12,7 @@ import type {
   ThemePreference,
   Transaction,
   UserProfile,
-} from '@/utils/types';
+} from '../utils/types';
 
 interface SyncStateUpdate {
   syncInProgress?: boolean;
@@ -43,6 +43,7 @@ interface AppState {
   notificationPreferences: NotificationPreferences;
   selectedMonth: string;
   dataRevision: number;
+  smsEnabled: boolean;
   setLocked: (locked: boolean) => void;
   setBiometrics: (enabled: boolean) => void;
   setBiometricsPrompted: (prompted: boolean) => void;
@@ -61,6 +62,7 @@ interface AppState {
   setUserProfile: (profile: UserProfile | null) => void;
   setNotificationPreferences: (preferences: NotificationPreferences) => void;
   setSelectedMonth: (month: string) => void;
+  setSmsEnabled: (enabled: boolean) => void;
   bumpDataRevision: () => void;
   resetAppState: () => void;
 }
@@ -89,6 +91,7 @@ const initialState: Pick<
   | 'notificationPreferences'
   | 'selectedMonth'
   | 'dataRevision'
+  | 'smsEnabled'
 > = {
   isLocked: true,
   biometricsEnabled: false,
@@ -123,6 +126,7 @@ const initialState: Pick<
   },
   selectedMonth: new Date().toISOString().slice(0, 7),
   dataRevision: 0,
+  smsEnabled: false,
 };
 
 export const useAppStore = create<AppState>((set) => ({
@@ -146,6 +150,7 @@ export const useAppStore = create<AppState>((set) => ({
   setNotificationPreferences: (notificationPreferences) =>
     set({ notificationPreferences }),
   setSelectedMonth: (selectedMonth) => set({ selectedMonth }),
+  setSmsEnabled: (smsEnabled) => set({ smsEnabled }),
   bumpDataRevision: () =>
     set((state) => ({ dataRevision: state.dataRevision + 1 })),
   resetAppState: () => set({ ...initialState }),

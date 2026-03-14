@@ -1,9 +1,10 @@
 import React from 'react';
-import { StyleSheet, TouchableOpacity, View } from 'react-native';
+import { Pressable, StyleSheet } from 'react-native';
 import { Tabs, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import Animated, {
   useAnimatedStyle,
+  useSharedValue,
   withSpring,
 } from 'react-native-reanimated';
 import { useTheme } from '../../src/hooks/useTheme';
@@ -32,15 +33,32 @@ const TabIcon: React.FC<{ name: string; color: string; focused: boolean }> = ({
 const CenterFAB: React.FC = () => {
   const router = useRouter();
   const { colors } = useTheme();
+  const scale = useSharedValue(1);
+
+  const animatedStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: scale.value }],
+  }));
 
   return (
-    <TouchableOpacity
-      style={[fabStyles.container, { backgroundColor: colors.primary }]}
+    <Pressable
+      onPressIn={() => {
+        scale.value = withSpring(0.88, { damping: 10, stiffness: 300 });
+      }}
+      onPressOut={() => {
+        scale.value = withSpring(1, { damping: 10, stiffness: 300 });
+      }}
       onPress={() => router.push('/transactions/add')}
-      activeOpacity={0.85}
     >
-      <Ionicons name="add" size={28} color="#fff" />
-    </TouchableOpacity>
+      <Animated.View
+        style={[
+          fabStyles.container,
+          { backgroundColor: colors.primary },
+          animatedStyle,
+        ]}
+      >
+        <Ionicons name="add" size={28} color="#fff" />
+      </Animated.View>
+    </Pressable>
   );
 };
 

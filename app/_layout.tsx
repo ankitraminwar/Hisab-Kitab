@@ -1,48 +1,43 @@
-import { useEffect, useRef, useState, useMemo } from 'react';
+import { Ionicons } from '@expo/vector-icons';
+import type { Session } from '@supabase/supabase-js';
+import { QueryClientProvider } from '@tanstack/react-query';
+import { Stack, useRouter, useSegments } from 'expo-router';
+import { StatusBar } from 'expo-status-bar';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
 } from 'react-native';
-import { Stack, useRouter, useSegments } from 'expo-router';
-import { StatusBar } from 'expo-status-bar';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
-import { QueryClientProvider } from '@tanstack/react-query';
-import { Ionicons } from '@expo/vector-icons';
-import type { Session } from '@supabase/supabase-js';
 
 import { clearLocalData, initializeDatabase } from '@/database';
+import { useTheme } from '@/hooks/useTheme';
 import { queryClient } from '@/lib/queryClient';
 import {
   authService,
   authenticateBiometric,
   getBiometricPreference,
   getBiometricPrompted,
-  setBiometricPreference,
-  setBiometricPrompted,
 } from '@/services/auth';
+import { UserProfileService } from '@/services/dataServices';
 import { applyNotificationPreferences } from '@/services/notifications';
 import { smsImportService } from '@/services/sms';
 import { syncService } from '@/services/syncService';
-import { UserProfileService } from '@/services/dataServices';
 import { useAppStore } from '@/store/appStore';
 import { SPACING, TYPOGRAPHY } from '@/utils/constants';
-import { useTheme } from '@/hooks/useTheme';
 
 export default function RootLayout() {
   const router = useRouter();
   const segments = useSegments();
   const previousSessionRef = useRef<Session | null>(null);
-  const biometricPromptVisibleRef = useRef(false);
   const {
     isLocked,
     setLocked,
     biometricsEnabled,
     setBiometrics,
-    biometricsPrompted,
     setBiometricsPrompted: setBiometricsPromptedState,
     theme,
     setTheme,
@@ -245,6 +240,10 @@ export default function RootLayout() {
           <Stack.Screen
             name="sms-import"
             options={{ presentation: 'modal', animation: 'slide_from_bottom' }}
+          />
+          <Stack.Screen
+            name="splits/index"
+            options={{ animation: 'slide_from_right' }}
           />
           <Stack.Screen
             name="split-expense/[id]"

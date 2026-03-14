@@ -2,14 +2,14 @@ import { Ionicons } from '@expo/vector-icons';
 import { format } from 'date-fns';
 import React, { memo, useCallback, useMemo } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
   useAnimatedStyle,
   useSharedValue,
   withSpring,
 } from 'react-native-reanimated';
-import { Gesture, GestureDetector } from 'react-native-gesture-handler';
-import { SPACING, TYPOGRAPHY, formatCurrency } from '../utils/constants';
 import { useTheme } from '../hooks/useTheme';
+import { SPACING, TYPOGRAPHY, formatCurrency } from '../utils/constants';
 import type { Transaction } from '../utils/types';
 
 interface TransactionItemProps {
@@ -85,7 +85,7 @@ const TransactionItem: React.FC<TransactionItemProps> = ({
         <View
           style={[
             styles.iconBg,
-            { backgroundColor: (item.categoryColor || colors.primary) + '20' },
+            { backgroundColor: (item.categoryColor || colors.primary) + '1A' },
           ]}
         >
           <Ionicons
@@ -101,6 +101,10 @@ const TransactionItem: React.FC<TransactionItemProps> = ({
           </Text>
           <View style={styles.meta}>
             <Text style={styles.category}>{item.categoryName}</Text>
+            <View style={styles.dot} />
+            <Text style={styles.category}>
+              {format(new Date(item.date), 'hh:mm a')}
+            </Text>
             {item.tags.length > 0 && (
               <>
                 <View style={styles.dot} />
@@ -136,9 +140,9 @@ const createStyles = (colors: any) =>
       gap: SPACING.sm,
     },
     iconBg: {
-      width: 44,
-      height: 44,
-      borderRadius: 14,
+      width: 48,
+      height: 48,
+      borderRadius: 24,
       alignItems: 'center',
       justifyContent: 'center',
       flexShrink: 0,
@@ -150,6 +154,7 @@ const createStyles = (colors: any) =>
     merchant: {
       ...TYPOGRAPHY.bodyMedium,
       color: colors.textPrimary,
+      fontWeight: '700',
     },
     meta: {
       flexDirection: 'row',

@@ -9,7 +9,15 @@ import {
   TouchableOpacity,
   View,
   ViewStyle,
+  Modal,
+  Pressable,
 } from 'react-native';
+import Animated, {
+  FadeIn,
+  SlideInDown,
+  useAnimatedStyle,
+  withSpring,
+} from 'react-native-reanimated';
 import {
   RADIUS,
   SHADOWS,
@@ -415,6 +423,145 @@ export const StatCard: React.FC<StatCardProps> = ({
   );
 };
 
+// ─── Custom Popup ─────────────────────────────────────────────────────────────
+interface CustomPopupProps {
+  visible: boolean;
+  title: string;
+  message: string;
+  type?: 'success' | 'error' | 'info';
+  onClose: () => void;
+  actionLabel?: string;
+  onAction?: () => void;
+}
+export const CustomPopup: React.FC<CustomPopupProps> = ({
+  visible,
+  title,
+  message,
+  type = 'info',
+  onClose,
+  actionLabel = 'OK',
+  onAction,
+}) => {
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+
+  const iconName =
+    type === 'success'
+      ? 'checkmark-circle'
+      : type === 'error'
+        ? 'close-circle'
+        : 'information-circle';
+  const iconColor =
+    type === 'success'
+      ? colors.income
+      : type === 'error'
+        ? colors.expense
+        : colors.primary;
+
+  return (
+    <Modal visible={visible} transparent animationType="none">
+      <Animated.View
+        style={styles.popupOverlay}
+        entering={FadeIn.duration(200)}
+      >
+        <Animated.View
+          style={styles.popupCard}
+          entering={SlideInDown.duration(300).springify()}
+        >
+          <View
+            style={[styles.popupIconBg, { backgroundColor: iconColor + '20' }]}
+          >
+            <Ionicons name={iconName} size={32} color={iconColor} />
+          </View>
+          <Text style={styles.popupTitle}>{title}</Text>
+          <Text style={styles.popupMessage}>{message}</Text>
+
+          <Button
+            title={actionLabel}
+            onPress={onAction || onClose}
+            style={{ width: '100%', marginTop: SPACING.md }}
+            variant={type === 'error' ? 'danger' : 'primary'}
+          />
+        </Animated.View>
+      </Animated.View>
+    </Modal>
+  );
+};
+
+// ─── Custom Switch ────────────────────────────────────────────────────────────
+interface CustomSwitchProps {
+  value: boolean;
+  onValueChange: (val: boolean) => void;
+  disabled?: boolean;
+}
+export const CustomSwitch: React.FC<CustomSwitchProps> = ({
+  value,
+  onValueChange,
+  disabled,
+}) => {
+  const { colors } = useTheme();
+
+  const trackAnimatedStyle = useAnimatedStyle(() => {
+    return {
+      backgroundColor: withSpring(value ? colors.primary : colors.bgElevated, {
+        mass: 1,
+        damping: 15,
+        stiffness: 120,
+      }),
+    };
+  });
+
+  const thumbAnimatedStyle = useAnimatedStyle(() => {
+    return {
+      transform: [
+        {
+          translateX: withSpring(value ? 20 : 0, {
+            mass: 0.8,
+            damping: 15,
+            stiffness: 150,
+          }),
+        },
+      ],
+      backgroundColor: value ? '#FFFFFF' : colors.textMuted,
+    };
+  });
+
+  return (
+    <Pressable
+      onPress={() => {
+        if (!disabled) onValueChange(!value);
+      }}
+      disabled={disabled}
+      style={{ opacity: disabled ? 0.5 : 1 }}
+    >
+      <Animated.View
+        style={[
+          {
+            width: 44,
+            height: 24,
+            borderRadius: 12,
+            justifyContent: 'center',
+            padding: 2,
+          },
+          trackAnimatedStyle,
+        ]}
+      >
+        <Animated.View
+          style={[
+            {
+              width: 20,
+              height: 20,
+              borderRadius: 10,
+              ...SHADOWS.sm,
+            },
+            thumbAnimatedStyle,
+          ]}
+        />
+      </Animated.View>
+    </Pressable>
+  );
+};
+
 function createStyles(colors: any) {
   return StyleSheet.create({
     card: {
@@ -581,6 +728,44 @@ function createStyles(colors: any) {
     statChange: {
       ...TYPOGRAPHY.caption,
       marginTop: 4,
+    },
+    popupOverlay: {
+      flex: 1,
+      backgroundColor: 'rgba(0,0,0,0.6)',
+      alignItems: 'center',
+      justifyContent: 'center',
+      padding: SPACING.xl,
+    },
+    popupCard: {
+      width: '100%',
+      backgroundColor: colors.bgCard,
+      borderRadius: RADIUS.lg,
+      padding: SPACING.xl,
+      alignItems: 'center',
+      borderWidth: 1,
+      borderColor: colors.border,
+      ...SHADOWS.primary,
+    },
+    popupIconBg: {
+      width: 64,
+      height: 64,
+      borderRadius: 32,
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginBottom: SPACING.lg,
+    },
+    popupTitle: {
+      ...TYPOGRAPHY.h3,
+      color: colors.textPrimary,
+      fontWeight: '800',
+      textAlign: 'center',
+      marginBottom: SPACING.sm,
+    },
+    popupMessage: {
+      ...TYPOGRAPHY.body,
+      color: colors.textSecondary,
+      textAlign: 'center',
+      marginBottom: SPACING.lg,
     },
   });
 }

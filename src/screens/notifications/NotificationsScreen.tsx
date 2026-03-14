@@ -8,7 +8,6 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 
 import { ScreenHeader } from '../../components/common/ScreenHeader';
@@ -57,7 +56,6 @@ const MOCK_NOTIFICATIONS: NotificationItem[] = [
 export default function NotificationsScreen() {
   const { colors } = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
-  const router = useRouter();
 
   const getIconForType = (type: NotificationItem['type']) => {
     switch (type) {

@@ -11,15 +11,15 @@ import {
   setLastSyncTimestamp,
   softDeleteLocalRecord,
   upsertLocalRecord,
-} from '@/database';
-import { supabase } from '@/lib/supabase';
+} from '../database';
+import { supabase } from '../lib/supabase';
+import { useAppStore } from '../store/appStore';
+import type { SyncableTable } from '../utils/constants';
+import type { SyncQueueItem } from '../utils/types';
 import {
   mapLocalToRemoteRecord,
   mapRemoteToLocalRecord,
-} from '@/services/syncTransform';
-import { useAppStore } from '@/store/appStore';
-import type { SyncableTable } from '@/utils/constants';
-import type { SyncQueueItem } from '@/utils/types';
+} from './syncTransform';
 
 const MAX_RETRY_DELAY_MS = 60_000;
 const BASE_DELAY_MS = 1_000;
@@ -68,9 +68,9 @@ class SyncService {
     this.remoteSchemaAvailable = true;
   }
 
-  async sync(reason = 'manual') {
+  async sync(reason = 'manual'): Promise<{ success: boolean; error?: string }> {
     if (this.syncing) {
-      return;
+      return { success: false, error: 'Sync already in progress' };
     }
 
     const state = await NetInfo.fetch();
@@ -78,7 +78,7 @@ class SyncService {
       state.isConnected && state.isInternetReachable !== false,
     );
     if (!isOnline) {
-      return;
+      return { success: false, error: 'Device is offline' };
     }
 
     if (reason === 'manual') {
@@ -86,7 +86,11 @@ class SyncService {
     }
 
     if (!this.remoteSchemaAvailable) {
-      return;
+      return {
+        success: false,
+        error:
+          'Supabase schema is not deployed yet. Apply supabase/schema.sql and retry.',
+      };
     }
 
     this.syncing = true;
@@ -105,22 +109,25 @@ class SyncService {
         lastSyncAt: completedAt,
         lastSyncError: null,
       });
-      console.log(`Sync completed: ${reason}`);
+      return { success: true };
     } catch (error) {
       if (this.isRemoteSchemaMissing(error)) {
         this.remoteSchemaAvailable = false;
+        const message =
+          'Supabase schema is not deployed yet. Apply supabase/schema.sql and restart sync.';
         useAppStore.getState().setSyncState({
           syncInProgress: false,
-          lastSyncError:
-            'Supabase schema is not deployed yet. Apply supabase/schema.sql and restart sync.',
+          lastSyncError: message,
         });
-        return;
+        return { success: false, error: message };
       }
 
+      const message = error instanceof Error ? error.message : 'Sync failed';
       useAppStore.getState().setSyncState({
         syncInProgress: false,
-        lastSyncError: error instanceof Error ? error.message : 'Sync failed',
+        lastSyncError: message,
       });
+      return { success: false, error: message };
     } finally {
       this.syncing = false;
     }
@@ -158,14 +165,17 @@ class SyncService {
       return;
     }
     const pendingItems = await listPendingSyncItems();
+    const failures: Array<{ item: SyncQueueItem; reason: string }> = [];
 
     for (const item of pendingItems) {
       try {
         await this.pushQueueItem(item, userId);
       } catch (error) {
+        const reason = error instanceof Error ? error.message : String(error);
+        failures.push({ item, reason });
         console.warn(
           `Sync push failed for ${item.entity}/${item.recordId}:`,
-          error instanceof Error ? error.message : error,
+          reason,
         );
 
         if (item.retryCount >= 2) {
@@ -173,13 +183,22 @@ class SyncService {
         }
       }
     }
+
+    if (failures.length > 0) {
+      throw new Error(
+        `Failed to sync ${failures.length} record(s): ${failures
+          .slice(0, 3)
+          .map((failure) => `${failure.item.entity}/${failure.item.recordId}`)
+          .join(', ')}`,
+      );
+    }
   }
 
   private async pushQueueItem(item: SyncQueueItem, userId: string | null) {
     try {
       const payload = JSON.parse(item.payload) as Record<string, unknown>;
       const table = item.entity as SyncableTable;
-      const remotePayload = mapLocalToRemoteRecord(table, payload);
+      const remoteData = mapLocalToRemoteRecord(item.entity as any, payload);
       const recordId = String(payload.id ?? item.recordId);
 
       const { data: remoteRecord, error: remoteError } = await supabase
@@ -201,7 +220,7 @@ class SyncService {
         ) {
           const { error } = await supabase.from(table).upsert(
             {
-              ...remotePayload,
+              ...remoteData,
               user_id: userId,
               sync_status: 'synced',
               last_synced_at: deletedAt,
@@ -238,7 +257,7 @@ class SyncService {
       const syncedAt = new Date().toISOString();
       const { error } = await supabase.from(table).upsert(
         {
-          ...remotePayload,
+          ...remoteData,
           user_id: userId,
           sync_status: 'synced',
           last_synced_at: syncedAt,

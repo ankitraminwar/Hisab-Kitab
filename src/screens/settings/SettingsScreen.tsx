@@ -1,39 +1,55 @@
+import { Ionicons } from '@expo/vector-icons';
+import * as ImagePicker from 'expo-image-picker';
+import * as LocalAuthentication from 'expo-local-authentication';
+import { useRouter, type Href } from 'expo-router';
 import React, { useEffect, useMemo, useState } from 'react';
 import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  TouchableOpacity,
-  Switch,
-  Alert,
   Image,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
 import Animated, { FadeInDown } from 'react-native-reanimated';
-import * as LocalAuthentication from 'expo-local-authentication';
-import { useRouter } from 'expo-router';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { ScreenHeader } from '@/components/common/ScreenHeader';
-import { useTheme, type ThemeColors } from '@/hooks/useTheme';
-import { useAppStore } from '@/store/appStore';
-import { authService, setBiometricPreference } from '@/services/auth';
-import { syncService } from '@/services/syncService';
-import { exportService } from '@/services/exportService';
-import { importSmsTransactions } from '@/services/sms';
-import { SPACING, RADIUS, TYPOGRAPHY } from '@/utils/constants';
+import { CustomPopup, CustomSwitch } from '../../components/common/index';
+import { ScreenHeader } from '../../components/common/ScreenHeader';
+import { useTheme, type ThemeColors } from '../../hooks/useTheme';
+import { authService, setBiometricPreference } from '../../services/auth';
+import { exportService } from '../../services/exportService';
+import { syncService } from '../../services/syncService';
+import { useAppStore } from '../../store/appStore';
+import { RADIUS, SPACING, TYPOGRAPHY } from '../../utils/constants';
 
 export default function SettingsScreen() {
   const router = useRouter();
   const { colors } = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
 
-  const { theme, setTheme, biometricsEnabled, setBiometrics, userProfile } =
-    useAppStore();
+  const {
+    theme,
+    setTheme,
+    biometricsEnabled,
+    setBiometrics,
+    userProfile,
+    setUserProfile,
+    smsEnabled,
+    setSmsEnabled,
+    lastSyncAt,
+  } = useAppStore();
 
   const [biometricsAvailable, setBiometricsAvailable] = useState(false);
-  const [smsEnabled, setSmsEnabled] = useState(true); // placeholder, assuming SMS is always enabled for now unless managed in store
+  const [popupConfig, setPopupConfig] = useState<{
+    visible: boolean;
+    title: string;
+    message: string;
+    type: 'success' | 'error' | 'info';
+    onClose?: () => void;
+  }>({ visible: false, title: '', message: '', type: 'info' });
+  const [showExportPicker, setShowExportPicker] = useState(false);
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
 
   useEffect(() => {
     const checkBiometrics = async () => {
@@ -60,67 +76,108 @@ export default function SettingsScreen() {
   };
 
   const handleSync = async () => {
+    const result = await syncService.sync('manual');
+    if (result.success) {
+      setPopupConfig({
+        visible: true,
+        title: 'Success',
+        message: 'Data synced successfully to the cloud.',
+        type: 'success',
+      });
+      return;
+    }
+    setPopupConfig({
+      visible: true,
+      title: 'Sync Failed',
+      message: result.error ?? 'Could not sync data. Check your connection.',
+      type: 'error',
+    });
+  };
+
+  const handleExportCsv = async () => {
+    setShowExportPicker(false);
     try {
-      await syncService.sync('manual');
-      Alert.alert('Success', 'Data synced successfully to the cloud.');
+      const uri = await exportService.exportTransactionsCsv();
+      if (uri)
+        setPopupConfig({
+          visible: true,
+          title: 'Success',
+          message: `Data exported to:\n${uri}`,
+          type: 'success',
+        });
     } catch {
-      Alert.alert('Sync Failed', 'Could not sync data. Check your connection.');
+      setPopupConfig({
+        visible: true,
+        title: 'Export Failed',
+        message: 'Could not export CSV data.',
+        type: 'error',
+      });
+    }
+  };
+
+  const handleExportJson = async () => {
+    setShowExportPicker(false);
+    try {
+      const uri = await exportService.exportFullBackupJson();
+      if (uri)
+        setPopupConfig({
+          visible: true,
+          title: 'Success',
+          message: `Backup exported to:\n${uri}`,
+          type: 'success',
+        });
+    } catch {
+      setPopupConfig({
+        visible: true,
+        title: 'Export Failed',
+        message: 'Could not export JSON backup.',
+        type: 'error',
+      });
     }
   };
 
   const handleExport = () => {
-    Alert.alert('Export Format', 'Choose data format to export:', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'CSV (Transactions)',
-        onPress: async () => {
-          try {
-            const uri = await exportService.exportTransactionsCsv();
-            if (uri) Alert.alert('Success', `Data exported to:\n${uri}`);
-          } catch {
-            Alert.alert('Export Failed', 'Could not export CSV data.');
-          }
-        },
-      },
-      {
-        text: 'JSON (Full Backup)',
-        onPress: async () => {
-          try {
-            const uri = await exportService.exportFullBackupJson();
-            if (uri) Alert.alert('Success', `Backup exported to:\n${uri}`);
-          } catch {
-            Alert.alert('Export Failed', 'Could not export JSON backup.');
-          }
-        },
-      },
-    ]);
-  };
-
-  const handleSmsImport = async () => {
-    try {
-      const count = await importSmsTransactions();
-      Alert.alert('SMS Import', `Found ${count} new transactions from SMS.`);
-    } catch {
-      Alert.alert('Import Failed', 'Could not import SMS transactions.');
-    }
+    setShowExportPicker(true);
   };
 
   const handleLogout = () => {
-    Alert.alert('Logout', 'Are you sure you want to log out?', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Logout',
-        style: 'destructive',
-        onPress: async () => {
-          await authService.signOut();
-        },
-      },
-    ]);
+    setShowLogoutConfirm(true);
   };
+
+  const confirmLogout = async () => {
+    setShowLogoutConfirm(false);
+    await authService.signOut();
+  };
+
+  const pickImage = async () => {
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.8,
+    });
+
+    if (!result.canceled && result.assets[0]?.uri) {
+      if (userProfile) {
+        setUserProfile({ ...userProfile, avatar: result.assets[0].uri });
+      }
+    }
+  };
+
+  const formattedLastSync = useMemo(() => {
+    if (!lastSyncAt) return 'Never';
+    return new Date(lastSyncAt).toLocaleString();
+  }, [lastSyncAt]);
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      <ScreenHeader title="Settings" rightIcon="help-circle-outline" />
+      <ScreenHeader
+        title="Settings"
+        rightAction={{
+          icon: 'help-circle-outline',
+          onPress: () => {},
+        }}
+      />
 
       <ScrollView
         contentContainerStyle={styles.scroll}
@@ -133,9 +190,22 @@ export default function SettingsScreen() {
             style={styles.profileCard}
             onPress={() => router.push('/profile/edit')}
           >
-            <View style={[styles.avatar, styles.avatarPlaceholder]}>
-              <Ionicons name="person" size={24} color={colors.primary} />
-            </View>
+            <TouchableOpacity
+              style={[
+                styles.avatar,
+                !userProfile?.avatar && styles.avatarPlaceholder,
+              ]}
+              onPress={() => void pickImage()}
+            >
+              {userProfile?.avatar ? (
+                <Image
+                  source={{ uri: userProfile.avatar }}
+                  style={styles.avatarImage}
+                />
+              ) : (
+                <Ionicons name="person" size={24} color={colors.primary} />
+              )}
+            </TouchableOpacity>
             <View style={styles.profileInfo}>
               <Text style={styles.profileName}>
                 {userProfile?.name || 'My Account'}
@@ -206,13 +276,7 @@ export default function SettingsScreen() {
                 <Text style={styles.prefSub}>Sync transactions from SMS</Text>
               </View>
             </View>
-            <Switch
-              value={smsEnabled}
-              onValueChange={setSmsEnabled}
-              trackColor={{ false: colors.bgElevated, true: colors.primary }}
-              thumbColor="#FFFFFF"
-              disabled={!__DEV__} // Just mock toggle unless implemented globally
-            />
+            <CustomSwitch value={smsEnabled} onValueChange={setSmsEnabled} />
           </View>
           <TouchableOpacity
             onPress={() => router.push('/sms-import')}
@@ -237,12 +301,10 @@ export default function SettingsScreen() {
               </View>
               <Text style={styles.prefTitle}>Biometric Lock</Text>
             </View>
-            <Switch
+            <CustomSwitch
               value={biometricsEnabled}
               onValueChange={(val) => void handleBiometricToggle(val)}
               disabled={!biometricsAvailable}
-              trackColor={{ false: colors.bgElevated, true: colors.primary }}
-              thumbColor="#FFFFFF"
             />
           </View>
         </Animated.View>
@@ -273,6 +335,28 @@ export default function SettingsScreen() {
             />
           </TouchableOpacity>
 
+          {/* Split Expenses */}
+          <TouchableOpacity
+            style={styles.prefRow}
+            onPress={() => router.push('/splits' as Href)}
+          >
+            <View style={styles.prefLeft}>
+              <View style={styles.iconBox}>
+                <Ionicons
+                  name="people-outline"
+                  size={20}
+                  color={colors.primary}
+                />
+              </View>
+              <Text style={styles.prefTitle}>Split Expenses</Text>
+            </View>
+            <Ionicons
+              name="chevron-forward"
+              size={20}
+              color={colors.textMuted}
+            />
+          </TouchableOpacity>
+
           {/* Cloud Sync */}
           <View style={styles.prefRow}>
             <View style={styles.prefLeft}>
@@ -285,7 +369,9 @@ export default function SettingsScreen() {
               </View>
               <View>
                 <Text style={styles.prefTitle}>Cloud Backup</Text>
-                <Text style={styles.prefSub}>Last synced: Just now</Text>
+                <Text style={styles.prefSub}>
+                  Last synced: {formattedLastSync}
+                </Text>
               </View>
             </View>
             <TouchableOpacity
@@ -336,12 +422,46 @@ export default function SettingsScreen() {
         </Animated.View>
         <View style={{ height: 100 }} />
       </ScrollView>
+
+      {/* Export Format Picker */}
+      <CustomPopup
+        visible={showExportPicker}
+        title="Export Format"
+        message="Choose data format to export:"
+        type="info"
+        actionLabel="CSV (Transactions)"
+        onAction={() => void handleExportCsv()}
+        onClose={() => setShowExportPicker(false)}
+      />
+
+      {/* Logout Confirmation */}
+      <CustomPopup
+        visible={showLogoutConfirm}
+        title="Logout"
+        message="Are you sure you want to log out?"
+        type="error"
+        actionLabel="Logout"
+        onAction={() => void confirmLogout()}
+        onClose={() => setShowLogoutConfirm(false)}
+      />
+
+      {/* General Popup */}
+      <CustomPopup
+        visible={popupConfig.visible}
+        title={popupConfig.title}
+        message={popupConfig.message}
+        type={popupConfig.type}
+        onClose={() => {
+          setPopupConfig((prev) => ({ ...prev, visible: false }));
+          popupConfig.onClose?.();
+        }}
+      />
     </SafeAreaView>
   );
 }
 
-const createStyles = (colors: ThemeColors) =>
-  StyleSheet.create({
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
     container: { flex: 1, backgroundColor: colors.bg },
     scroll: { paddingBottom: 40 },
     sectionTitle: {
@@ -370,6 +490,11 @@ const createStyles = (colors: ThemeColors) =>
       borderRadius: 28,
       borderWidth: 2,
       borderColor: colors.primary + '40',
+      overflow: 'hidden',
+    },
+    avatarImage: {
+      width: '100%',
+      height: '100%',
     },
     avatarPlaceholder: {
       backgroundColor: colors.bgElevated,
@@ -466,3 +591,4 @@ const createStyles = (colors: ThemeColors) =>
       marginTop: SPACING.lg,
     },
   });
+}

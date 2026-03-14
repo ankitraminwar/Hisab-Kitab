@@ -1,102 +1,109 @@
+import { Ionicons } from '@expo/vector-icons';
+import * as Haptics from 'expo-haptics';
+import { useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  View,
-  Text,
   ScrollView,
   StyleSheet,
+  Text,
   TouchableOpacity,
-  Alert,
+  View,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
 import Animated, { FadeInDown } from 'react-native-reanimated';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { useTheme, type ThemeColors } from '../../hooks/useTheme';
+import {
+  RADIUS,
+  SPACING,
+  TYPOGRAPHY,
+  formatCurrency,
+} from '../../utils/constants';
 
-import { useTheme, type ThemeColors } from '@/hooks/useTheme';
-import { SPACING, RADIUS, TYPOGRAPHY, formatCurrency } from '@/utils/constants';
-
-import { TransactionService } from '@/services/transactionService';
-
-interface PendingTransaction {
-  id: string;
-  bankName: string;
-  time: string;
-  merchant: string;
-  category: string;
-  amount: number;
-  type: 'debit' | 'credit';
-  icon: string;
-  iconColor: string;
-  rawTags: string[];
-}
+import { CustomPopup } from '../../components/common';
+import { SmsReadService, type ParsedSms } from '../../services/smsReadService';
 
 export default function SmsImportScreen() {
   const router = useRouter();
   const { colors } = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
-  const [pending, setPending] = useState<PendingTransaction[]>([]);
+  const [pending, setPending] = useState<ParsedSms[]>([]);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [loading, setLoading] = useState(false);
 
-  const loadTransactions = useCallback(async () => {
-    const txs = await TransactionService.getAll(
-      { search: 'sms-import' },
-      100,
-      0,
-    );
-    // Filter out transactions that no longer have 'sms-import' in their actual tags array (just in case)
-    const pendingTxs = txs.filter((tx) => tx.tags.includes('sms-import'));
+  const [popupConfig, setPopupConfig] = useState<{
+    visible: boolean;
+    title: string;
+    message: string;
+    type: 'success' | 'error' | 'info';
+    onClose?: () => void;
+  }>({ visible: false, title: '', message: '', type: 'info' });
 
-    setPending(
-      pendingTxs.map((tx) => ({
-        id: tx.id,
-        bankName: tx.accountName || 'UNKNOWN',
-        time: new Date(tx.date).toLocaleDateString(),
-        merchant: tx.merchant || 'Unknown',
-        category: tx.categoryName || 'GENERAL',
-        amount: tx.amount,
-        type: tx.type === 'income' ? 'credit' : 'debit',
-        icon: tx.categoryIcon || 'list',
-        iconColor: tx.categoryColor || colors.primary,
-        rawTags: tx.tags,
-      })),
-    );
-  }, [colors]);
+  const scanSms = useCallback(async () => {
+    setLoading(true);
+    try {
+      const hasPermission = await SmsReadService.requestPermission();
+      if (!hasPermission) {
+        setPopupConfig({
+          visible: true,
+          title: 'Permission Denied',
+          message: 'SMS permission is required to scan for transactions.',
+          type: 'error',
+        });
+        return;
+      }
+
+      const results = await SmsReadService.scanSms();
+      setPending(results);
+      setSelectedIds(new Set(results.map((r) => r.id)));
+    } catch {
+      setPopupConfig({
+        visible: true,
+        title: 'Error',
+        message: 'Failed to scan SMS messages.',
+        type: 'error',
+      });
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
-    void loadTransactions();
-  }, [loadTransactions]);
+    void scanSms();
+  }, [scanSms]);
 
-  const handleConfirm = async (id: string) => {
-    const tx = await TransactionService.getById(id);
-    if (tx) {
-      await TransactionService.update(id, {
-        tags: tx.tags.filter((t) => t !== 'sms-import'),
-      });
-      void loadTransactions();
-    }
-  };
-
-  const handleDismiss = async (id: string) => {
-    await TransactionService.delete(id);
-    void loadTransactions();
-  };
-
-  const handleEdit = (id: string) => {
-    router.push({
-      pathname: '/transactions/[id]',
-      params: { id },
-    });
+  const toggleSelection = (id: string) => {
+    const next = new Set(selectedIds);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    setSelectedIds(next);
   };
 
   const handleConfirmAll = async () => {
-    for (const p of pending) {
-      const tx = await TransactionService.getById(p.id);
-      if (tx) {
-        await TransactionService.update(p.id, {
-          tags: tx.tags.filter((t) => t !== 'sms-import'),
-        });
-      }
+    if (selectedIds.size === 0) return;
+
+    setLoading(true);
+    try {
+      const toImport = pending.filter((p) => selectedIds.has(p.id));
+      await SmsReadService.importTransactions(toImport);
+
+      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      setPopupConfig({
+        visible: true,
+        title: 'Success',
+        message: `${toImport.length} transactions imported successfully.`,
+        type: 'success',
+        onClose: () => router.back(),
+      });
+    } catch {
+      setPopupConfig({
+        visible: true,
+        title: 'Error',
+        message: 'Failed to import transactions.',
+        type: 'error',
+      });
+    } finally {
+      setLoading(false);
     }
-    void loadTransactions();
   };
 
   return (
@@ -129,7 +136,7 @@ export default function SmsImportScreen() {
         <Animated.View entering={FadeInDown.duration(400)}>
           <View style={styles.summaryCard}>
             <View style={styles.summaryIcon}>
-              <Ionicons name="chatbubbles" size={24} color={colors.primary} />
+              <Ionicons name="chatbubbles" size={24} color="#FFFFFF" />
             </View>
             <View>
               <Text style={styles.summaryTitle}>
@@ -151,82 +158,66 @@ export default function SmsImportScreen() {
         </View>
 
         {/* Pending Transaction Cards */}
-        {pending.map((tx, idx) => (
-          <Animated.View
-            key={tx.id}
-            entering={FadeInDown.duration(400).delay(100 + idx * 80)}
-          >
-            <View style={styles.txCard}>
-              <View style={styles.txTopRow}>
-                <View
-                  style={[
-                    styles.txIconBg,
-                    { backgroundColor: tx.iconColor + '20' },
-                  ]}
-                >
-                  <Ionicons
-                    name={tx.icon as never}
-                    size={20}
-                    color={tx.iconColor}
-                  />
-                </View>
-                <View style={styles.txInfo}>
-                  <Text style={styles.txBank}>
-                    {tx.bankName} • {tx.time}
-                  </Text>
-                  <Text style={styles.txMerchant}>{tx.merchant}</Text>
-                  <View style={styles.categoryBadge}>
-                    <Text style={styles.categoryBadgeText}>{tx.category}</Text>
-                  </View>
-                </View>
-                <View style={styles.txAmountCol}>
-                  <Text style={styles.txAmount}>
-                    {formatCurrency(tx.amount)}
-                  </Text>
-                  <Text
+        {pending.map((tx, idx) => {
+          const isSelected = selectedIds.has(tx.id);
+          return (
+            <Animated.View
+              key={tx.id}
+              entering={FadeInDown.duration(400).delay(100 + idx * 80)}
+            >
+              <TouchableOpacity
+                activeOpacity={0.9}
+                onPress={() => toggleSelection(tx.id)}
+                style={[styles.txCard, isSelected && styles.txCardSelected]}
+              >
+                <View style={styles.txTopRow}>
+                  <View
                     style={[
-                      styles.txType,
+                      styles.txIconBg,
                       {
-                        color:
-                          tx.type === 'credit' ? colors.income : colors.expense,
+                        backgroundColor:
+                          colors.primary + (isSelected ? '25' : '10'),
                       },
                     ]}
                   >
-                    {tx.type === 'credit' ? 'CREDIT' : 'DEBIT'}
-                  </Text>
+                    <Ionicons
+                      name={isSelected ? 'checkmark-circle' : 'mail-outline'}
+                      size={20}
+                      color={isSelected ? colors.primary : colors.textMuted}
+                    />
+                  </View>
+                  <View style={styles.txInfo}>
+                    <Text style={styles.txBank}>
+                      {tx.sender} • {new Date(tx.date).toLocaleDateString()}
+                    </Text>
+                    <Text style={styles.txMerchant}>{tx.merchant}</Text>
+                    <Text style={styles.txBody} numberOfLines={2}>
+                      {tx.body}
+                    </Text>
+                  </View>
+                  <View style={styles.txAmountCol}>
+                    <Text style={styles.txAmount}>
+                      {formatCurrency(tx.amount)}
+                    </Text>
+                    <Text
+                      style={[
+                        styles.txType,
+                        {
+                          color:
+                            tx.type === 'income'
+                              ? colors.income
+                              : colors.expense,
+                        },
+                      ]}
+                    >
+                      {tx.type === 'income' ? 'CREDIT' : 'DEBIT'}
+                    </Text>
+                  </View>
                 </View>
-              </View>
-
-              {/* Actions */}
-              <View style={styles.txActions}>
-                <TouchableOpacity
-                  style={styles.confirmBtn}
-                  onPress={() => handleConfirm(tx.id)}
-                >
-                  <Ionicons name="checkmark-circle" size={16} color="#fff" />
-                  <Text style={styles.confirmBtnText}>Confirm</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={styles.editBtn}
-                  onPress={() => handleEdit(tx.id)}
-                >
-                  <Ionicons
-                    name="pencil"
-                    size={14}
-                    color={colors.textSecondary}
-                  />
-                  <Text style={styles.editBtnText}>Edit</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={styles.dismissBtn}
-                  onPress={() => handleDismiss(tx.id)}
-                >
-                  <Ionicons name="close" size={16} color={colors.textMuted} />
-                </TouchableOpacity>
-              </View>
-            </View>
-          </Animated.View>
-        ))}
+              </TouchableOpacity>
+            </Animated.View>
+          );
+        })}
 
         {pending.length === 0 && (
           <View style={styles.emptyState}>
@@ -243,21 +234,48 @@ export default function SmsImportScreen() {
       {pending.length > 0 && (
         <View style={styles.footer}>
           <TouchableOpacity
-            style={styles.confirmAllBtn}
-            onPress={handleConfirmAll}
+            style={[
+              styles.confirmAllBtn,
+              {
+                backgroundColor:
+                  selectedIds.size > 0 ? colors.primary : colors.bgElevated,
+              },
+            ]}
+            onPress={() => void handleConfirmAll()}
+            disabled={selectedIds.size === 0 || loading}
           >
-            <Text style={styles.confirmAllText}>
-              Confirm All ({pending.length}) »
+            <Text
+              style={[
+                styles.confirmAllText,
+                { color: selectedIds.size > 0 ? '#fff' : colors.textMuted },
+              ]}
+            >
+              {loading
+                ? 'Importing...'
+                : `Import Selected (${selectedIds.size})`}
             </Text>
           </TouchableOpacity>
         </View>
       )}
+
+      <CustomPopup
+        visible={popupConfig.visible}
+        title={popupConfig.title}
+        message={popupConfig.message}
+        type={popupConfig.type}
+        onClose={() => {
+          setPopupConfig((prev) => ({ ...prev, visible: false }));
+          if (popupConfig.onClose) {
+            setTimeout(popupConfig.onClose, 300);
+          }
+        }}
+      />
     </SafeAreaView>
   );
 }
 
-const createStyles = (colors: ThemeColors) =>
-  StyleSheet.create({
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
     container: { flex: 1, backgroundColor: colors.bg },
     header: {
       flexDirection: 'row',
@@ -293,8 +311,8 @@ const createStyles = (colors: ThemeColors) =>
     summaryIcon: {
       width: 48,
       height: 48,
-      borderRadius: 12,
-      backgroundColor: colors.primary + '20',
+      borderRadius: RADIUS.md,
+      backgroundColor: colors.primary,
       alignItems: 'center',
       justifyContent: 'center',
     },
@@ -343,11 +361,15 @@ const createStyles = (colors: ThemeColors) =>
       borderColor: colors.border,
       marginBottom: SPACING.md,
     },
+    txCardSelected: {
+      borderColor: colors.primary,
+      backgroundColor: colors.primary + '05',
+    },
     txTopRow: { flexDirection: 'row', gap: 12 },
     txIconBg: {
-      width: 44,
-      height: 44,
-      borderRadius: 12,
+      width: 48,
+      height: 48,
+      borderRadius: 24,
       alignItems: 'center',
       justifyContent: 'center',
     },
@@ -359,28 +381,19 @@ const createStyles = (colors: ThemeColors) =>
       textTransform: 'uppercase',
     },
     txMerchant: {
-      ...TYPOGRAPHY.bodyMedium,
+      fontSize: 17,
       color: colors.textPrimary,
       fontWeight: '700',
       marginTop: 2,
     },
-    categoryBadge: {
-      alignSelf: 'flex-start',
-      backgroundColor: colors.bgElevated,
-      borderRadius: RADIUS.full,
-      paddingHorizontal: 8,
-      paddingVertical: 2,
-      marginTop: 4,
-    },
-    categoryBadgeText: {
+    txBody: {
       ...TYPOGRAPHY.caption,
       color: colors.textSecondary,
-      fontSize: 10,
-      fontWeight: '600',
+      marginTop: 4,
     },
     txAmountCol: { alignItems: 'flex-end' },
     txAmount: {
-      ...TYPOGRAPHY.bodyMedium,
+      fontSize: 18,
       color: colors.textPrimary,
       fontWeight: '800',
     },
@@ -468,3 +481,4 @@ const createStyles = (colors: ThemeColors) =>
       fontWeight: '700',
     },
   });
+}

@@ -11,19 +11,24 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import Animated, { FadeInDown } from 'react-native-reanimated';
-import { SPACING, RADIUS, TYPOGRAPHY, formatCurrency } from '@/utils/constants';
-import { BudgetService, CategoryService } from '@/services/dataServices';
-import type { Budget, Category } from '@/utils/types';
-import { useAppStore } from '@/store/appStore';
+import {
+  SPACING,
+  RADIUS,
+  TYPOGRAPHY,
+  formatCurrency,
+} from '../../utils/constants';
+import { BudgetService, CategoryService } from '../../services/dataService';
+import type { Budget, Category } from '../../utils/types';
+import { useAppStore } from '../../store/appStore';
 import {
   Card,
   ProgressBar,
-  SectionHeader,
   EmptyState,
   Button,
-} from '@/components/common';
+  SectionHeader,
+} from '../../components/common';
 import { format } from 'date-fns';
-import { useTheme, type ThemeColors } from '@/hooks/useTheme';
+import { useTheme, type ThemeColors } from '../../hooks/useTheme';
 
 export default function BudgetsScreen() {
   const { colors, isDark } = useTheme();

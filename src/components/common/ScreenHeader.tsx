@@ -2,78 +2,54 @@ import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { useTheme } from '@/hooks/useTheme';
-import { SPACING, TYPOGRAPHY } from '@/utils/constants';
+import { useTheme } from '../../hooks/useTheme';
+import { SPACING, TYPOGRAPHY } from '../../utils/constants';
 
 interface ScreenHeaderProps {
   title: string;
   showBack?: boolean;
-  rightIcon?: string;
-  onRightPress?: () => void;
-  secondRightIcon?: string;
-  onSecondRightPress?: () => void;
+  rightAction?: {
+    icon: keyof typeof Ionicons.glyphMap;
+    onPress: () => void;
+  };
 }
 
 export const ScreenHeader: React.FC<ScreenHeaderProps> = ({
   title,
   showBack = true,
-  rightIcon,
-  onRightPress,
-  secondRightIcon,
-  onSecondRightPress,
+  rightAction,
 }) => {
   const router = useRouter();
   const { colors } = useTheme();
 
   return (
-    <View style={[styles.container, { borderBottomColor: colors.border }]}>
-      {showBack ? (
-        <TouchableOpacity
-          onPress={() => router.back()}
-          style={[styles.iconBtn, { backgroundColor: 'transparent' }]}
-          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-        >
-          <Ionicons name="arrow-back" size={22} color={colors.textPrimary} />
-        </TouchableOpacity>
-      ) : (
-        <View style={styles.iconBtn} />
-      )}
-      <Text
-        style={[styles.title, { color: colors.textPrimary }]}
-        numberOfLines={1}
-      >
-        {title}
-      </Text>
-      <View style={styles.rightActions}>
-        {secondRightIcon && (
+    <View style={[styles.container, { backgroundColor: colors.bg }]}>
+      <View style={styles.leftContainer}>
+        {showBack && (
           <TouchableOpacity
-            onPress={onSecondRightPress}
-            style={styles.iconBtn}
-            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            onPress={() => router.back()}
+            style={[styles.backButton, { backgroundColor: colors.bgCard }]}
           >
             <Ionicons
-              name={secondRightIcon as never}
-              size={20}
-              color={colors.textSecondary}
+              name="chevron-back"
+              size={24}
+              color={colors.textPrimary}
             />
           </TouchableOpacity>
         )}
-        {rightIcon ? (
-          <TouchableOpacity
-            onPress={onRightPress}
-            style={styles.iconBtn}
-            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-          >
-            <Ionicons
-              name={rightIcon as never}
-              size={20}
-              color={colors.textSecondary}
-            />
-          </TouchableOpacity>
-        ) : (
-          <View style={styles.iconBtn} />
-        )}
+        <Text style={[styles.title, { color: colors.textPrimary }]}>
+          {title}
+        </Text>
       </View>
+
+      {rightAction && (
+        <TouchableOpacity
+          onPress={rightAction.onPress}
+          style={[styles.rightButton, { backgroundColor: colors.bgCard }]}
+        >
+          <Ionicons name={rightAction.icon} size={22} color={colors.primary} />
+        </TouchableOpacity>
+      )}
     </View>
   );
 };
@@ -82,25 +58,32 @@ const styles = StyleSheet.create({
   container: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
     paddingHorizontal: SPACING.md,
-    paddingVertical: SPACING.sm,
-    borderBottomWidth: 1,
+    paddingTop: SPACING.xl,
+    paddingBottom: SPACING.md,
+    height: 100,
   },
-  iconBtn: {
-    width: 40,
-    height: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: 20,
-  },
-  title: {
-    ...TYPOGRAPHY.h3,
-    flex: 1,
-    textAlign: 'center',
-    fontWeight: '700',
-  },
-  rightActions: {
+  leftContainer: {
     flexDirection: 'row',
     alignItems: 'center',
+  },
+  backButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: SPACING.md,
+  },
+  title: {
+    ...TYPOGRAPHY.h2,
+  },
+  rightButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });

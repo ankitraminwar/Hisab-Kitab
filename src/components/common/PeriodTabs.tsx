@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
-import { useTheme } from '@/hooks/useTheme';
-import { SPACING, TYPOGRAPHY } from '@/utils/constants';
+import { useTheme } from '../../hooks/useTheme';
+import { SPACING, TYPOGRAPHY } from '../../utils/constants';
 
 interface PeriodTabsProps {
   tabs: string[];

@@ -12,19 +12,19 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import Svg, { Path, Defs, LinearGradient, Stop } from 'react-native-svg';
-import { ScreenHeader } from '@/components/common/ScreenHeader';
-import { Button, Card } from '@/components/common';
+import { ScreenHeader } from '../../components/common/ScreenHeader';
+import { Button } from '../../components/common';
 import {
   SPACING,
   RADIUS,
   TYPOGRAPHY,
   formatCurrency,
   formatCompact,
-} from '@/utils/constants';
-import { useTheme, type ThemeColors } from '@/hooks/useTheme';
-import { NetWorthService } from '@/services/dataServices';
-import { Asset, Liability, AssetType, LiabilityType } from '@/utils/types';
-import { useAppStore } from '@/store/appStore';
+} from '../../utils/constants';
+import { useTheme, type ThemeColors } from '../../hooks/useTheme';
+import { NetWorthService } from '../../services/dataService';
+import { Asset, Liability, AssetType, LiabilityType } from '../../utils/types';
+import { useAppStore } from '../../store/appStore';
 
 const ASSET_TYPES: {
   key: AssetType;
@@ -109,7 +109,13 @@ export default function NetWorthScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      <ScreenHeader title="Net Worth" rightIcon="ellipsis-vertical" />
+      <ScreenHeader
+        title="Net Worth"
+        rightAction={{
+          icon: 'ellipsis-vertical',
+          onPress: () => {},
+        }}
+      />
 
       <ScrollView
         contentContainerStyle={styles.scroll}

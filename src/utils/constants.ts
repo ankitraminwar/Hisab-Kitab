@@ -92,16 +92,26 @@ export const TYPOGRAPHY = {
   label: { fontSize: 12, fontWeight: '600' as const, letterSpacing: 0.5 },
 } as const;
 
+export const FONTS = {
+  Manrope: {
+    regular: 'Manrope_400Regular',
+    medium: 'Manrope_500Medium',
+    semiBold: 'Manrope_600SemiBold',
+    bold: 'Manrope_700Bold',
+    extraBold: 'Manrope_800ExtraBold',
+  },
+} as const;
+
 export const SHADOWS = {
   sm: {
-    shadowColor: '#7C3AED',
+    shadowColor: '#8B5CF6',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.15,
     shadowRadius: 8,
     elevation: 3,
   },
   md: {
-    shadowColor: '#7C3AED',
+    shadowColor: '#8B5CF6',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.2,
     shadowRadius: 16,
@@ -113,6 +123,13 @@ export const SHADOWS = {
     shadowOpacity: 0.4,
     shadowRadius: 24,
     elevation: 12,
+  },
+  primary: {
+    shadowColor: 'rgba(139,92,246,0.15)',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 1,
+    shadowRadius: 20,
+    elevation: 8,
   },
 } as const;
 
@@ -131,7 +148,11 @@ export const SYNCABLE_TABLES = [
   'assets',
   'liabilities',
   'net_worth_history',
+  'goal_deposits',
+  'split_expenses',
+  'split_members',
   'user_profile',
+  'payment_methods',
 ] as const;
 
 export type SyncableTable = (typeof SYNCABLE_TABLES)[number];

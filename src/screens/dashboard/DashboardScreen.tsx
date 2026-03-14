@@ -1,42 +1,50 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import {
-  View,
-  Text,
-  ScrollView,
-  StyleSheet,
-  RefreshControl,
-  TouchableOpacity,
-} from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useRouter } from 'expo-router';
-import Animated, { FadeInDown, FadeInRight } from 'react-native-reanimated';
+import { useRouter, type Href } from 'expo-router';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import {
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from 'react-native';
+import Animated, {
+  Easing,
+  FadeInDown,
+  useAnimatedProps,
+  useSharedValue,
+  withTiming,
+} from 'react-native-reanimated';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import Svg, { Circle } from 'react-native-svg';
 import {
-  SPACING,
-  RADIUS,
-  TYPOGRAPHY,
-  formatCurrency,
-  formatCompact,
-} from '../../utils/constants';
-import { TransactionService } from '../../services/transactionService';
+  Card,
+  EmptyState,
+  ProgressBar,
+  SectionHeader,
+} from '../../components/common';
+import TransactionItem from '../../components/TransactionItem';
+import { useTheme, type ThemeColors } from '../../hooks/useTheme';
 import {
   AccountService,
   BudgetService,
   NetWorthService,
-  CategoryService,
 } from '../../services/dataServices';
+import { TransactionService } from '../../services/transactionService';
 import { useAppStore } from '../../store/appStore';
 import {
-  Card,
-  SectionHeader,
-  ProgressBar,
-  EmptyState,
-} from '../../components/common';
-import TransactionItem from '../../components/TransactionItem';
-import type { Budget, Category } from '../../utils/types';
-import { useTheme } from '../../hooks/useTheme';
+  RADIUS,
+  SPACING,
+  TYPOGRAPHY,
+  formatCompact,
+  formatCurrency,
+} from '../../utils/constants';
+import type { Budget } from '../../utils/types';
+
+// ─── AnimatedCircle ────────────────────────────────────────────────────────────
+const AnimatedCircle = Animated.createAnimatedComponent(Circle);
 
 // ─── Donut Chart Component ────────────────────────────────────────────────────
 interface DonutSlice {
@@ -44,6 +52,53 @@ interface DonutSlice {
   value: number;
   color: string;
 }
+
+const DonutSliceAnimated: React.FC<{
+  cx: number;
+  cy: number;
+  r: number;
+  strokeWidth: number;
+  color: string;
+  dashArray: number;
+  circumference: number;
+  dashOffset: number;
+}> = ({
+  cx,
+  cy,
+  r,
+  strokeWidth,
+  color,
+  dashArray,
+  circumference,
+  dashOffset,
+}) => {
+  const progress = useSharedValue(0);
+
+  useEffect(() => {
+    progress.value = withTiming(1, {
+      duration: 900,
+      easing: Easing.out(Easing.cubic),
+    });
+  }, [progress]);
+
+  const animatedProps = useAnimatedProps(() => ({
+    strokeDasharray: `${dashArray * progress.value} ${circumference - dashArray * progress.value}`,
+    strokeDashoffset: dashOffset,
+  }));
+
+  return (
+    <AnimatedCircle
+      cx={cx}
+      cy={cy}
+      r={r}
+      fill="none"
+      stroke={color}
+      strokeWidth={strokeWidth}
+      animatedProps={animatedProps}
+      strokeLinecap="round"
+    />
+  );
+};
 
 const DonutChart: React.FC<{
   slices: DonutSlice[];
@@ -93,17 +148,16 @@ const DonutChart: React.FC<{
           const dashOffset = -cumulativeOffset * circumference;
           cumulativeOffset += pct;
           return (
-            <Circle
+            <DonutSliceAnimated
               key={index}
               cx={size / 2}
               cy={size / 2}
               r={radius}
-              fill="none"
-              stroke={slice.color}
               strokeWidth={strokeWidth}
-              strokeDasharray={`${dashArray} ${circumference - dashArray}`}
-              strokeDashoffset={dashOffset}
-              strokeLinecap="round"
+              color={slice.color}
+              dashArray={dashArray}
+              circumference={circumference}
+              dashOffset={dashOffset}
             />
           );
         })}
@@ -151,30 +205,36 @@ const BudgetAlertCard: React.FC<{
     budget.limit_amount > 0 ? budget.spent / budget.limit_amount : 0;
   const remaining = Math.max(0, budget.limit_amount - budget.spent);
   const pct = Math.round(progress * 100);
+  const isOver = pct >= 100;
 
   return (
     <View
       style={{
-        backgroundColor: colors.warning + '10',
+        backgroundColor: (isOver ? colors.expense : colors.warning) + '10',
         borderLeftWidth: 4,
-        borderLeftColor: colors.warning,
+        borderLeftColor: isOver ? colors.expense : colors.warning,
         borderRadius: RADIUS.sm,
         padding: SPACING.md,
         flexDirection: 'row',
         alignItems: 'center',
         gap: 12,
+        marginBottom: SPACING.sm,
       }}
     >
-      <Ionicons name="warning" size={22} color={colors.warning} />
+      <Ionicons
+        name="warning"
+        size={22}
+        color={isOver ? colors.expense : colors.warning}
+      />
       <View style={{ flex: 1 }}>
         <Text
           style={{
             ...TYPOGRAPHY.bodyMedium,
-            color: colors.warning,
+            color: isOver ? colors.expense : colors.warning,
             fontWeight: '700',
           }}
         >
-          Budget Alert
+          {isOver ? 'Over Budget!' : 'Budget Alert'}
         </Text>
         <Text
           style={{
@@ -183,15 +243,15 @@ const BudgetAlertCard: React.FC<{
             marginTop: 2,
           }}
         >
-          {budget.categoryName ?? 'Category'} budget {pct}% used. You have{' '}
-          {formatCurrency(remaining)} left.
+          {budget.categoryName ?? 'Category'} — {pct}% used.
+          {!isOver && ` ${formatCurrency(remaining)} left.`}
         </Text>
       </View>
       <View
         style={{
           width: 64,
           height: 6,
-          backgroundColor: colors.warning + '30',
+          backgroundColor: (isOver ? colors.expense : colors.warning) + '30',
           borderRadius: RADIUS.full,
           overflow: 'hidden',
         }}
@@ -200,7 +260,7 @@ const BudgetAlertCard: React.FC<{
           style={{
             height: '100%',
             width: `${Math.min(pct, 100)}%`,
-            backgroundColor: colors.warning,
+            backgroundColor: isOver ? colors.expense : colors.warning,
             borderRadius: RADIUS.full,
           }}
         />
@@ -219,11 +279,11 @@ export default function DashboardScreen() {
     setDashboardStats,
     recentTransactions,
     setRecentTransactions,
-    accounts,
     setAccounts,
     budgets,
     setBudgets,
     dataRevision,
+    userProfile,
   } = useAppStore();
   const [refreshing, setRefreshing] = useState(false);
   const [spendingSlices, setSpendingSlices] = useState<DonutSlice[]>([]);
@@ -236,15 +296,13 @@ export default function DashboardScreen() {
     const year = now.getFullYear();
     const month = String(now.getMonth() + 1).padStart(2, '0');
 
-    const [txs, accs, budgetData, nw, monthStats, categories] =
-      await Promise.all([
-        TransactionService.getAll(undefined, 10),
-        AccountService.getAll(),
-        BudgetService.getForMonth(year, month),
-        NetWorthService.getNetWorth(),
-        TransactionService.getMonthlyStats(year, month),
-        CategoryService.getAll(),
-      ]);
+    const [txs, accs, budgetData, nw, monthStats] = await Promise.all([
+      TransactionService.getAll(undefined, 10),
+      AccountService.getAll(),
+      BudgetService.getForMonth(year, month),
+      NetWorthService.getNetWorth(),
+      TransactionService.getMonthlyStats(year, month),
+    ]);
 
     setRecentTransactions(txs);
     setAccounts(accs);
@@ -301,10 +359,18 @@ export default function DashboardScreen() {
     setRefreshing(false);
   };
 
-  // Find the most over-budget category for the alert
-  const alertBudget = budgets.find(
+  // All over-70% budget alerts
+  const alertBudgets = budgets.filter(
     (b) => b.limit_amount > 0 && b.spent / b.limit_amount >= 0.7,
   );
+
+  const savingsAmount =
+    dashboardStats.totalIncome - dashboardStats.totalExpenses;
+  const savingsProgress =
+    dashboardStats.totalIncome > 0
+      ? Math.max(0, Math.min(1, savingsAmount / dashboardStats.totalIncome))
+      : 0;
+  const displayName = userProfile?.name ?? 'there';
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -330,7 +396,7 @@ export default function DashboardScreen() {
             </View>
             <View>
               <Text style={styles.appName}>Hisab-Kitab</Text>
-              <Text style={styles.welcomeText}>Welcome back, Rahul</Text>
+              <Text style={styles.welcomeText}>Welcome, {displayName}</Text>
             </View>
           </View>
           <TouchableOpacity
@@ -345,105 +411,180 @@ export default function DashboardScreen() {
           </TouchableOpacity>
         </Animated.View>
 
-        {/* Hero Card — Total Balance */}
+        {/* Hero Card — Net Balance + Income + Expense */}
         <Animated.View
           entering={FadeInDown.duration(500).delay(100)}
           style={styles.heroWrapper}
         >
           <LinearGradient
-            colors={[colors.primary, colors.primaryLight]}
+            colors={['#8B5CF6', '#6D28D9']}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
             style={styles.heroCard}
           >
-            <Text style={styles.heroLabel}>Total Balance</Text>
+            {/* Decorative blobs */}
+            <View style={styles.heroBlob1} />
+            <View style={styles.heroBlob2} />
+
+            <Text style={styles.heroLabel}>Net Balance</Text>
             <Text style={styles.heroAmount}>
               {formatCurrency(dashboardStats.totalBalance)}
             </Text>
-            <View style={styles.heroBlur} />
+
+            <View style={styles.heroStatsRow}>
+              <View style={styles.heroStatItem}>
+                <View style={styles.heroStatIcon}>
+                  <Ionicons name="arrow-down" size={12} color="#10B981" />
+                </View>
+                <View>
+                  <Text style={styles.heroStatLabel}>Income</Text>
+                  <Text style={styles.heroStatValue}>
+                    {formatCompact(dashboardStats.totalIncome)}
+                  </Text>
+                </View>
+              </View>
+              <View style={styles.heroStatDivider} />
+              <View style={styles.heroStatItem}>
+                <View
+                  style={[
+                    styles.heroStatIcon,
+                    { backgroundColor: 'rgba(244,63,94,0.2)' },
+                  ]}
+                >
+                  <Ionicons name="arrow-up" size={12} color="#F43F5E" />
+                </View>
+                <View>
+                  <Text style={styles.heroStatLabel}>Expense</Text>
+                  <Text style={styles.heroStatValue}>
+                    {formatCompact(dashboardStats.totalExpenses)}
+                  </Text>
+                </View>
+              </View>
+            </View>
           </LinearGradient>
         </Animated.View>
 
-        {/* Income & Expenses Row */}
-        <Animated.View
-          entering={FadeInDown.duration(500).delay(200)}
-          style={styles.statsRow}
-        >
-          <View
-            style={[styles.statTile, { borderColor: colors.income + '20' }]}
-          >
-            <Text style={[styles.statLabel, { color: colors.income }]}>
-              Monthly Income
-            </Text>
-            <Text style={styles.statAmount}>
-              {formatCurrency(dashboardStats.totalIncome)}
-            </Text>
-          </View>
-          <View style={{ width: SPACING.sm }} />
-          <View
-            style={[styles.statTile, { borderColor: colors.expense + '20' }]}
-          >
-            <Text style={[styles.statLabel, { color: colors.expense }]}>
-              Expenses
-            </Text>
-            <Text style={styles.statAmount}>
-              {formatCurrency(dashboardStats.totalExpenses)}
-            </Text>
-          </View>
-        </Animated.View>
-
-        {/* Total Savings */}
-        <Animated.View entering={FadeInDown.duration(500).delay(250)}>
+        {/* Savings Progress Card */}
+        <Animated.View entering={FadeInDown.duration(500).delay(200)}>
           <View style={styles.savingsCard}>
-            <View>
-              <Text style={styles.savingsLabel}>TOTAL SAVINGS</Text>
-              <Text style={styles.savingsAmount}>
-                {formatCurrency(
-                  dashboardStats.totalIncome - dashboardStats.totalExpenses,
-                )}
+            <View style={styles.savingsHeader}>
+              <Text style={styles.savingsLabel}>MONTHLY SAVINGS</Text>
+              <Text style={styles.savingsRate}>
+                {dashboardStats.savingsRate.toFixed(1)}%
               </Text>
             </View>
-            <View style={styles.avatarGroup}>
-              <View
-                style={[
-                  styles.avatarCircle,
-                  { backgroundColor: colors.primary + '30' },
-                ]}
-              >
-                <Ionicons name="person" size={14} color={colors.primary} />
-              </View>
-              <View
-                style={[
-                  styles.avatarCircle,
-                  {
-                    backgroundColor: colors.primary,
-                    marginLeft: -8,
-                  },
-                ]}
-              >
-                <Text
-                  style={{ fontSize: 10, color: '#fff', fontWeight: '700' }}
-                >
-                  +2
-                </Text>
-              </View>
-            </View>
+            <Text style={styles.savingsAmount}>
+              {formatCurrency(savingsAmount)}
+            </Text>
+            <ProgressBar
+              progress={savingsProgress}
+              color={savingsAmount >= 0 ? colors.income : colors.expense}
+            />
+            <Text style={styles.savingsSub}>
+              of {formatCurrency(dashboardStats.totalIncome)} income
+            </Text>
           </View>
         </Animated.View>
 
-        {/* Budget Alert */}
-        {alertBudget && (
+        {/* Budget Alerts */}
+        {alertBudgets.length > 0 && (
           <Animated.View entering={FadeInDown.duration(500).delay(300)}>
-            <BudgetAlertCard budget={alertBudget} colors={colors} />
+            <Text style={styles.sectionTitle}>Budget Alerts</Text>
+            {alertBudgets.map((b) => (
+              <BudgetAlertCard key={b.id} budget={b} colors={colors} />
+            ))}
           </Animated.View>
         )}
+
+        {/* Quick Actions */}
+        <Animated.View entering={FadeInDown.duration(500).delay(320)}>
+          <Text style={styles.sectionTitle}>Quick Actions</Text>
+          <View style={styles.quickActionsRow}>
+            <TouchableOpacity
+              style={styles.quickActionCard}
+              onPress={() => router.push('/splits' as Href)}
+              activeOpacity={0.7}
+            >
+              <View
+                style={[
+                  styles.quickActionIcon,
+                  { backgroundColor: colors.primary + '18' },
+                ]}
+              >
+                <Ionicons
+                  name="people-outline"
+                  size={22}
+                  color={colors.primary}
+                />
+              </View>
+              <Text style={styles.quickActionLabel}>Split{'\n'}Expense</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.quickActionCard}
+              onPress={() => router.push('/sms-import')}
+              activeOpacity={0.7}
+            >
+              <View
+                style={[
+                  styles.quickActionIcon,
+                  { backgroundColor: colors.income + '18' },
+                ]}
+              >
+                <Ionicons
+                  name="chatbubble-ellipses-outline"
+                  size={22}
+                  color={colors.income}
+                />
+              </View>
+              <Text style={styles.quickActionLabel}>SMS{'\n'}Import</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.quickActionCard}
+              onPress={() => router.push('/reports')}
+              activeOpacity={0.7}
+            >
+              <View
+                style={[
+                  styles.quickActionIcon,
+                  { backgroundColor: colors.warning + '18' },
+                ]}
+              >
+                <Ionicons
+                  name="bar-chart-outline"
+                  size={22}
+                  color={colors.warning}
+                />
+              </View>
+              <Text style={styles.quickActionLabel}>Reports</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.quickActionCard}
+              onPress={() => router.push('/(tabs)/goals')}
+              activeOpacity={0.7}
+            >
+              <View
+                style={[
+                  styles.quickActionIcon,
+                  { backgroundColor: colors.expense + '18' },
+                ]}
+              >
+                <Ionicons
+                  name="flag-outline"
+                  size={22}
+                  color={colors.expense}
+                />
+              </View>
+              <Text style={styles.quickActionLabel}>Goals</Text>
+            </TouchableOpacity>
+          </View>
+        </Animated.View>
 
         {/* Spending Distribution */}
         <Animated.View entering={FadeInDown.duration(500).delay(350)}>
           <View style={styles.sectionRow}>
             <Text style={styles.sectionTitle}>Spending Distribution</Text>
             <TouchableOpacity onPress={() => router.push('/reports')}>
-              <Text style={styles.sectionAction}>View Details</Text>
+              <Text style={styles.sectionAction}>Details</Text>
             </TouchableOpacity>
           </View>
           <Card style={styles.donutCard}>
@@ -486,7 +627,10 @@ export default function DashboardScreen() {
           ) : (
             <View style={styles.txList}>
               {recentTransactions.slice(0, 5).map((tx, idx) => (
-                <View key={tx.id}>
+                <Animated.View
+                  key={tx.id}
+                  entering={FadeInDown.duration(400).delay(420 + idx * 60)}
+                >
                   <TransactionItem
                     item={tx}
                     onPress={() => router.push(`/transactions/${tx.id}`)}
@@ -494,7 +638,7 @@ export default function DashboardScreen() {
                   {idx < Math.min(recentTransactions.length, 5) - 1 && (
                     <View style={styles.divider} />
                   )}
-                </View>
+                </Animated.View>
               ))}
             </View>
           )}
@@ -507,7 +651,7 @@ export default function DashboardScreen() {
 }
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
-const createStyles = (colors: ReturnType<typeof useTheme>['colors']) =>
+const createStyles = (colors: ThemeColors) =>
   StyleSheet.create({
     container: { flex: 1, backgroundColor: colors.bg },
     scroll: { paddingHorizontal: SPACING.md, paddingTop: SPACING.sm },
@@ -543,55 +687,85 @@ const createStyles = (colors: ReturnType<typeof useTheme>['colors']) =>
       marginBottom: SPACING.md,
       borderRadius: RADIUS.xl,
       overflow: 'hidden',
+      shadowColor: 'rgba(139,92,246,0.15)',
+      shadowOffset: { width: 0, height: 8 },
+      shadowOpacity: 1,
+      shadowRadius: 24,
+      elevation: 8,
     },
     heroCard: {
       padding: SPACING.lg,
       borderRadius: RADIUS.xl,
       overflow: 'hidden',
     },
+    heroBlob1: {
+      position: 'absolute',
+      right: -30,
+      top: -30,
+      width: 140,
+      height: 140,
+      borderRadius: 70,
+      backgroundColor: 'rgba(255,255,255,0.08)',
+    },
+    heroBlob2: {
+      position: 'absolute',
+      left: -20,
+      bottom: -20,
+      width: 100,
+      height: 100,
+      borderRadius: 50,
+      backgroundColor: 'rgba(255,255,255,0.05)',
+    },
     heroLabel: {
       ...TYPOGRAPHY.bodyMedium,
-      color: 'rgba(255,255,255,0.85)',
+      color: 'rgba(255,255,255,0.75)',
       fontWeight: '500',
     },
     heroAmount: {
-      fontSize: 34,
+      fontSize: 38,
       fontWeight: '800',
       color: '#fff',
-      letterSpacing: -1,
+      letterSpacing: -1.5,
       marginTop: 4,
+      marginBottom: SPACING.lg,
     },
-    heroBlur: {
-      position: 'absolute',
-      right: -20,
-      bottom: -20,
-      width: 120,
-      height: 120,
-      borderRadius: 60,
-      backgroundColor: 'rgba(255,255,255,0.1)',
-    },
-
-    // Stats
-    statsRow: {
+    heroStatsRow: {
       flexDirection: 'row',
-      marginBottom: SPACING.md,
-    },
-    statTile: {
-      flex: 1,
-      backgroundColor: colors.bgCard,
-      borderRadius: RADIUS.lg,
+      alignItems: 'center',
+      backgroundColor: 'rgba(0,0,0,0.15)',
+      borderRadius: RADIUS.md,
       padding: SPACING.md,
-      borderWidth: 1,
     },
-    statLabel: {
-      ...TYPOGRAPHY.caption,
+    heroStatItem: {
+      flex: 1,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 10,
+    },
+    heroStatIcon: {
+      width: 28,
+      height: 28,
+      borderRadius: 14,
+      backgroundColor: 'rgba(16,185,129,0.2)',
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    heroStatLabel: {
+      fontSize: 11,
       fontWeight: '600',
+      color: 'rgba(255,255,255,0.65)',
     },
-    statAmount: {
-      ...TYPOGRAPHY.h3,
-      color: colors.textPrimary,
+    heroStatValue: {
+      fontSize: 16,
       fontWeight: '800',
-      marginTop: 4,
+      color: '#fff',
+      marginTop: 1,
+    },
+    heroStatDivider: {
+      width: 1,
+      height: 36,
+      backgroundColor: 'rgba(255,255,255,0.2)',
+      marginHorizontal: SPACING.sm,
     },
 
     // Savings
@@ -601,31 +775,34 @@ const createStyles = (colors: ReturnType<typeof useTheme>['colors']) =>
       padding: SPACING.md,
       borderWidth: 1,
       borderColor: colors.border,
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'space-between',
       marginBottom: SPACING.md,
+    },
+    savingsHeader: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      marginBottom: 4,
     },
     savingsLabel: {
       ...TYPOGRAPHY.label,
       color: colors.textMuted,
       textTransform: 'uppercase',
     },
+    savingsRate: {
+      ...TYPOGRAPHY.caption,
+      color: colors.income,
+      fontWeight: '700',
+    },
     savingsAmount: {
       ...TYPOGRAPHY.h3,
       color: colors.textPrimary,
       fontWeight: '800',
-      marginTop: 2,
+      marginBottom: SPACING.sm,
     },
-    avatarGroup: { flexDirection: 'row', alignItems: 'center' },
-    avatarCircle: {
-      width: 32,
-      height: 32,
-      borderRadius: 16,
-      alignItems: 'center',
-      justifyContent: 'center',
-      borderWidth: 2,
-      borderColor: colors.bgCard,
+    savingsSub: {
+      ...TYPOGRAPHY.caption,
+      color: colors.textMuted,
+      marginTop: 6,
     },
 
     // Sections
@@ -640,11 +817,42 @@ const createStyles = (colors: ReturnType<typeof useTheme>['colors']) =>
       ...TYPOGRAPHY.h3,
       color: colors.textPrimary,
       fontWeight: '800',
+      marginBottom: SPACING.sm,
     },
     sectionAction: {
       ...TYPOGRAPHY.caption,
       color: colors.primary,
       fontWeight: '700',
+    },
+
+    // Quick Actions
+    quickActionsRow: {
+      flexDirection: 'row',
+      gap: SPACING.sm,
+      marginBottom: SPACING.lg,
+    },
+    quickActionCard: {
+      flex: 1,
+      backgroundColor: colors.bgCard,
+      borderRadius: RADIUS.lg,
+      paddingVertical: SPACING.md,
+      alignItems: 'center',
+      borderWidth: 1,
+      borderColor: colors.border,
+      gap: 8,
+    },
+    quickActionIcon: {
+      width: 42,
+      height: 42,
+      borderRadius: 12,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    quickActionLabel: {
+      fontSize: 11,
+      fontWeight: '700',
+      color: colors.textSecondary,
+      textAlign: 'center',
     },
 
     // Donut chart card

@@ -1,9 +1,9 @@
-import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useTheme } from '@/hooks/useTheme';
-import { RADIUS, SPACING, TYPOGRAPHY } from '@/utils/constants';
-import type { Category } from '@/utils/types';
+import React from 'react';
+import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { useTheme } from '../../hooks/useTheme';
+import { RADIUS, SPACING, TYPOGRAPHY } from '../../utils/constants';
+import type { Category } from '../../utils/types';
 
 interface CategoryGridProps {
   categories: Category[];
@@ -33,31 +33,43 @@ export const CategoryGrid: React.FC<CategoryGridProps> = ({
             <TouchableOpacity
               key={cat.id}
               onPress={() => onSelect(cat)}
-              style={[
-                styles.item,
-                {
-                  width: `${100 / columns - 3}%`,
-                  backgroundColor: isSelected ? catColor + '15' : colors.bgCard,
-                  borderColor: isSelected ? catColor + '60' : colors.border,
-                  borderWidth: isSelected ? 2 : 1,
-                },
-              ]}
               activeOpacity={0.7}
+              style={{ width: `${100 / columns - 3}%` as any }}
             >
-              <Ionicons
-                name={(cat.icon || 'ellipse') as never}
-                size={22}
-                color={isSelected ? catColor : colors.textMuted}
-              />
-              <Text
+              <View
                 style={[
-                  styles.itemLabel,
-                  { color: isSelected ? catColor : colors.textMuted },
+                  styles.item,
+                  {
+                    backgroundColor: isSelected
+                      ? catColor + '15'
+                      : colors.bgCard,
+                    borderColor: isSelected ? catColor + '80' : colors.border,
+                    borderWidth: isSelected ? 2 : 1,
+                  },
+                  isSelected && {
+                    shadowColor: catColor,
+                    shadowOffset: { width: 0, height: 0 },
+                    shadowOpacity: 0.3,
+                    shadowRadius: 8,
+                    elevation: 6,
+                  },
                 ]}
-                numberOfLines={1}
               >
-                {cat.name}
-              </Text>
+                <Ionicons
+                  name={(cat.icon || 'ellipse') as never}
+                  size={22}
+                  color={isSelected ? catColor : colors.textMuted}
+                />
+                <Text
+                  style={[
+                    styles.itemLabel,
+                    { color: isSelected ? catColor : colors.textMuted },
+                  ]}
+                  numberOfLines={1}
+                >
+                  {cat.name}
+                </Text>
+              </View>
             </TouchableOpacity>
           );
         })}

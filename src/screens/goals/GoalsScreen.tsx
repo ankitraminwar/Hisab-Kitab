@@ -11,13 +11,18 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import Animated, { FadeInDown } from 'react-native-reanimated';
-import { SPACING, RADIUS, TYPOGRAPHY, formatCurrency } from '@/utils/constants';
-import { GoalService } from '@/services/dataServices';
-import type { Goal } from '@/utils/types';
-import { Card, ProgressBar, EmptyState, Button } from '@/components/common';
+import {
+  SPACING,
+  RADIUS,
+  TYPOGRAPHY,
+  formatCurrency,
+} from '../../utils/constants';
+import { GoalService } from '../../services/dataService';
+import type { Goal } from '../../utils/types';
+import { Card, ProgressBar, EmptyState, Button } from '../../components/common';
 import { differenceInDays } from 'date-fns';
-import { useAppStore } from '@/store/appStore';
-import { useTheme, type ThemeColors } from '@/hooks/useTheme';
+import { useAppStore } from '../../store/appStore';
+import { useTheme, type ThemeColors } from '../../hooks/useTheme';
 
 const GOAL_COLORS = [
   '#7C3AED',

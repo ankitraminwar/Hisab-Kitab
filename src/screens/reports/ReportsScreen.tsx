@@ -1,3 +1,4 @@
+import { Ionicons } from '@expo/vector-icons';
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   ScrollView,
@@ -6,23 +7,21 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
 import Animated, { FadeInDown } from 'react-native-reanimated';
-import { format } from 'date-fns';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { ScreenHeader } from '@/components/common/ScreenHeader';
-import { PeriodTabs } from '@/components/common/PeriodTabs';
-import { TransactionService } from '@/services/transactionService';
-import { useAppStore } from '@/store/appStore';
-import { useTheme, type ThemeColors } from '@/hooks/useTheme';
+import { PeriodTabs } from '../../components/common/PeriodTabs';
+import { ScreenHeader } from '../../components/common/ScreenHeader';
+import { useTheme, type ThemeColors } from '../../hooks/useTheme';
+import { TransactionService } from '../../services/transactionService';
+import { useAppStore } from '../../store/appStore';
 import {
-  SPACING,
   RADIUS,
+  SPACING,
   TYPOGRAPHY,
-  formatCurrency,
   formatCompact,
-} from '@/utils/constants';
+  formatCurrency,
+} from '../../utils/constants';
 
 type CategoryDatum = {
   categoryId: string;
@@ -41,10 +40,8 @@ export default function ReportsScreen() {
   const dataRevision = useAppStore((state) => state.dataRevision);
 
   const [period, setPeriod] = useState('Monthly');
-  const [year, setYear] = useState(now.getFullYear());
-  const [month, setMonth] = useState(
-    String(now.getMonth() + 1).padStart(2, '0'),
-  );
+  const [year] = useState(now.getFullYear());
+  const [month] = useState(String(now.getMonth() + 1).padStart(2, '0'));
   const [expenseBreakdown, setExpenseBreakdown] = useState<CategoryDatum[]>([]);
   const [stats, setStats] = useState({ income: 0, expense: 0 });
 
@@ -65,7 +62,13 @@ export default function ReportsScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      <ScreenHeader title="Financial Analytics" rightIcon="share-outline" />
+      <ScreenHeader
+        title="Financial Analytics"
+        rightAction={{
+          icon: 'share-outline',
+          onPress: () => {},
+        }}
+      />
 
       {/* Period Tabs */}
       <PeriodTabs
@@ -89,6 +92,7 @@ export default function ReportsScreen() {
             trendLabel="12%"
             trendUp
             colors={colors}
+            tintColor={colors.primary}
           />
           <SummaryCard
             label="Expenses"
@@ -96,6 +100,7 @@ export default function ReportsScreen() {
             trendLabel="4%"
             trendUp={false}
             colors={colors}
+            tintColor={colors.expense}
           />
           <SummaryCard
             label="Savings"
@@ -103,6 +108,7 @@ export default function ReportsScreen() {
             trendLabel={`${Math.abs(savingsRate).toFixed(0)}%`}
             trendUp={savings >= 0}
             colors={colors}
+            tintColor={colors.income}
           />
         </Animated.View>
 
@@ -215,22 +221,21 @@ const SummaryCard: React.FC<{
   trendLabel: string;
   trendUp: boolean;
   colors: ThemeColors;
-}> = ({ label, value, trendLabel, trendUp, colors }) => (
+  tintColor: string;
+}> = ({ label, value, trendLabel, trendUp, colors, tintColor }) => (
   <View
     style={[
       summaryStyles.card,
       {
-        backgroundColor: colors.bgCard,
-        borderColor: colors.border,
+        backgroundColor: tintColor + '10',
+        borderColor: tintColor + '20',
       },
     ]}
   >
     <Text style={[summaryStyles.label, { color: colors.textMuted }]}>
       {label}
     </Text>
-    <Text style={[summaryStyles.value, { color: colors.textPrimary }]}>
-      {value}
-    </Text>
+    <Text style={[summaryStyles.value, { color: tintColor }]}>{value}</Text>
     <View style={summaryStyles.trend}>
       <Ionicons
         name={trendUp ? 'trending-up' : 'trending-down'}
@@ -314,8 +319,8 @@ const barStyles = StyleSheet.create({
   },
   label: { fontSize: 12, fontWeight: '500' },
   amount: { fontSize: 12, fontWeight: '700' },
-  barBg: { height: 10, borderRadius: 5, overflow: 'hidden' },
-  barFill: { height: '100%', borderRadius: 5 },
+  barBg: { height: 8, borderRadius: 4, overflow: 'hidden' },
+  barFill: { height: '100%', borderRadius: 4 },
 });
 
 const createStyles = (colors: ThemeColors) =>
