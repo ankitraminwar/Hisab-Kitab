@@ -56,10 +56,6 @@ Apply Supabase schema before sync will work:
 ```bash
 # Apply in Supabase SQL editor:
 supabase/schema.sql
-supabase/migrations/20260312_221818_bank_sms_auto_sync_profile_bootstrap.sql
-supabase/migrations/20260312_223000_theme_preference_updown.sql
-supabase/migrations/20260314_004000_add_split_expenses.sql
-supabase/migrations/20260315_add_split_tables.sql
 ```
 
 Deploy edge function:
