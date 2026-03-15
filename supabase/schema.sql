@@ -1,5 +1,15 @@
+-- Hisab Kitab — Complete Supabase Schema (Idempotent)
+-- Run this single file in the Supabase SQL editor to set up all tables,
+-- indexes, triggers, RLS policies, and seed data.
+
+-- ============================================================
+-- Extensions
+-- ============================================================
 create extension if not exists pgcrypto;
 
+-- ============================================================
+-- Functions
+-- ============================================================
 create or replace function public.set_updated_at()
 returns trigger
 language plpgsql
@@ -46,6 +56,10 @@ begin
   return new;
 end;
 $$;
+
+-- ============================================================
+-- Tables
+-- ============================================================
 
 create table if not exists public.accounts (
   id text primary key,
@@ -190,7 +204,7 @@ create table if not exists public.user_profile (
   phone text,
   currency text not null default 'INR',
   monthly_budget double precision not null default 0,
-  theme_preference text not null default 'dark' check (theme_preference in ('dark', 'light', 'system')),
+  theme_preference text not null default 'system' check (theme_preference in ('dark', 'light', 'system')),
   notifications_enabled boolean not null default false,
   biometric_enabled boolean not null default false,
   created_at timestamptz not null default timezone('utc', now()),
@@ -199,6 +213,54 @@ create table if not exists public.user_profile (
   last_synced_at timestamptz,
   deleted_at timestamptz
 );
+
+create table if not exists public.split_expenses (
+  id text primary key,
+  user_id uuid references auth.users(id) on delete cascade,
+  transaction_id text not null,
+  paid_by_user_id text not null,
+  total_amount double precision not null,
+  split_method text not null check (split_method in ('equal', 'exact', 'percent')),
+  notes text,
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now()),
+  sync_status text not null default 'synced' check (sync_status in ('synced', 'pending', 'failed')),
+  last_synced_at timestamptz,
+  deleted_at timestamptz
+);
+
+create table if not exists public.split_members (
+  id text primary key,
+  user_id uuid references auth.users(id) on delete cascade,
+  split_expense_id text not null references public.split_expenses(id) on delete cascade,
+  name text not null,
+  share_amount double precision not null,
+  share_percent double precision,
+  status text not null default 'pending' check (status in ('pending', 'paid', 'dismissed')),
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now()),
+  sync_status text not null default 'synced' check (sync_status in ('synced', 'pending', 'failed')),
+  last_synced_at timestamptz,
+  deleted_at timestamptz
+);
+
+create table if not exists public.payment_methods (
+  id text primary key,
+  user_id uuid references auth.users(id) on delete cascade,
+  name text not null,
+  icon text not null default 'card',
+  color text not null default '#8B5CF6',
+  is_custom boolean not null default false,
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now()),
+  sync_status text not null default 'synced' check (sync_status in ('synced', 'pending', 'failed')),
+  last_synced_at timestamptz,
+  deleted_at timestamptz
+);
+
+-- ============================================================
+-- Indexes
+-- ============================================================
 
 create index if not exists idx_transactions_transaction_date on public.transactions (transaction_date desc);
 create index if not exists idx_transactions_category_id on public.transactions (category_id);
@@ -215,6 +277,15 @@ create index if not exists idx_user_profile_user_updated_at on public.user_profi
 create unique index if not exists idx_budgets_user_category_month_year
   on public.budgets (user_id, category_id, month, year)
   where deleted_at is null;
+create index if not exists idx_split_expenses_user on public.split_expenses (user_id, updated_at desc);
+create index if not exists idx_split_expenses_transaction on public.split_expenses (transaction_id);
+create index if not exists idx_split_members_split_id on public.split_members (split_expense_id);
+create index if not exists idx_split_members_user on public.split_members (user_id, updated_at desc);
+create index if not exists idx_payment_methods_user on public.payment_methods (user_id, updated_at desc);
+
+-- ============================================================
+-- Triggers
+-- ============================================================
 
 drop trigger if exists set_accounts_updated_at on public.accounts;
 create trigger set_accounts_updated_at before update on public.accounts for each row execute function public.set_updated_at();
@@ -234,8 +305,18 @@ drop trigger if exists set_net_worth_updated_at on public.net_worth_history;
 create trigger set_net_worth_updated_at before update on public.net_worth_history for each row execute function public.set_updated_at();
 drop trigger if exists set_user_profile_updated_at on public.user_profile;
 create trigger set_user_profile_updated_at before update on public.user_profile for each row execute function public.set_updated_at();
+drop trigger if exists set_split_expenses_updated_at on public.split_expenses;
+create trigger set_split_expenses_updated_at before update on public.split_expenses for each row execute function public.set_updated_at();
+drop trigger if exists set_split_members_updated_at on public.split_members;
+create trigger set_split_members_updated_at before update on public.split_members for each row execute function public.set_updated_at();
+drop trigger if exists set_payment_methods_updated_at on public.payment_methods;
+create trigger set_payment_methods_updated_at before update on public.payment_methods for each row execute function public.set_updated_at();
 drop trigger if exists on_auth_user_created on auth.users;
 create trigger on_auth_user_created after insert on auth.users for each row execute function public.handle_new_user();
+
+-- ============================================================
+-- Backfill existing auth users missing a user_profile row
+-- ============================================================
 
 insert into public.user_profile (
   id,
@@ -268,6 +349,10 @@ from auth.users u
 left join public.user_profile p on p.user_id = u.id
 where p.user_id is null;
 
+-- ============================================================
+-- Row Level Security
+-- ============================================================
+
 alter table public.accounts enable row level security;
 alter table public.categories enable row level security;
 alter table public.transactions enable row level security;
@@ -277,6 +362,9 @@ alter table public.assets enable row level security;
 alter table public.liabilities enable row level security;
 alter table public.net_worth_history enable row level security;
 alter table public.user_profile enable row level security;
+alter table public.split_expenses enable row level security;
+alter table public.split_members enable row level security;
+alter table public.payment_methods enable row level security;
 
 drop policy if exists "own_accounts" on public.accounts;
 drop policy if exists "own_categories" on public.categories;
@@ -287,6 +375,9 @@ drop policy if exists "own_assets" on public.assets;
 drop policy if exists "own_liabilities" on public.liabilities;
 drop policy if exists "own_net_worth_history" on public.net_worth_history;
 drop policy if exists "own_user_profile" on public.user_profile;
+drop policy if exists "own_split_expenses" on public.split_expenses;
+drop policy if exists "own_split_members" on public.split_members;
+drop policy if exists "own_payment_methods" on public.payment_methods;
 
 create policy "own_accounts" on public.accounts for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
 create policy "own_categories" on public.categories for all using (auth.uid() = user_id or user_id is null) with check (auth.uid() = user_id or user_id is null);
@@ -297,3 +388,6 @@ create policy "own_assets" on public.assets for all using (auth.uid() = user_id)
 create policy "own_liabilities" on public.liabilities for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
 create policy "own_net_worth_history" on public.net_worth_history for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
 create policy "own_user_profile" on public.user_profile for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+create policy "own_split_expenses" on public.split_expenses for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+create policy "own_split_members" on public.split_members for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+create policy "own_payment_methods" on public.payment_methods for all using (auth.uid() = user_id) with check (auth.uid() = user_id);

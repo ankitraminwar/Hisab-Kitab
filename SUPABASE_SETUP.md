@@ -14,27 +14,25 @@ Do not use `EXPO_PUBLIC_SUPABASE_KEY`.
 
 ## 2. Apply Schema
 
-Run the SQL in:
+Run the single file in the Supabase SQL editor:
 
 - [supabase/schema.sql](./supabase/schema.sql)
 
-If your project already exists and you only need the user-profile bootstrap fix, also run:
-
-- [supabase/migrations/20260312_221818_bank_sms_auto_sync_profile_bootstrap.sql](./supabase/migrations/20260312_221818_bank_sms_auto_sync_profile_bootstrap.sql)
+This creates all tables, indexes, triggers, RLS policies, and seed data.
 
 Without this, the app will log errors like:
 
 - `PGRST205`
 - `Could not find the table 'public.accounts' in the schema cache`
 
-The current schema is intentionally idempotent:
+The schema is intentionally idempotent:
 
 - triggers are dropped and recreated
 - RLS policies are dropped and recreated
-- transaction indexes are created only if missing
+- indexes are created only if missing
 - budget uniqueness is enforced per `user_id + category_id + month + year`
 - new auth users automatically get a `public.user_profile` row
-- existing auth users missing `public.user_profile` are backfilled by the migration
+- existing auth users missing `public.user_profile` are backfilled automatically
 
 ## 3. Edge Function
 

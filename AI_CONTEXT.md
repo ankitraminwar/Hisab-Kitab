@@ -81,8 +81,7 @@ src/
     types.ts                  # TypeScript interfaces (Transaction, SplitExpense, SplitMember, Budget, etc.)
 
 supabase/
-  schema.sql                  # Full idempotent base schema
-  migrations/                 # Incremental SQL migrations
+  schema.sql                  # Complete idempotent schema (all tables, indexes, triggers, RLS)
   functions/send-email/       # Resend email edge function
 
 stitch_designs/               # Reference UI mockups (PNG) — light + dark per screen
@@ -145,17 +144,14 @@ Split feature is reachable from 3 places:
 
 `stitch_designs/` has PNG mockups per screen (light + dark variants). Check corresponding folder when modifying UI.
 
-## Supabase Migrations (apply in order)
+## Supabase Schema
 
-1. `schema.sql` — Full idempotent base schema
-2. `20260312_221818_bank_sms_auto_sync_profile_bootstrap.sql` — Profile bootstrap + tables
-3. `20260312_223000_theme_preference_updown.sql` — Theme preference column
-4. `20260314_004000_add_split_expenses.sql` — Local split tables
-5. `20260315_add_split_tables.sql` — Remote split tables with RLS
+Run `supabase/schema.sql` in the Supabase SQL editor. This single file contains all tables,
+indexes, triggers, RLS policies, and backfill logic. No separate migration files needed.
 
 ## Caveats
 
-- If Supabase migrations aren't applied, sync returns `PGRST205`. App continues locally.
+- If Supabase schema isn't applied, sync returns `PGRST205`. App continues locally.
 - SMS import only works on native Android builds, not Expo Go or iOS.
 - `NetWorthScreen` exists but has no route — not yet linked.
 - `NotificationsScreen` route exists but has no discoverable entry point from UI.
