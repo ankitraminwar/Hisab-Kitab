@@ -22,7 +22,7 @@
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/android-icon-foreground.png",
-        "backgroundColor": "#0A0A0F"
+        "backgroundImage": "./assets/images/android-icon-background.png"
       },
       "package": "com.hisabkitab.app",
       "permissions": [
