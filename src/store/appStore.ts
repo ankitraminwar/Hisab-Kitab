@@ -116,7 +116,7 @@ const initialState: Pick<
     netWorth: 0,
   },
   isLoading: false,
-  theme: 'dark',
+  theme: 'system',
   userProfile: null,
   notificationPreferences: {
     enabled: false,

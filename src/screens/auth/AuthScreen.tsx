@@ -17,6 +17,7 @@ import { Button, CustomPopup } from '../../components/common';
 import { useTheme, type ThemeColors } from '../../hooks/useTheme';
 import { authService } from '../../services/auth';
 import { RADIUS } from '../../utils/constants';
+import type { IoniconsName } from '../../utils/types';
 
 type Mode = 'login' | 'signup' | 'forgot-password' | 'reset-password';
 
@@ -92,7 +93,11 @@ const IconInput: React.FC<{
             zIndex: 1,
           }}
         >
-          <Ionicons name={icon as any} size={20} color={colors.textMuted} />
+          <Ionicons
+            name={icon as IoniconsName}
+            size={20}
+            color={colors.textMuted}
+          />
         </View>
         <TextInput
           value={value}
@@ -198,7 +203,11 @@ const SocialButton: React.FC<{
       gap: 12,
     }}
   >
-    <Ionicons name={icon as any} size={20} color={colors.textPrimary} />
+    <Ionicons
+      name={icon as IoniconsName}
+      size={20}
+      color={colors.textPrimary}
+    />
     <Text
       style={{
         fontSize: 16,

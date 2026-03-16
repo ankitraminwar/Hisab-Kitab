@@ -1,3 +1,8 @@
+import type { Ionicons } from '@expo/vector-icons';
+import type { ComponentProps } from 'react';
+
+export type IoniconsName = ComponentProps<typeof Ionicons>['name'];
+
 export type TransactionType = 'expense' | 'income' | 'transfer';
 export type AccountType =
   | 'cash'
@@ -23,7 +28,7 @@ export type ThemePreference = 'dark' | 'light' | 'system';
 export type PaymentMethod = string;
 
 export type SplitMethod = 'equal' | 'exact' | 'percent';
-export type SplitStatus = 'pending' | 'paid' | 'declined';
+export type SplitStatus = 'pending' | 'paid' | 'dismissed';
 
 export interface SyncMetadata {
   userId?: string | null;

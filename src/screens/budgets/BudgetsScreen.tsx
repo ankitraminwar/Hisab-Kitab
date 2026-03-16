@@ -1,34 +1,34 @@
-import React, { useCallback, useEffect, useState, useMemo } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  TouchableOpacity,
-  TextInput,
-  Modal,
-} from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import Animated, { FadeInDown } from 'react-native-reanimated';
+import { format } from 'date-fns';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  SPACING,
+  Modal,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+} from 'react-native';
+import Animated, { FadeInDown } from 'react-native-reanimated';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import {
+  Button,
+  Card,
+  EmptyState,
+  ProgressBar,
+  SectionHeader,
+} from '../../components/common';
+import { useTheme, type ThemeColors } from '../../hooks/useTheme';
+import { BudgetService, CategoryService } from '../../services/dataService';
+import { useAppStore } from '../../store/appStore';
+import {
   RADIUS,
+  SPACING,
   TYPOGRAPHY,
   formatCurrency,
 } from '../../utils/constants';
-import { BudgetService, CategoryService } from '../../services/dataService';
 import type { Budget, Category } from '../../utils/types';
-import { useAppStore } from '../../store/appStore';
-import {
-  Card,
-  ProgressBar,
-  EmptyState,
-  Button,
-  SectionHeader,
-} from '../../components/common';
-import { format } from 'date-fns';
-import { useTheme, type ThemeColors } from '../../hooks/useTheme';
 
 export default function BudgetsScreen() {
   const { colors, isDark } = useTheme();
@@ -315,9 +315,22 @@ const AddBudgetModal = ({
   };
 
   return (
-    <Modal visible={visible} animationType="slide" transparent>
-      <View style={styles.overlay}>
-        <View style={styles.sheet}>
+    <Modal
+      visible={visible}
+      animationType="slide"
+      transparent
+      onRequestClose={onClose}
+    >
+      <TouchableOpacity
+        style={styles.overlay}
+        activeOpacity={1}
+        onPress={onClose}
+      >
+        <TouchableOpacity
+          style={styles.sheet}
+          activeOpacity={1}
+          onPress={() => {}}
+        >
           <View style={styles.handle} />
           <Text style={styles.title}>New Budget</Text>
 
@@ -382,8 +395,8 @@ const AddBudgetModal = ({
               disabled={!categoryId || !amount}
             />
           </View>
-        </View>
-      </View>
+        </TouchableOpacity>
+      </TouchableOpacity>
     </Modal>
   );
 };
@@ -423,9 +436,22 @@ const EditBudgetModal = ({
   };
 
   return (
-    <Modal visible={visible} animationType="slide" transparent>
-      <View style={styles.overlay}>
-        <View style={styles.sheet}>
+    <Modal
+      visible={visible}
+      animationType="slide"
+      transparent
+      onRequestClose={onClose}
+    >
+      <TouchableOpacity
+        style={styles.overlay}
+        activeOpacity={1}
+        onPress={onClose}
+      >
+        <TouchableOpacity
+          style={styles.sheet}
+          activeOpacity={1}
+          onPress={() => {}}
+        >
           <View style={styles.handle} />
           <Text style={styles.title}>Edit Budget</Text>
           <Text style={styles.subtitle}>{category?.name}</Text>
@@ -452,8 +478,8 @@ const EditBudgetModal = ({
               style={styles.flex1}
             />
           </View>
-        </View>
-      </View>
+        </TouchableOpacity>
+      </TouchableOpacity>
     </Modal>
   );
 };

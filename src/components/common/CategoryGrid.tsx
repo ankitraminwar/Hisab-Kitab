@@ -1,6 +1,12 @@
 import { Ionicons } from '@expo/vector-icons';
 import React from 'react';
-import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import {
+  type DimensionValue,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from 'react-native';
 import { useTheme } from '../../hooks/useTheme';
 import { RADIUS, SPACING, TYPOGRAPHY } from '../../utils/constants';
 import type { Category } from '../../utils/types';
@@ -34,7 +40,7 @@ export const CategoryGrid: React.FC<CategoryGridProps> = ({
               key={cat.id}
               onPress={() => onSelect(cat)}
               activeOpacity={0.7}
-              style={{ width: `${100 / columns - 3}%` as any }}
+              style={{ width: `${100 / columns - 3}%` as DimensionValue }}
             >
               <View
                 style={[

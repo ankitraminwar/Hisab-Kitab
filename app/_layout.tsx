@@ -6,15 +6,17 @@ import { StatusBar } from 'expo-status-bar';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Platform,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
 } from 'react-native';
+import { registerWidgetTaskHandler } from 'react-native-android-widget';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 import { clearLocalData, initializeDatabase } from '@/database';
-import { useTheme } from '@/hooks/useTheme';
+import { useTheme, type ThemeColors } from '@/hooks/useTheme';
 import { queryClient } from '@/lib/queryClient';
 import {
   authService,
@@ -28,6 +30,12 @@ import { smsImportService } from '@/services/sms';
 import { syncService } from '@/services/syncService';
 import { useAppStore } from '@/store/appStore';
 import { SPACING, TYPOGRAPHY } from '@/utils/constants';
+import { widgetTaskHandler } from '@/widgets/widgetTaskHandler';
+
+// Register Android widget task handler at module level
+if (Platform.OS === 'android') {
+  registerWidgetTaskHandler(widgetTaskHandler);
+}
 
 export default function RootLayout() {
   const router = useRouter();
@@ -86,10 +94,11 @@ export default function RootLayout() {
             const createdProfile = await UserProfileService.upsertProfile({
               userId: nextSession.user.id,
               email: nextSession.user.email ?? '',
+              themePreference: 'system',
             });
             setUserProfile(createdProfile);
           }
-          setTheme('dark');
+          setTheme('system');
         }
 
         setBiometrics(biometricPreference);
@@ -255,7 +264,7 @@ export default function RootLayout() {
   );
 }
 
-const createStyles = (colors: any) =>
+const createStyles = (colors: ThemeColors) =>
   StyleSheet.create({
     root: {
       flex: 1,

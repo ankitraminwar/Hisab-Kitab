@@ -2,6 +2,8 @@ import { Ionicons } from '@expo/vector-icons';
 import React, { useMemo } from 'react';
 import {
   ActivityIndicator,
+  Modal,
+  Pressable,
   StyleSheet,
   Text,
   TextInput,
@@ -9,8 +11,6 @@ import {
   TouchableOpacity,
   View,
   ViewStyle,
-  Modal,
-  Pressable,
 } from 'react-native';
 import Animated, {
   FadeIn,
@@ -18,6 +18,7 @@ import Animated, {
   useAnimatedStyle,
   withSpring,
 } from 'react-native-reanimated';
+import { useTheme, type ThemeColors } from '../../hooks/useTheme';
 import {
   RADIUS,
   SHADOWS,
@@ -25,8 +26,7 @@ import {
   TYPOGRAPHY,
   formatCurrency,
 } from '../../utils/constants';
-import { useTheme } from '../../hooks/useTheme';
-import { TransactionType } from '../../utils/types';
+import type { IoniconsName, TransactionType } from '../../utils/types';
 
 // ─── Card ─────────────────────────────────────────────────────────────────────
 interface CardProps {
@@ -120,7 +120,7 @@ export const CategoryBadge: React.FC<CategoryBadgeProps> = ({
           },
         ]}
       >
-        <Ionicons name={icon as any} size={size * 0.5} color={color} />
+        <Ionicons name={icon as IoniconsName} size={size * 0.5} color={color} />
       </View>
       {name && (
         <Text style={styles.badgeName} numberOfLines={1}>
@@ -217,7 +217,11 @@ export const EmptyState: React.FC<EmptyStateProps> = ({
   return (
     <View style={styles.emptyState}>
       <View style={styles.emptyIcon}>
-        <Ionicons name={icon as any} size={32} color={colors.textMuted} />
+        <Ionicons
+          name={icon as IoniconsName}
+          size={32}
+          color={colors.textMuted}
+        />
       </View>
       <Text style={styles.emptyTitle}>{title}</Text>
       {subtitle && <Text style={styles.emptySubtitle}>{subtitle}</Text>}
@@ -323,7 +327,7 @@ export const Button: React.FC<ButtonProps> = ({
         <>
           {icon && (
             <Ionicons
-              name={icon as any}
+              name={icon as IoniconsName}
               size={18}
               color={contentColor}
               style={{ marginRight: 8 }}
@@ -349,7 +353,7 @@ export const FAB: React.FC<FABProps> = ({ onPress, icon = 'add' }) => {
   return (
     <TouchableOpacity style={styles.fab} onPress={onPress} activeOpacity={0.85}>
       <View style={styles.fabInner}>
-        <Ionicons name={icon as any} size={28} color="#fff" />
+        <Ionicons name={icon as IoniconsName} size={28} color="#fff" />
       </View>
     </TouchableOpacity>
   );
@@ -390,7 +394,7 @@ export const StatCard: React.FC<StatCardProps> = ({
           ]}
         >
           <Ionicons
-            name={icon as any}
+            name={icon as IoniconsName}
             size={16}
             color={
               type === 'income'
@@ -562,7 +566,7 @@ export const CustomSwitch: React.FC<CustomSwitchProps> = ({
   );
 };
 
-function createStyles(colors: any) {
+function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
     card: {
       backgroundColor: colors.bgCard,

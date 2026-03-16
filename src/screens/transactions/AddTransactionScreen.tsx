@@ -29,6 +29,7 @@ import { RADIUS, SPACING } from '../../utils/constants';
 import type {
   Account,
   Category,
+  IoniconsName,
   PaymentMethod,
   TransactionType,
 } from '../../utils/types';
@@ -552,7 +553,7 @@ export default function AddTransactionScreen() {
                     }}
                   >
                     <Ionicons
-                      name={pm.icon as any}
+                      name={pm.icon as IoniconsName}
                       size={18}
                       color={colors.textMuted}
                     />

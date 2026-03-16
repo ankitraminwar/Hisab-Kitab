@@ -416,57 +416,66 @@ export default function DashboardScreen() {
           entering={FadeInDown.duration(500).delay(100)}
           style={styles.heroWrapper}
         >
-          <LinearGradient
-            colors={['#8B5CF6', '#6D28D9']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={styles.heroCard}
+          <TouchableOpacity
+            activeOpacity={0.9}
+            onPress={() => router.push('/accounts' as Href)}
           >
-            {/* Decorative blobs */}
-            <View style={styles.heroBlob1} />
-            <View style={styles.heroBlob2} />
+            <LinearGradient
+              colors={['#8B5CF6', '#6D28D9']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.heroCard}
+            >
+              {/* Decorative blobs */}
+              <View style={styles.heroBlob1} />
+              <View style={styles.heroBlob2} />
 
-            <Text style={styles.heroLabel}>Net Balance</Text>
-            <Text style={styles.heroAmount}>
-              {formatCurrency(dashboardStats.totalBalance)}
-            </Text>
+              <Text style={styles.heroLabel}>Net Balance</Text>
+              <Text style={styles.heroAmount}>
+                {formatCurrency(dashboardStats.totalBalance)}
+              </Text>
 
-            <View style={styles.heroStatsRow}>
-              <View style={styles.heroStatItem}>
-                <View style={styles.heroStatIcon}>
-                  <Ionicons name="arrow-down" size={12} color="#10B981" />
+              <View style={styles.heroStatsRow}>
+                <View style={styles.heroStatItem}>
+                  <View style={styles.heroStatIcon}>
+                    <Ionicons name="arrow-down" size={12} color="#10B981" />
+                  </View>
+                  <View>
+                    <Text style={styles.heroStatLabel}>Income</Text>
+                    <Text style={styles.heroStatValue}>
+                      {formatCompact(dashboardStats.totalIncome)}
+                    </Text>
+                  </View>
                 </View>
-                <View>
-                  <Text style={styles.heroStatLabel}>Income</Text>
-                  <Text style={styles.heroStatValue}>
-                    {formatCompact(dashboardStats.totalIncome)}
-                  </Text>
+                <View style={styles.heroStatDivider} />
+                <View style={styles.heroStatItem}>
+                  <View
+                    style={[
+                      styles.heroStatIcon,
+                      { backgroundColor: 'rgba(244,63,94,0.2)' },
+                    ]}
+                  >
+                    <Ionicons name="arrow-up" size={12} color="#F43F5E" />
+                  </View>
+                  <View>
+                    <Text style={styles.heroStatLabel}>Expense</Text>
+                    <Text style={styles.heroStatValue}>
+                      {formatCompact(dashboardStats.totalExpenses)}
+                    </Text>
+                  </View>
                 </View>
               </View>
-              <View style={styles.heroStatDivider} />
-              <View style={styles.heroStatItem}>
-                <View
-                  style={[
-                    styles.heroStatIcon,
-                    { backgroundColor: 'rgba(244,63,94,0.2)' },
-                  ]}
-                >
-                  <Ionicons name="arrow-up" size={12} color="#F43F5E" />
-                </View>
-                <View>
-                  <Text style={styles.heroStatLabel}>Expense</Text>
-                  <Text style={styles.heroStatValue}>
-                    {formatCompact(dashboardStats.totalExpenses)}
-                  </Text>
-                </View>
-              </View>
-            </View>
-          </LinearGradient>
+            </LinearGradient>
+          </TouchableOpacity>
         </Animated.View>
 
         {/* Savings Progress Card */}
         <Animated.View entering={FadeInDown.duration(500).delay(200)}>
-          <View style={styles.savingsCard}>
+          <TouchableOpacity
+            style={styles.savingsCard}
+            activeOpacity={0.8}
+            onPress={() => router.push('/reports')}
+          >
             <View style={styles.savingsHeader}>
               <Text style={styles.savingsLabel}>MONTHLY SAVINGS</Text>
               <Text style={styles.savingsRate}>
@@ -483,16 +492,21 @@ export default function DashboardScreen() {
             <Text style={styles.savingsSub}>
               of {formatCurrency(dashboardStats.totalIncome)} income
             </Text>
-          </View>
+          </TouchableOpacity>
         </Animated.View>
 
         {/* Budget Alerts */}
         {alertBudgets.length > 0 && (
           <Animated.View entering={FadeInDown.duration(500).delay(300)}>
-            <Text style={styles.sectionTitle}>Budget Alerts</Text>
-            {alertBudgets.map((b) => (
-              <BudgetAlertCard key={b.id} budget={b} colors={colors} />
-            ))}
+            <TouchableOpacity
+              onPress={() => router.push('/(tabs)/budgets')}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.sectionTitle}>Budget Alerts</Text>
+              {alertBudgets.map((b) => (
+                <BudgetAlertCard key={b.id} budget={b} colors={colors} />
+              ))}
+            </TouchableOpacity>
           </Animated.View>
         )}
 

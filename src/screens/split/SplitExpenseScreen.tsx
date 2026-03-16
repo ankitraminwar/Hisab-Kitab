@@ -1,8 +1,14 @@
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useLocalSearchParams, useRouter } from 'expo-router';
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { useLocalSearchParams, useRouter, type Href } from 'expo-router';
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import {
   Modal,
   ScrollView,
@@ -40,6 +46,7 @@ interface LocalMember {
   name: string;
   role: 'owner' | 'member';
   amount: number;
+  sharePercent?: number;
   status?: SplitStatus;
   dbId?: string; // ID from the database for existing members
 }
@@ -81,6 +88,7 @@ export default function SplitExpenseScreen() {
   }>({ visible: false, title: '', message: '', type: 'info' });
 
   const [saving, setSaving] = useState(false);
+  const friendSearchRef = useRef<TextInput>(null);
 
   const totalExpense = selectedTransaction?.amount || 0;
 
@@ -102,16 +110,10 @@ export default function SplitExpenseScreen() {
     if (!isNewSplit) {
       void loadExistingSplit();
     }
-  }, [loadExistingSplit, dataRevision]);
+  }, [loadExistingSplit, dataRevision, isNewSplit]);
 
   // ── Load transactions for new split ──────────────────────────────────────
-  useEffect(() => {
-    if (isNewSplit) {
-      void loadTransactions();
-    }
-  }, [isNewSplit]);
-
-  const loadTransactions = async () => {
+  const loadTransactions = useCallback(async () => {
     const data = await TransactionService.getAll();
     const expenseList = data.filter((t) => t.type === 'expense');
     setTransactions(expenseList);
@@ -119,10 +121,16 @@ export default function SplitExpenseScreen() {
       ? expenseList.find((t) => t.id === txId)
       : expenseList[0];
     if (preselected) setSelectedTransaction(preselected);
-  };
+  }, [txId]);
+
+  useEffect(() => {
+    if (isNewSplit) {
+      void loadTransactions();
+    }
+  }, [isNewSplit, loadTransactions]);
 
   // ── Recalculate equal split ──────────────────────────────────────────────
-  useMemo(() => {
+  useEffect(() => {
     if (isNewSplit && splitMethod === 'equal' && members.length > 0) {
       const splitAmount = totalExpense / members.length;
       setMembers((current) => {
@@ -134,6 +142,18 @@ export default function SplitExpenseScreen() {
       });
     }
   }, [isNewSplit, splitMethod, members.length, totalExpense]);
+
+  // ── Recalculate amounts when percent changes ────────────────────────────
+  useEffect(() => {
+    if (isNewSplit && splitMethod === 'percent' && totalExpense > 0) {
+      setMembers((current) =>
+        current.map((m) => {
+          const pct = m.sharePercent ?? 0;
+          return { ...m, amount: (totalExpense * pct) / 100 };
+        }),
+      );
+    }
+  }, [isNewSplit, splitMethod, totalExpense]);
 
   const totalToReceive = members
     .filter((m) => m.role === 'member')
@@ -157,6 +177,22 @@ export default function SplitExpenseScreen() {
         type: 'error',
       });
       return;
+    }
+
+    if (splitMethod === 'percent') {
+      const totalPercent = members.reduce(
+        (sum, m) => sum + (m.sharePercent ?? 0),
+        0,
+      );
+      if (Math.abs(totalPercent - 100) > 0.5) {
+        setPopupConfig({
+          visible: true,
+          title: 'Percent Mismatch',
+          message: `Total percentage is ${totalPercent.toFixed(1)}%. It must add up to 100%.`,
+          type: 'error',
+        });
+        return;
+      }
     }
 
     const totalSplit = members.reduce((sum, m) => sum + m.amount, 0);
@@ -196,6 +232,7 @@ export default function SplitExpenseScreen() {
         otherMembers.map((m) => ({
           name: m.name,
           shareAmount: m.amount,
+          sharePercent: splitMethod === 'percent' ? m.sharePercent : undefined,
           status: 'pending' as const,
         })),
       );
@@ -206,7 +243,7 @@ export default function SplitExpenseScreen() {
         title: 'Success',
         message: 'Expense split successfully!',
         type: 'success',
-        onClose: () => router.back(),
+        onClose: () => router.replace('/splits' as Href),
       });
     } catch {
       setPopupConfig({
@@ -623,9 +660,10 @@ export default function SplitExpenseScreen() {
           <View style={styles.searchBox}>
             <Ionicons name="search" size={18} color={colors.textMuted} />
             <TextInput
+              ref={friendSearchRef}
               value={friendSearch}
               onChangeText={setFriendSearch}
-              placeholder="Type a name and press Add..."
+              placeholder="Enter friend's name and press Add"
               placeholderTextColor={colors.textMuted}
               style={styles.searchInput}
               onSubmitEditing={handleAddFriend}
@@ -722,9 +760,54 @@ export default function SplitExpenseScreen() {
                   {member.role === 'owner' ? 'PAID BY YOU' : 'OWES YOU'}
                 </Text>
               </View>
-              <View style={styles.memberAmountBox}>
+              {splitMethod === 'percent' && (
+                <View
+                  style={[
+                    styles.memberAmountBox,
+                    {
+                      minWidth: 60,
+                      borderWidth: 1,
+                      borderColor: colors.border,
+                    },
+                  ]}
+                >
+                  <TextInput
+                    style={styles.memberAmountInput}
+                    value={
+                      member.sharePercent ? String(member.sharePercent) : ''
+                    }
+                    keyboardType="numeric"
+                    onChangeText={(val) => {
+                      const pct = parseFloat(val) || 0;
+                      setMembers(
+                        members.map((m) =>
+                          m.id === member.id
+                            ? {
+                                ...m,
+                                sharePercent: pct,
+                                amount: (totalExpense * pct) / 100,
+                              }
+                            : m,
+                        ),
+                      );
+                    }}
+                    placeholder="0"
+                    placeholderTextColor={colors.textMuted}
+                  />
+                  <Text style={styles.memberCurrency}>%</Text>
+                </View>
+              )}
+              <View
+                style={[
+                  styles.memberAmountBox,
+                  splitMethod !== 'equal' && {
+                    borderWidth: 1,
+                    borderColor: colors.border,
+                  },
+                ]}
+              >
                 <Text style={styles.memberCurrency}>₹</Text>
-                {splitMethod === 'equal' ? (
+                {splitMethod === 'equal' || splitMethod === 'percent' ? (
                   <Text style={styles.memberAmount}>
                     {member.amount.toFixed(2)}
                   </Text>
@@ -746,13 +829,27 @@ export default function SplitExpenseScreen() {
                   />
                 )}
               </View>
+              {member.id !== 'you' && (
+                <TouchableOpacity
+                  onPress={() => handleRemoveFriend(member.id)}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                >
+                  <Ionicons
+                    name="close-circle"
+                    size={20}
+                    color={colors.textMuted}
+                  />
+                </TouchableOpacity>
+              )}
             </View>
           ))}
 
           {/* Add Friend */}
           <TouchableOpacity
             style={styles.addFriendBtn}
-            onPress={handleAddFriend}
+            onPress={() => {
+              friendSearchRef.current?.focus();
+            }}
           >
             <Ionicons name="person-add" size={18} color={colors.primary} />
             <Text style={styles.addFriendText}>Add Friend</Text>

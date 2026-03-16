@@ -8,7 +8,7 @@ import Animated, {
   useSharedValue,
   withSpring,
 } from 'react-native-reanimated';
-import { useTheme } from '../hooks/useTheme';
+import { useTheme, type ThemeColors } from '../hooks/useTheme';
 import { SPACING, TYPOGRAPHY, formatCurrency } from '../utils/constants';
 import type { Transaction } from '../utils/types';
 
@@ -130,7 +130,7 @@ const TransactionItem: React.FC<TransactionItemProps> = ({
 
 export default memo(TransactionItem);
 
-const createStyles = (colors: any) =>
+const createStyles = (colors: ThemeColors) =>
   StyleSheet.create({
     container: {
       flexDirection: 'row',

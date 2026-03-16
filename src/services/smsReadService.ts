@@ -1,7 +1,14 @@
 import { PermissionsAndroid, Platform } from 'react-native';
 import SmsAndroid from 'react-native-get-sms-android';
-import { TransactionService } from './transactionService';
 import { CategoryService } from './dataServices';
+import { TransactionService } from './transactionService';
+
+interface SmsMessage {
+  _id: number;
+  address: string;
+  body: string;
+  date: number;
+}
 
 export interface ParsedSms {
   id: string;
@@ -63,7 +70,7 @@ export const SmsReadService = {
         },
         async (count: number, smsList: string) => {
           try {
-            const messages = JSON.parse(smsList) as any[];
+            const messages = JSON.parse(smsList) as SmsMessage[];
             const parsedResults: ParsedSms[] = [];
 
             for (const msg of messages) {
@@ -82,7 +89,7 @@ export const SmsReadService = {
     });
   },
 
-  parseMessage(msg: any): ParsedSms | null {
+  parseMessage(msg: SmsMessage): ParsedSms | null {
     const body = msg.body;
     const cleanBody = body.toLowerCase();
 

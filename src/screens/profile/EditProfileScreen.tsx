@@ -27,6 +27,7 @@ export default function EditProfileScreen() {
   const { userProfile, setUserProfile } = useAppStore();
 
   const [name, setName] = useState(userProfile?.name || '');
+  const [phone, setPhone] = useState(userProfile?.phone || '');
   const [isSaving, setIsSaving] = useState(false);
   const [popupConfig, setPopupConfig] = useState<{
     visible: boolean;
@@ -52,6 +53,7 @@ export default function EditProfileScreen() {
       const updatedProfile = await UserProfileService.upsertProfile({
         userId: userProfile.userId,
         name: name.trim(),
+        phone: phone.trim() || undefined,
       });
       setUserProfile(updatedProfile);
       router.back();
@@ -121,6 +123,27 @@ export default function EditProfileScreen() {
             <Text style={styles.helpText}>
               Email cannot be changed directly.
             </Text>
+          </View>
+
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>PHONE / MOBILE</Text>
+            <View style={styles.inputWrap}>
+              <Ionicons
+                name="call-outline"
+                size={20}
+                color={colors.textMuted}
+              />
+              <Text style={styles.countryCode}>+91</Text>
+              <TextInput
+                value={phone}
+                onChangeText={setPhone}
+                style={styles.input}
+                placeholder="9876543210"
+                placeholderTextColor={colors.textMuted}
+                keyboardType="phone-pad"
+                maxLength={10}
+              />
+            </View>
           </View>
 
           <View style={styles.spacer} />
@@ -213,6 +236,11 @@ const createStyles = (colors: ThemeColors) =>
       ...TYPOGRAPHY.body,
       color: colors.textPrimary,
       fontWeight: '600',
+    },
+    countryCode: {
+      ...TYPOGRAPHY.body,
+      color: colors.textSecondary,
+      fontWeight: '700',
     },
     helpText: {
       fontSize: 11,

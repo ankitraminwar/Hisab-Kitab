@@ -1,28 +1,29 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  TouchableOpacity,
-  Modal,
-  TextInput,
-} from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import Animated, { FadeInDown } from 'react-native-reanimated';
+import { differenceInDays } from 'date-fns';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
-  SPACING,
+  Alert,
+  Modal,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+} from 'react-native';
+import Animated, { FadeInDown } from 'react-native-reanimated';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { Button, Card, EmptyState, ProgressBar } from '../../components/common';
+import { useTheme, type ThemeColors } from '../../hooks/useTheme';
+import { GoalService } from '../../services/dataService';
+import { useAppStore } from '../../store/appStore';
+import {
   RADIUS,
+  SPACING,
   TYPOGRAPHY,
   formatCurrency,
 } from '../../utils/constants';
-import { GoalService } from '../../services/dataService';
 import type { Goal } from '../../utils/types';
-import { Card, ProgressBar, EmptyState, Button } from '../../components/common';
-import { differenceInDays } from 'date-fns';
-import { useAppStore } from '../../store/appStore';
-import { useTheme, type ThemeColors } from '../../hooks/useTheme';
 
 const GOAL_COLORS = [
   '#7C3AED',
@@ -162,6 +163,23 @@ export default function GoalsScreen() {
                   key={goal.id}
                   goal={goal}
                   onFund={() => setSelectedGoal(goal)}
+                  onDelete={() => {
+                    Alert.alert(
+                      'Delete Goal',
+                      `Are you sure you want to delete "${goal.name}"?`,
+                      [
+                        { text: 'Cancel', style: 'cancel' },
+                        {
+                          text: 'Delete',
+                          style: 'destructive',
+                          onPress: async () => {
+                            await GoalService.delete(goal.id);
+                            void loadGoals();
+                          },
+                        },
+                      ],
+                    );
+                  }}
                   colors={colors}
                 />
               ))}
@@ -172,15 +190,32 @@ export default function GoalsScreen() {
       </ScrollView>
 
       {/* Fund Goal Modal */}
-      <Modal visible={!!selectedGoal} animationType="fade" transparent>
-        <View style={StyleSheet.absoluteFillObject}>
+      <Modal
+        visible={!!selectedGoal}
+        animationType="fade"
+        transparent
+        onRequestClose={() => {
+          setSelectedGoal(null);
+          setFundAmount('');
+        }}
+      >
+        <TouchableOpacity
+          style={StyleSheet.absoluteFillObject}
+          activeOpacity={1}
+          onPress={() => {
+            setSelectedGoal(null);
+            setFundAmount('');
+          }}
+        >
           <View
             style={[
               StyleSheet.absoluteFillObject,
               { backgroundColor: 'rgba(0,0,0,0.6)' },
             ]}
           />
-          <View
+          <TouchableOpacity
+            activeOpacity={1}
+            onPress={() => {}}
             style={{
               backgroundColor: colors.bgCard,
               borderRadius: RADIUS.xl,
@@ -248,8 +283,8 @@ export default function GoalsScreen() {
               onPress={() => void handleFund()}
               disabled={!fundAmount}
             />
-          </View>
-        </View>
+          </TouchableOpacity>
+        </TouchableOpacity>
       </Modal>
 
       <AddGoalModal
@@ -269,10 +304,12 @@ export default function GoalsScreen() {
 const GoalCard = ({
   goal,
   onFund,
+  onDelete,
   colors,
 }: {
   goal: Goal;
   onFund: () => void;
+  onDelete: () => void;
   colors: ThemeColors;
 }) => {
   const styles = useMemo(() => cardStyles(colors), [colors]);
@@ -283,7 +320,7 @@ const GoalCard = ({
     : 'No deadline';
 
   return (
-    <Card style={[styles.card, isCompleted ? { opacity: 0.7 } : {}] as any}>
+    <Card style={{ ...styles.card, ...(isCompleted ? { opacity: 0.7 } : {}) }}>
       <View style={styles.header}>
         <View style={styles.iconInfo}>
           <View
@@ -324,17 +361,39 @@ const GoalCard = ({
       </View>
 
       {!isCompleted && (
+        <View style={{ flexDirection: 'row', gap: SPACING.sm }}>
+          <TouchableOpacity
+            style={[
+              styles.fundButton,
+              { backgroundColor: colors.bgElevated, flex: 1 },
+            ]}
+            onPress={onFund}
+          >
+            <Ionicons
+              name="add-circle-outline"
+              size={18}
+              color={colors.primary}
+            />
+            <Text style={[styles.fundText, { color: colors.primary }]}>
+              Add Funds
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.fundButton, { backgroundColor: colors.bgElevated }]}
+            onPress={onDelete}
+          >
+            <Ionicons name="trash-outline" size={18} color={colors.expense} />
+          </TouchableOpacity>
+        </View>
+      )}
+      {isCompleted && (
         <TouchableOpacity
           style={[styles.fundButton, { backgroundColor: colors.bgElevated }]}
-          onPress={onFund}
+          onPress={onDelete}
         >
-          <Ionicons
-            name="add-circle-outline"
-            size={18}
-            color={colors.primary}
-          />
-          <Text style={[styles.fundText, { color: colors.primary }]}>
-            Add Funds
+          <Ionicons name="trash-outline" size={18} color={colors.expense} />
+          <Text style={[styles.fundText, { color: colors.expense }]}>
+            Delete
           </Text>
         </TouchableOpacity>
       )}
@@ -386,9 +445,22 @@ const AddGoalModal = ({
   };
 
   return (
-    <Modal visible={visible} animationType="slide" transparent>
-      <View style={styles.overlay}>
-        <View style={styles.sheet}>
+    <Modal
+      visible={visible}
+      animationType="slide"
+      transparent
+      onRequestClose={onClose}
+    >
+      <TouchableOpacity
+        style={styles.overlay}
+        activeOpacity={1}
+        onPress={onClose}
+      >
+        <TouchableOpacity
+          style={styles.sheet}
+          activeOpacity={1}
+          onPress={() => {}}
+        >
           <View style={styles.handle} />
           <Text style={styles.title}>New Goal</Text>
 
@@ -474,8 +546,8 @@ const AddGoalModal = ({
               />
             </View>
           </ScrollView>
-        </View>
-      </View>
+        </TouchableOpacity>
+      </TouchableOpacity>
     </Modal>
   );
 };

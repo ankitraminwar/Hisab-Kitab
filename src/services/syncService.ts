@@ -165,7 +165,7 @@ class SyncService {
       return;
     }
     const pendingItems = await listPendingSyncItems();
-    const failures: Array<{ item: SyncQueueItem; reason: string }> = [];
+    const failures: { item: SyncQueueItem; reason: string }[] = [];
 
     for (const item of pendingItems) {
       try {
@@ -198,7 +198,10 @@ class SyncService {
     try {
       const payload = JSON.parse(item.payload) as Record<string, unknown>;
       const table = item.entity as SyncableTable;
-      const remoteData = mapLocalToRemoteRecord(item.entity as any, payload);
+      const remoteData = mapLocalToRemoteRecord(
+        item.entity as SyncableTable,
+        payload,
+      );
       const recordId = String(payload.id ?? item.recordId);
 
       const { data: remoteRecord, error: remoteError } = await supabase

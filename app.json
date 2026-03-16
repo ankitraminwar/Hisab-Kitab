@@ -49,6 +49,46 @@
           "icon": "./assets/images/android-icon-monochrome.png",
           "color": "#7C3AED"
         }
+      ],
+      [
+        "react-native-android-widget",
+        {
+          "widgets": [
+            {
+              "name": "ExpenseSummary",
+              "label": "Expense Summary",
+              "description": "View your monthly spending and top expense categories",
+              "minWidth": "250dp",
+              "minHeight": "110dp",
+              "targetCellWidth": 4,
+              "targetCellHeight": 2,
+              "resizeMode": "horizontal|vertical",
+              "updatePeriodMillis": 1800000
+            },
+            {
+              "name": "QuickAdd",
+              "label": "Quick Add",
+              "description": "Quickly add a new transaction",
+              "minWidth": "110dp",
+              "minHeight": "110dp",
+              "targetCellWidth": 2,
+              "targetCellHeight": 2,
+              "resizeMode": "none",
+              "updatePeriodMillis": 0
+            },
+            {
+              "name": "BudgetHealth",
+              "label": "Budget Health",
+              "description": "Monitor your budget usage at a glance",
+              "minWidth": "250dp",
+              "minHeight": "57dp",
+              "targetCellWidth": 4,
+              "targetCellHeight": 1,
+              "resizeMode": "horizontal",
+              "updatePeriodMillis": 1800000
+            }
+          ]
+        }
       ]
     ],
     "experiments": {

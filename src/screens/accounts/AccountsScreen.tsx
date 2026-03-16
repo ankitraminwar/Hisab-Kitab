@@ -1,27 +1,27 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  TouchableOpacity,
-  Modal,
-  TextInput,
-} from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import Animated, { FadeInDown } from 'react-native-reanimated';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
-  SPACING,
+  Modal,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+} from 'react-native';
+import Animated, { FadeInDown } from 'react-native-reanimated';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { Button, Card } from '../../components/common';
+import { useTheme, type ThemeColors } from '../../hooks/useTheme';
+import { AccountService } from '../../services/dataServices';
+import { useAppStore } from '../../store/appStore';
+import {
   RADIUS,
+  SPACING,
   TYPOGRAPHY,
   formatCurrency,
 } from '../../utils/constants';
-import { useTheme } from '../../hooks/useTheme';
-import { AccountService } from '../../services/dataServices';
-import { Account, AccountType } from '../../utils/types';
-import { Card, Button } from '../../components/common';
-import { useAppStore } from '../../store/appStore';
+import type { Account, AccountType, IoniconsName } from '../../utils/types';
 
 const ACCOUNT_TYPES: {
   key: AccountType;
@@ -149,7 +149,7 @@ const AccountCard: React.FC<{ account: Account; onDelete: () => void }> = ({
           ]}
         >
           <Ionicons
-            name={account.icon as any}
+            name={account.icon as IoniconsName}
             size={22}
             color={account.color}
           />
@@ -227,8 +227,16 @@ const AddAccountModal: React.FC<{
       animationType="slide"
       onRequestClose={onClose}
     >
-      <View style={mStyles.overlay}>
-        <View style={mStyles.sheet}>
+      <TouchableOpacity
+        style={mStyles.overlay}
+        activeOpacity={1}
+        onPress={onClose}
+      >
+        <TouchableOpacity
+          style={mStyles.sheet}
+          activeOpacity={1}
+          onPress={() => {}}
+        >
           <View style={mStyles.handle} />
           <Text style={mStyles.title}>Add Account</Text>
 
@@ -251,7 +259,7 @@ const AddAccountModal: React.FC<{
                 ]}
               >
                 <Ionicons
-                  name={t.icon as any}
+                  name={t.icon as IoniconsName}
                   size={14}
                   color={type === t.key ? '#fff' : colors.textMuted}
                 />
@@ -315,13 +323,13 @@ const AddAccountModal: React.FC<{
               style={{ flex: 1 }}
             />
           </View>
-        </View>
-      </View>
+        </TouchableOpacity>
+      </TouchableOpacity>
     </Modal>
   );
 };
 
-function createModalStyles(colors: any) {
+function createModalStyles(colors: ThemeColors) {
   return StyleSheet.create({
     overlay: {
       flex: 1,
@@ -389,7 +397,7 @@ function createModalStyles(colors: any) {
   });
 }
 
-function createStyles(colors: any) {
+function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
     container: { flex: 1, backgroundColor: colors.bg },
     header: {
