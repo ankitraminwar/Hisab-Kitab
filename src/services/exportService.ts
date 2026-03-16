@@ -1,4 +1,3 @@
-import * as DocumentPicker from 'expo-document-picker';
 import {
   cacheDirectory,
   documentDirectory,
@@ -120,6 +119,7 @@ export const exportService = {
     );
   },
   importBackupJson: async (): Promise<{ imported: number } | null> => {
+    const DocumentPicker = await import('expo-document-picker');
     const result = await DocumentPicker.getDocumentAsync({
       type: 'application/json',
       copyToCacheDirectory: true,

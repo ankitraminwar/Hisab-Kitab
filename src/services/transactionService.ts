@@ -7,8 +7,15 @@ import type {
   TransactionFilters,
   TransactionType,
 } from '@/utils/types';
-import { refreshAllWidgets } from '@/widgets/refreshWidgets';
 import type { SQLiteBindValue } from 'expo-sqlite';
+
+/** Lazy-import to break the require cycle:
+ *  transactionService → refreshWidgets → widgetDataService → transactionService */
+const refreshAllWidgets = async () => {
+  const { refreshAllWidgets: refresh } =
+    await import('@/widgets/refreshWidgets');
+  return refresh();
+};
 
 const bindValue = (value: unknown): SQLiteBindValue => {
   if (
