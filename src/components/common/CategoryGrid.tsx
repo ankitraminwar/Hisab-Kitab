@@ -48,7 +48,7 @@ export const CategoryGrid: React.FC<CategoryGridProps> = ({
                   {
                     backgroundColor: isSelected
                       ? catColor + '15'
-                      : colors.bgCard,
+                      : 'transparent',
                     borderColor: isSelected ? catColor + '80' : colors.border,
                     borderWidth: isSelected ? 2 : 1,
                   },

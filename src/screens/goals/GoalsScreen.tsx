@@ -3,7 +3,9 @@ import { differenceInDays } from 'date-fns';
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   Alert,
+  KeyboardAvoidingView,
   Modal,
+  Platform,
   ScrollView,
   StyleSheet,
   Text,
@@ -199,92 +201,101 @@ export default function GoalsScreen() {
           setFundAmount('');
         }}
       >
-        <TouchableOpacity
-          style={StyleSheet.absoluteFillObject}
-          activeOpacity={1}
-          onPress={() => {
-            setSelectedGoal(null);
-            setFundAmount('');
-          }}
+        <KeyboardAvoidingView
+          style={{ flex: 1 }}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         >
-          <View
-            style={[
-              StyleSheet.absoluteFillObject,
-              { backgroundColor: 'rgba(0,0,0,0.6)' },
-            ]}
-          />
           <TouchableOpacity
+            style={StyleSheet.absoluteFillObject}
             activeOpacity={1}
-            onPress={() => {}}
-            style={{
-              backgroundColor: colors.bgCard,
-              borderRadius: RADIUS.xl,
-              padding: SPACING.xl,
-              width: '90%',
-              alignSelf: 'center',
-              marginTop: '30%',
-              borderWidth: 1,
-              borderColor: colors.border,
+            onPress={() => {
+              setSelectedGoal(null);
+              setFundAmount('');
             }}
           >
             <View
+              style={[
+                StyleSheet.absoluteFillObject,
+                { backgroundColor: 'rgba(0,0,0,0.6)' },
+              ]}
+            />
+            <TouchableOpacity
+              activeOpacity={1}
+              onPress={() => {}}
               style={{
-                flexDirection: 'row',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                marginBottom: SPACING.sm,
-              }}
-            >
-              <Text style={{ ...TYPOGRAPHY.h3, color: colors.textPrimary }}>
-                Add Funds
-              </Text>
-              <TouchableOpacity
-                onPress={() => {
-                  setSelectedGoal(null);
-                  setFundAmount('');
-                }}
-              >
-                <Ionicons name="close" size={24} color={colors.textSecondary} />
-              </TouchableOpacity>
-            </View>
-
-            <Text
-              style={{
-                ...TYPOGRAPHY.body,
-                color: colors.textSecondary,
-                marginBottom: SPACING.lg,
-              }}
-            >
-              Funding: {selectedGoal?.name}
-            </Text>
-
-            <TextInput
-              style={{
-                backgroundColor: colors.bgInput,
+                backgroundColor: colors.bgCard,
+                borderRadius: RADIUS.xl,
+                padding: SPACING.xl,
+                width: '90%',
+                alignSelf: 'center',
+                marginTop: '30%',
                 borderWidth: 1,
                 borderColor: colors.border,
-                borderRadius: RADIUS.md,
-                padding: SPACING.md,
-                color: colors.textPrimary,
-                ...TYPOGRAPHY.body,
-                marginBottom: SPACING.lg,
               }}
-              keyboardType="numeric"
-              value={fundAmount}
-              onChangeText={setFundAmount}
-              placeholder="0.00"
-              placeholderTextColor={colors.textMuted}
-              autoFocus
-              keyboardAppearance={isDark ? 'dark' : 'light'}
-            />
+            >
+              <View
+                style={{
+                  flexDirection: 'row',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  marginBottom: SPACING.sm,
+                }}
+              >
+                <Text style={{ ...TYPOGRAPHY.h3, color: colors.textPrimary }}>
+                  Add Funds
+                </Text>
+                <TouchableOpacity
+                  onPress={() => {
+                    setSelectedGoal(null);
+                    setFundAmount('');
+                  }}
+                >
+                  <Ionicons
+                    name="close"
+                    size={24}
+                    color={colors.textSecondary}
+                  />
+                </TouchableOpacity>
+              </View>
 
-            <Button
-              title="Add Funds"
-              onPress={() => void handleFund()}
-              disabled={!fundAmount}
-            />
+              <Text
+                style={{
+                  ...TYPOGRAPHY.body,
+                  color: colors.textSecondary,
+                  marginBottom: SPACING.lg,
+                }}
+              >
+                Funding: {selectedGoal?.name}
+              </Text>
+
+              <TextInput
+                style={{
+                  backgroundColor: colors.bgInput,
+                  borderWidth: 1,
+                  borderColor: colors.border,
+                  borderRadius: RADIUS.md,
+                  padding: SPACING.md,
+                  color: colors.textPrimary,
+                  ...TYPOGRAPHY.body,
+                  marginBottom: SPACING.lg,
+                }}
+                keyboardType="numeric"
+                value={fundAmount}
+                onChangeText={setFundAmount}
+                placeholder="0.00"
+                placeholderTextColor={colors.textMuted}
+                autoFocus
+                keyboardAppearance={isDark ? 'dark' : 'light'}
+              />
+
+              <Button
+                title="Add Funds"
+                onPress={() => void handleFund()}
+                disabled={!fundAmount}
+              />
+            </TouchableOpacity>
           </TouchableOpacity>
-        </TouchableOpacity>
+        </KeyboardAvoidingView>
       </Modal>
 
       <AddGoalModal
@@ -451,103 +462,108 @@ const AddGoalModal = ({
       transparent
       onRequestClose={onClose}
     >
-      <TouchableOpacity
-        style={styles.overlay}
-        activeOpacity={1}
-        onPress={onClose}
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
         <TouchableOpacity
-          style={styles.sheet}
+          style={styles.overlay}
           activeOpacity={1}
-          onPress={() => {}}
+          onPress={onClose}
         >
-          <View style={styles.handle} />
-          <Text style={styles.title}>New Goal</Text>
+          <TouchableOpacity
+            style={styles.sheet}
+            activeOpacity={1}
+            onPress={() => {}}
+          >
+            <View style={styles.handle} />
+            <Text style={styles.title}>New Goal</Text>
 
-          <ScrollView showsVerticalScrollIndicator={false}>
-            <TextInput
-              style={styles.input}
-              placeholder="Goal Name (e.g. New Car)"
-              placeholderTextColor={colors.textMuted}
-              value={name}
-              onChangeText={setName}
-            />
+            <ScrollView showsVerticalScrollIndicator={false}>
+              <TextInput
+                style={styles.input}
+                placeholder="Goal Name (e.g. New Car)"
+                placeholderTextColor={colors.textMuted}
+                value={name}
+                onChangeText={setName}
+              />
 
-            <TextInput
-              style={styles.input}
-              placeholder="Target Amount"
-              placeholderTextColor={colors.textMuted}
-              keyboardType="numeric"
-              value={targetAmount}
-              onChangeText={setTargetAmount}
-              keyboardAppearance={isDark ? 'dark' : 'light'}
-            />
+              <TextInput
+                style={styles.input}
+                placeholder="Target Amount"
+                placeholderTextColor={colors.textMuted}
+                keyboardType="numeric"
+                value={targetAmount}
+                onChangeText={setTargetAmount}
+                keyboardAppearance={isDark ? 'dark' : 'light'}
+              />
 
-            <Text style={styles.label}>Style</Text>
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              style={styles.selector}
-            >
-              {GOAL_COLORS.map((c) => (
-                <TouchableOpacity
-                  key={c}
-                  onPress={() => setColor(c)}
-                  style={[
-                    styles.colorOption,
-                    { backgroundColor: c },
-                    color === c && styles.selectedOption,
-                  ]}
-                />
-              ))}
-            </ScrollView>
-
-            <Text style={styles.label}>Icon</Text>
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              style={styles.selector}
-            >
-              {GOAL_ICONS.map((i) => (
-                <TouchableOpacity
-                  key={i}
-                  onPress={() => setIcon(i)}
-                  style={[
-                    styles.iconOption,
-                    { backgroundColor: colors.bgElevated },
-                    icon === i && [
-                      styles.selectedOption,
-                      { borderColor: color },
-                    ],
-                  ]}
-                >
-                  <Ionicons
-                    name={i as never}
-                    size={24}
-                    color={icon === i ? color : colors.textMuted}
+              <Text style={styles.label}>Style</Text>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                style={styles.selector}
+              >
+                {GOAL_COLORS.map((c) => (
+                  <TouchableOpacity
+                    key={c}
+                    onPress={() => setColor(c)}
+                    style={[
+                      styles.colorOption,
+                      { backgroundColor: c },
+                      color === c && styles.selectedOption,
+                    ]}
                   />
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
+                ))}
+              </ScrollView>
 
-            <View style={styles.actions}>
-              <Button
-                title="Cancel"
-                variant="secondary"
-                onPress={onClose}
-                style={styles.flex1}
-              />
-              <Button
-                title="Save Goal"
-                onPress={() => void handleSave()}
-                loading={loading}
-                style={styles.flex1}
-                disabled={!name || !targetAmount}
-              />
-            </View>
-          </ScrollView>
+              <Text style={styles.label}>Icon</Text>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                style={styles.selector}
+              >
+                {GOAL_ICONS.map((i) => (
+                  <TouchableOpacity
+                    key={i}
+                    onPress={() => setIcon(i)}
+                    style={[
+                      styles.iconOption,
+                      { backgroundColor: colors.bgElevated },
+                      icon === i && [
+                        styles.selectedOption,
+                        { borderColor: color },
+                      ],
+                    ]}
+                  >
+                    <Ionicons
+                      name={i as never}
+                      size={24}
+                      color={icon === i ? color : colors.textMuted}
+                    />
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+
+              <View style={styles.actions}>
+                <Button
+                  title="Cancel"
+                  variant="secondary"
+                  onPress={onClose}
+                  style={styles.flex1}
+                />
+                <Button
+                  title="Save Goal"
+                  onPress={() => void handleSave()}
+                  loading={loading}
+                  style={styles.flex1}
+                  disabled={!name || !targetAmount}
+                />
+              </View>
+            </ScrollView>
+          </TouchableOpacity>
         </TouchableOpacity>
-      </TouchableOpacity>
+      </KeyboardAvoidingView>
     </Modal>
   );
 };

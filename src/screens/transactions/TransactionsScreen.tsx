@@ -25,6 +25,7 @@ import { SearchBar } from '../../components/common';
 import TransactionItem from '../../components/TransactionItem';
 import { useTheme, type ThemeColors } from '../../hooks/useTheme';
 import { AccountService, CategoryService } from '../../services/dataServices';
+import { triggerBackgroundSync } from '../../services/syncService';
 import { TransactionService } from '../../services/transactionService';
 import { useAppStore } from '../../store/appStore';
 import {
@@ -219,6 +220,7 @@ export default function TransactionsScreen() {
 
   const onRefresh = async () => {
     setRefreshing(true);
+    await triggerBackgroundSync('pull-to-refresh');
     await loadData(0, true);
     setRefreshing(false);
   };

@@ -101,11 +101,15 @@ const TransactionItem: React.FC<TransactionItemProps> = ({
           </Text>
           <View style={styles.meta}>
             <Text style={styles.category}>{item.categoryName}</Text>
-            <View style={styles.dot} />
-            <Text style={styles.category}>
-              {format(new Date(item.date), 'hh:mm a')}
-            </Text>
-            {item.tags.length > 0 && (
+            {item.date ? (
+              <>
+                <View style={styles.dot} />
+                <Text style={styles.category}>
+                  {format(new Date(item.date), 'hh:mm a')}
+                </Text>
+              </>
+            ) : null}
+            {Array.isArray(item.tags) && item.tags.length > 0 && (
               <>
                 <View style={styles.dot} />
                 <Text style={styles.tag}>{item.tags[0]}</Text>
@@ -120,7 +124,7 @@ const TransactionItem: React.FC<TransactionItemProps> = ({
             {formatCurrency(item.amount)}
           </Text>
           <Text style={styles.date}>
-            {format(new Date(item.date), 'dd MMM')}
+            {item.date ? format(new Date(item.date), 'dd MMM') : ''}
           </Text>
         </View>
       </Animated.View>

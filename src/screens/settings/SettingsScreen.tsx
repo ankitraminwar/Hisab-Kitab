@@ -4,6 +4,7 @@ import * as LocalAuthentication from 'expo-local-authentication';
 import { useRouter, type Href } from 'expo-router';
 import React, { useEffect, useMemo, useState } from 'react';
 import {
+  ActivityIndicator,
   Alert,
   Image,
   ScrollView,
@@ -52,6 +53,7 @@ export default function SettingsScreen() {
   }>({ visible: false, title: '', message: '', type: 'info' });
   const [showExportPicker, setShowExportPicker] = useState(false);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
+  const [syncing, setSyncing] = useState(false);
 
   useEffect(() => {
     const checkBiometrics = async () => {
@@ -78,22 +80,27 @@ export default function SettingsScreen() {
   };
 
   const handleSync = async () => {
-    const result = await syncService.sync('manual');
-    if (result.success) {
+    setSyncing(true);
+    try {
+      const result = await syncService.sync('manual');
+      if (result.success) {
+        setPopupConfig({
+          visible: true,
+          title: 'Success',
+          message: 'Data synced successfully to the cloud.',
+          type: 'success',
+        });
+        return;
+      }
       setPopupConfig({
         visible: true,
-        title: 'Success',
-        message: 'Data synced successfully to the cloud.',
-        type: 'success',
+        title: 'Sync Failed',
+        message: result.error ?? 'Could not sync data. Check your connection.',
+        type: 'error',
       });
-      return;
+    } finally {
+      setSyncing(false);
     }
-    setPopupConfig({
-      visible: true,
-      title: 'Sync Failed',
-      message: result.error ?? 'Could not sync data. Check your connection.',
-      type: 'error',
-    });
   };
 
   const handleExportCsv = async () => {
@@ -218,7 +225,7 @@ export default function SettingsScreen() {
         title="Settings"
         rightAction={{
           icon: 'help-circle-outline',
-          onPress: () => {},
+          onPress: () => router.push('/faq' as Href),
         }}
       />
 
@@ -419,9 +426,14 @@ export default function SettingsScreen() {
             </View>
             <TouchableOpacity
               onPress={() => void handleSync()}
-              style={styles.actionBtn}
+              style={[styles.actionBtn, syncing && { opacity: 0.6 }]}
+              disabled={syncing}
             >
-              <Text style={styles.actionBtnText}>Sync Now</Text>
+              {syncing ? (
+                <ActivityIndicator size="small" color={colors.primary} />
+              ) : (
+                <Text style={styles.actionBtnText}>Sync Now</Text>
+              )}
             </TouchableOpacity>
           </View>
 

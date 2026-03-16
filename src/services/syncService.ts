@@ -21,6 +21,20 @@ import {
   mapRemoteToLocalRecord,
 } from './syncTransform';
 
+/** Extract a readable message from any thrown value (including Supabase PostgrestError). */
+const errorMessage = (error: unknown): string => {
+  if (error instanceof Error) return error.message;
+  if (
+    typeof error === 'object' &&
+    error !== null &&
+    'message' in error &&
+    typeof (error as { message: unknown }).message === 'string'
+  ) {
+    return (error as { message: string }).message;
+  }
+  return String(error);
+};
+
 const MAX_RETRY_DELAY_MS = 60_000;
 const BASE_DELAY_MS = 1_000;
 
@@ -122,7 +136,7 @@ class SyncService {
         return { success: false, error: message };
       }
 
-      const message = error instanceof Error ? error.message : 'Sync failed';
+      const message = errorMessage(error) || 'Sync failed';
       useAppStore.getState().setSyncState({
         syncInProgress: false,
         lastSyncError: message,
@@ -158,6 +172,25 @@ class SyncService {
     return false;
   }
 
+  /**
+   * Tables ordered by FK dependency: parents before children.
+   * Categories & accounts must exist before transactions reference them, etc.
+   */
+  private static readonly TABLE_PUSH_ORDER: Record<string, number> = {
+    user_profile: 0,
+    accounts: 0,
+    categories: 0,
+    payment_methods: 0,
+    goals: 0,
+    assets: 0,
+    liabilities: 0,
+    net_worth_history: 1,
+    transactions: 1,
+    budgets: 1,
+    split_expenses: 2,
+    split_members: 3,
+  };
+
   private async pushPendingChanges() {
     const session = await supabase.auth.getSession();
     const userId = session.data.session?.user?.id ?? null;
@@ -165,13 +198,21 @@ class SyncService {
       return;
     }
     const pendingItems = await listPendingSyncItems();
+
+    // Sort by FK dependency order so parent rows are pushed before children
+    pendingItems.sort((a, b) => {
+      const orderA = SyncService.TABLE_PUSH_ORDER[a.entity] ?? 1;
+      const orderB = SyncService.TABLE_PUSH_ORDER[b.entity] ?? 1;
+      return orderA - orderB;
+    });
+
     const failures: { item: SyncQueueItem; reason: string }[] = [];
 
     for (const item of pendingItems) {
       try {
         await this.pushQueueItem(item, userId);
       } catch (error) {
-        const reason = error instanceof Error ? error.message : String(error);
+        const reason = errorMessage(error);
         failures.push({ item, reason });
         console.warn(
           `Sync push failed for ${item.entity}/${item.recordId}:`,
@@ -274,10 +315,7 @@ class SyncService {
       await markRecordSyncStatus(table as never, recordId, 'synced', syncedAt);
       await removeFromSyncQueue(item.id);
     } catch (error) {
-      await incrementSyncRetry(
-        item.id,
-        error instanceof Error ? error.message : 'Push failed',
-      );
+      await incrementSyncRetry(item.id, errorMessage(error) || 'Push failed');
       throw error;
     }
   }

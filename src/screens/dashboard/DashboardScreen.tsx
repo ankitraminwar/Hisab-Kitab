@@ -32,6 +32,7 @@ import {
   BudgetService,
   NetWorthService,
 } from '../../services/dataServices';
+import { triggerBackgroundSync } from '../../services/syncService';
 import { TransactionService } from '../../services/transactionService';
 import { useAppStore } from '../../store/appStore';
 import {
@@ -355,6 +356,7 @@ export default function DashboardScreen() {
 
   const onRefresh = async () => {
     setRefreshing(true);
+    await triggerBackgroundSync('pull-to-refresh');
     await loadData();
     setRefreshing(false);
   };

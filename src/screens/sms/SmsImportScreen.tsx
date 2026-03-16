@@ -115,12 +115,28 @@ export default function SmsImportScreen() {
         </TouchableOpacity>
         <Text style={styles.title}>Import Transactions</Text>
         <View style={styles.headerActions}>
-          <TouchableOpacity style={styles.headerIcon}>
+          <TouchableOpacity
+            style={styles.headerIcon}
+            onPress={() => void scanSms()}
+          >
             <Ionicons name="refresh" size={20} color={colors.textSecondary} />
           </TouchableOpacity>
-          <TouchableOpacity style={styles.headerIcon}>
+          <TouchableOpacity
+            style={styles.headerIcon}
+            onPress={() => {
+              if (selectedIds.size === pending.length) {
+                setSelectedIds(new Set());
+              } else {
+                setSelectedIds(new Set(pending.map((p) => p.id)));
+              }
+            }}
+          >
             <Ionicons
-              name="ellipsis-vertical"
+              name={
+                selectedIds.size === pending.length
+                  ? 'checkbox'
+                  : 'checkbox-outline'
+              }
               size={20}
               color={colors.textSecondary}
             />

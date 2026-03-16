@@ -143,12 +143,17 @@ export const SmsReadService = {
     const otherCat =
       categories.find((c) => c.name === 'Other') || categories[0];
 
+    const { AccountService: AccService } = await import('./dataServices');
+    const accounts = await AccService.getAll();
+    const defaultAccount = accounts.find((a) => a.isDefault) || accounts[0];
+    const accountId = defaultAccount?.id ?? 'default';
+
     for (const sms of smsList) {
       await TransactionService.create({
         amount: sms.amount,
         type: sms.type,
         categoryId: otherCat.id,
-        accountId: 'default_account', // Should probably let user pick or handle multiple accounts
+        accountId,
         merchant: sms.merchant,
         notes: `Imported from SMS: ${sms.body.substring(0, 50)}...`,
         date: new Date(sms.date).toISOString().split('T')[0],
