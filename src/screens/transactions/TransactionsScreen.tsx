@@ -2,8 +2,16 @@ import { Ionicons } from '@expo/vector-icons';
 import { FlashList } from '@shopify/flash-list';
 import { format } from 'date-fns';
 import { useRouter } from 'expo-router';
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import {
+  Modal,
+  Pressable,
   RefreshControl,
   ScrollView,
   StyleSheet,
@@ -17,9 +25,15 @@ import { SearchBar } from '../../components/common';
 import TransactionItem from '../../components/TransactionItem';
 import { useTheme, type ThemeColors } from '../../hooks/useTheme';
 import { AccountService, CategoryService } from '../../services/dataServices';
+import { triggerBackgroundSync } from '../../services/syncService';
 import { TransactionService } from '../../services/transactionService';
 import { useAppStore } from '../../store/appStore';
-import { RADIUS, SPACING, TYPOGRAPHY } from '../../utils/constants';
+import {
+  RADIUS,
+  SPACING,
+  TYPOGRAPHY,
+  formatCurrency,
+} from '../../utils/constants';
 import type {
   Account,
   Category,
@@ -29,18 +43,93 @@ import type {
 } from '../../utils/types';
 
 type ListItem =
-  | { type: 'header'; title: string; key: string }
+  | { type: 'header'; title: string; key: string; total: number }
   | { type: 'transaction'; data: Transaction; key: string };
-
-interface FilterChip {
-  key: string;
-  label: string;
-  icon: string;
-  active: boolean;
-}
 
 const PAGE_SIZE = 20;
 
+// ─── Filter Bottom Sheet ──────────────────────────────────────────────────────
+const FilterSheet: React.FC<{
+  visible: boolean;
+  title: string;
+  onClose: () => void;
+  colors: ReturnType<typeof useTheme>['colors'];
+  children: React.ReactNode;
+}> = ({ visible, title, onClose, colors, children }) => (
+  <Modal
+    visible={visible}
+    transparent
+    animationType="slide"
+    onRequestClose={onClose}
+  >
+    <Pressable style={filterSheetStyles.overlay} onPress={onClose}>
+      <Pressable
+        style={[
+          filterSheetStyles.sheet,
+          { backgroundColor: colors.bgCard, borderColor: colors.border },
+        ]}
+        onPress={(e) => e.stopPropagation()}
+      >
+        <View style={filterSheetStyles.handle}>
+          <View
+            style={[
+              filterSheetStyles.handleBar,
+              { backgroundColor: colors.textMuted },
+            ]}
+          />
+        </View>
+        <View style={filterSheetStyles.sheetHeader}>
+          <Text
+            style={[
+              filterSheetStyles.sheetTitle,
+              { color: colors.textPrimary },
+            ]}
+          >
+            {title}
+          </Text>
+          <TouchableOpacity onPress={onClose}>
+            <Ionicons name="close" size={22} color={colors.textSecondary} />
+          </TouchableOpacity>
+        </View>
+        <ScrollView
+          style={filterSheetStyles.sheetContent}
+          showsVerticalScrollIndicator={false}
+        >
+          {children}
+          <View style={{ height: 32 }} />
+        </ScrollView>
+      </Pressable>
+    </Pressable>
+  </Modal>
+);
+
+const filterSheetStyles = StyleSheet.create({
+  overlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'flex-end',
+  },
+  sheet: {
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    maxHeight: '60%',
+    borderWidth: 1,
+    borderBottomWidth: 0,
+  },
+  handle: { alignItems: 'center', paddingTop: 12 },
+  handleBar: { width: 40, height: 4, borderRadius: 2, opacity: 0.3 },
+  sheetHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+  },
+  sheetTitle: { fontSize: 18, fontWeight: '700' },
+  sheetContent: { paddingHorizontal: 20, paddingBottom: 32 },
+});
+
+// ─── Main Screen ──────────────────────────────────────────────────────────────
 export default function TransactionsScreen() {
   const router = useRouter();
   const { colors } = useTheme();
@@ -49,6 +138,8 @@ export default function TransactionsScreen() {
   const dataRevision = useAppStore((state) => state.dataRevision);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [search, setSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(true);
@@ -60,18 +151,33 @@ export default function TransactionsScreen() {
 
   const [categories, setCategories] = useState<Category[]>([]);
   const [accounts, setAccounts] = useState<Account[]>([]);
-  const [showCatFilter, setShowCatFilter] = useState(false);
-  const [showAccFilter, setShowAccFilter] = useState(false);
-  const [showTypeFilter, setShowTypeFilter] = useState(false);
+  const [activeFilter, setActiveFilter] = useState<
+    'type' | 'category' | 'account' | null
+  >(null);
+
+  // Debounce search input
+  const handleSearchChange = useCallback((text: string) => {
+    setSearch(text);
+    if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+    searchTimerRef.current = setTimeout(() => {
+      setDebouncedSearch(text);
+    }, 300);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+    };
+  }, []);
 
   const buildFilters = useCallback(
     () => ({
       type: filterType,
       categoryId: filterCat,
       accountId: filterAcc,
-      search: search.trim() || undefined,
+      search: debouncedSearch.trim() || undefined,
     }),
-    [filterType, filterCat, filterAcc, search],
+    [filterType, filterCat, filterAcc, debouncedSearch],
   );
 
   const loadData = useCallback(
@@ -114,63 +220,57 @@ export default function TransactionsScreen() {
 
   const onRefresh = async () => {
     setRefreshing(true);
+    await triggerBackgroundSync('pull-to-refresh');
     await loadData(0, true);
     setRefreshing(false);
   };
 
-  // Group by month
+  // Group by month with totals
   const listData = useMemo((): ListItem[] => {
     const items: ListItem[] = [];
     let currentMonth = '';
+    let monthTotal = 0;
+    let headerIndex = -1;
+
     for (const tx of transactions) {
       const monthKey = format(new Date(tx.date), 'MMMM yyyy');
       if (monthKey !== currentMonth) {
+        if (headerIndex >= 0 && items[headerIndex].type === 'header') {
+          (items[headerIndex] as ListItem & { type: 'header' }).total =
+            monthTotal;
+        }
         currentMonth = monthKey;
+        monthTotal = 0;
+        headerIndex = items.length;
         items.push({
           type: 'header',
           title: monthKey,
           key: `header-${monthKey}`,
+          total: 0,
         });
       }
+      monthTotal +=
+        tx.type === 'expense'
+          ? -tx.amount
+          : tx.type === 'income'
+            ? tx.amount
+            : 0;
       items.push({ type: 'transaction', data: tx, key: tx.id });
+    }
+    if (headerIndex >= 0 && items[headerIndex].type === 'header') {
+      (items[headerIndex] as ListItem & { type: 'header' }).total = monthTotal;
     }
     return items;
   }, [transactions]);
 
-  const filterChips: FilterChip[] = useMemo(
-    () => [
-      {
-        key: 'type',
-        label: filterType
-          ? filterType.charAt(0).toUpperCase() + filterType.slice(1)
-          : 'Type',
-        icon: 'swap-vertical',
-        active: Boolean(filterType),
-      },
-      {
-        key: 'category',
-        label: filterCat
-          ? (categories.find((c) => c.id === filterCat)?.name ?? 'Category')
-          : 'Category',
-        icon: 'pricetag',
-        active: Boolean(filterCat),
-      },
-      {
-        key: 'account',
-        label: filterAcc
-          ? (accounts.find((a) => a.id === filterAcc)?.name ?? 'Account')
-          : 'Account',
-        icon: 'wallet',
-        active: Boolean(filterAcc),
-      },
-    ],
-    [filterType, filterCat, filterAcc, categories, accounts],
-  );
+  const activeFilterCount = [filterType, filterCat, filterAcc].filter(
+    Boolean,
+  ).length;
 
-  const handleChipPress = (key: string) => {
-    if (key === 'type') setShowTypeFilter((v) => !v);
-    if (key === 'category') setShowCatFilter((v) => !v);
-    if (key === 'account') setShowAccFilter((v) => !v);
+  const clearAllFilters = () => {
+    setFilterType(undefined);
+    setFilterCat(undefined);
+    setFilterAcc(undefined);
   };
 
   const renderItem = useCallback(
@@ -179,51 +279,70 @@ export default function TransactionsScreen() {
         return (
           <View style={styles.monthHeader}>
             <Text style={styles.monthText}>{item.title}</Text>
+            <Text
+              style={[
+                styles.monthTotal,
+                { color: item.total >= 0 ? colors.income : colors.expense },
+              ]}
+            >
+              {formatCurrency(item.total, true)}
+            </Text>
           </View>
         );
       }
-      const tx = item.data;
-      const debitCredit =
-        tx.type === 'income'
-          ? 'CREDIT'
-          : tx.type === 'expense'
-            ? 'DEBIT'
-            : null;
       return (
         <View style={styles.txCardWrapper}>
           <TransactionItem
-            item={tx}
-            onPress={() => router.push(`/transactions/${tx.id}`)}
+            item={item.data}
+            onPress={() => router.push(`/transactions/${item.data.id}`)}
           />
-          {debitCredit && (
-            <View
-              style={[
-                styles.badge,
-                {
-                  backgroundColor:
-                    debitCredit === 'CREDIT'
-                      ? colors.income + '20'
-                      : colors.expense + '20',
-                },
-              ]}
-            >
-              <Text
-                style={[
-                  styles.badgeText,
-                  {
-                    color:
-                      debitCredit === 'CREDIT' ? colors.income : colors.expense,
-                  },
-                ]}
-              >
-                {debitCredit}
-              </Text>
-            </View>
-          )}
         </View>
       );
     },
     [styles, colors, router],
+  );
+
+  const renderFilterOption = (
+    label: string,
+    isSelected: boolean,
+    onPress: () => void,
+    icon?: string,
+    iconColor?: string,
+  ) => (
+    <TouchableOpacity
+      key={label}
+      style={[styles.filterOption, isSelected && styles.filterOptionActive]}
+      onPress={onPress}
+      activeOpacity={0.7}
+    >
+      <View style={styles.filterOptionLeft}>
+        {icon && (
+          <View
+            style={[
+              styles.filterOptionIcon,
+              { backgroundColor: (iconColor ?? colors.primary) + '15' },
+            ]}
+          >
+            <Ionicons
+              name={icon as never}
+              size={18}
+              color={iconColor ?? colors.primary}
+            />
+          </View>
+        )}
+        <Text
+          style={[
+            styles.filterOptionText,
+            isSelected && { color: colors.primary, fontWeight: '700' },
+          ]}
+        >
+          {label}
+        </Text>
+      </View>
+      {isSelected && (
+        <Ionicons name="checkmark-circle" size={20} color={colors.primary} />
+      )}
+    </TouchableOpacity>
   );
 
   return (
@@ -231,7 +350,10 @@ export default function TransactionsScreen() {
       {/* Header */}
       <Animated.View entering={FadeInDown.duration(400)} style={styles.header}>
         <Text style={styles.title}>Transactions</Text>
-        <TouchableOpacity style={styles.menuBtn}>
+        <TouchableOpacity
+          style={styles.menuBtn}
+          onPress={() => router.push('/notifications')}
+        >
           <Ionicons
             name="notifications-outline"
             size={22}
@@ -248,158 +370,264 @@ export default function TransactionsScreen() {
         <SearchBar
           placeholder="Search transactions..."
           value={search}
-          onChangeText={setSearch}
+          onChangeText={handleSearchChange}
         />
       </Animated.View>
 
-      {/* Filter Chips — horizontal scroll */}
+      {/* Filter Chips */}
       <Animated.View entering={FadeInDown.duration(400).delay(150)}>
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.filterRow}
         >
-          {filterChips.map((chip) => (
+          {activeFilterCount > 0 && (
             <TouchableOpacity
-              key={chip.key}
-              style={[
-                styles.filterChip,
-                chip.active && styles.filterChipActive,
-              ]}
-              onPress={() => handleChipPress(chip.key)}
+              style={styles.clearChip}
+              onPress={clearAllFilters}
             >
-              <Ionicons
-                name={chip.icon as never}
-                size={13}
-                color={chip.active ? colors.primary : colors.textMuted}
-              />
-              <Text
-                style={[
-                  styles.filterChipText,
-                  chip.active && { color: colors.primary },
-                ]}
-              >
-                {chip.label}
+              <Ionicons name="close-circle" size={14} color={colors.expense} />
+              <Text style={[styles.filterChipText, { color: colors.expense }]}>
+                Clear
               </Text>
-              {chip.active && (
-                <TouchableOpacity
-                  onPress={() => {
-                    if (chip.key === 'type') setFilterType(undefined);
-                    if (chip.key === 'category') setFilterCat(undefined);
-                    if (chip.key === 'account') setFilterAcc(undefined);
-                  }}
-                >
-                  <Ionicons
-                    name="close-circle"
-                    size={14}
-                    color={colors.primary}
-                  />
-                </TouchableOpacity>
-              )}
-              {!chip.active && (
-                <Ionicons
-                  name="chevron-down"
-                  size={12}
-                  color={colors.textMuted}
-                />
-              )}
             </TouchableOpacity>
-          ))}
+          )}
+          <TouchableOpacity
+            style={[styles.filterChip, filterType && styles.filterChipActive]}
+            onPress={() => setActiveFilter('type')}
+          >
+            <Ionicons
+              name="swap-vertical"
+              size={13}
+              color={filterType ? colors.primary : colors.textMuted}
+            />
+            <Text
+              style={[
+                styles.filterChipText,
+                filterType && { color: colors.primary },
+              ]}
+            >
+              {filterType
+                ? filterType.charAt(0).toUpperCase() + filterType.slice(1)
+                : 'Type'}
+            </Text>
+            {filterType ? (
+              <TouchableOpacity
+                onPress={() => setFilterType(undefined)}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
+                <Ionicons
+                  name="close-circle"
+                  size={14}
+                  color={colors.primary}
+                />
+              </TouchableOpacity>
+            ) : (
+              <Ionicons
+                name="chevron-down"
+                size={12}
+                color={colors.textMuted}
+              />
+            )}
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.filterChip, filterCat && styles.filterChipActive]}
+            onPress={() => setActiveFilter('category')}
+          >
+            <Ionicons
+              name="pricetag"
+              size={13}
+              color={filterCat ? colors.primary : colors.textMuted}
+            />
+            <Text
+              style={[
+                styles.filterChipText,
+                filterCat && { color: colors.primary },
+              ]}
+            >
+              {filterCat
+                ? (categories.find((c) => c.id === filterCat)?.name ??
+                  'Category')
+                : 'Category'}
+            </Text>
+            {filterCat ? (
+              <TouchableOpacity
+                onPress={() => setFilterCat(undefined)}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
+                <Ionicons
+                  name="close-circle"
+                  size={14}
+                  color={colors.primary}
+                />
+              </TouchableOpacity>
+            ) : (
+              <Ionicons
+                name="chevron-down"
+                size={12}
+                color={colors.textMuted}
+              />
+            )}
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.filterChip, filterAcc && styles.filterChipActive]}
+            onPress={() => setActiveFilter('account')}
+          >
+            <Ionicons
+              name="wallet"
+              size={13}
+              color={filterAcc ? colors.primary : colors.textMuted}
+            />
+            <Text
+              style={[
+                styles.filterChipText,
+                filterAcc && { color: colors.primary },
+              ]}
+            >
+              {filterAcc
+                ? (accounts.find((a) => a.id === filterAcc)?.name ?? 'Account')
+                : 'Account'}
+            </Text>
+            {filterAcc ? (
+              <TouchableOpacity
+                onPress={() => setFilterAcc(undefined)}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
+                <Ionicons
+                  name="close-circle"
+                  size={14}
+                  color={colors.primary}
+                />
+              </TouchableOpacity>
+            ) : (
+              <Ionicons
+                name="chevron-down"
+                size={12}
+                color={colors.textMuted}
+              />
+            )}
+          </TouchableOpacity>
         </ScrollView>
       </Animated.View>
 
-      {/* Inline filter dropdowns */}
-      {showTypeFilter && (
-        <View style={styles.dropdown}>
-          {(['expense', 'income', 'transfer'] as TransactionType[]).map((t) => (
-            <TouchableOpacity
-              key={t}
-              style={styles.dropdownItem}
-              onPress={() => {
-                setFilterType(filterType === t ? undefined : t);
-                setShowTypeFilter(false);
-              }}
-            >
-              <Text
-                style={[
-                  styles.dropdownText,
-                  filterType === t && {
-                    color: colors.primary,
-                    fontWeight: '700',
-                  },
-                ]}
-              >
-                {t.charAt(0).toUpperCase() + t.slice(1)}
-              </Text>
-              {filterType === t && (
-                <Ionicons name="checkmark" size={16} color={colors.primary} />
-              )}
-            </TouchableOpacity>
-          ))}
-        </View>
-      )}
+      {/* Type Filter Sheet */}
+      <FilterSheet
+        visible={activeFilter === 'type'}
+        title="Transaction Type"
+        onClose={() => setActiveFilter(null)}
+        colors={colors}
+      >
+        {renderFilterOption(
+          'All Types',
+          !filterType,
+          () => {
+            setFilterType(undefined);
+            setActiveFilter(null);
+          },
+          'list',
+          colors.textSecondary,
+        )}
+        {renderFilterOption(
+          'Expense',
+          filterType === 'expense',
+          () => {
+            setFilterType('expense');
+            setActiveFilter(null);
+          },
+          'arrow-up-circle',
+          colors.expense,
+        )}
+        {renderFilterOption(
+          'Income',
+          filterType === 'income',
+          () => {
+            setFilterType('income');
+            setActiveFilter(null);
+          },
+          'arrow-down-circle',
+          colors.income,
+        )}
+        {renderFilterOption(
+          'Transfer',
+          filterType === 'transfer',
+          () => {
+            setFilterType('transfer');
+            setActiveFilter(null);
+          },
+          'swap-horizontal-outline',
+          colors.transfer,
+        )}
+      </FilterSheet>
 
-      {showCatFilter && (
-        <ScrollView style={styles.dropdownScrollable} nestedScrollEnabled>
-          {categories.map((c) => (
-            <TouchableOpacity
-              key={c.id}
-              style={styles.dropdownItem}
-              onPress={() => {
-                setFilterCat(filterCat === c.id ? undefined : c.id);
-                setShowCatFilter(false);
-              }}
-            >
-              <Text
-                style={[
-                  styles.dropdownText,
-                  filterCat === c.id && {
-                    color: colors.primary,
-                    fontWeight: '700',
-                  },
-                ]}
-              >
-                {c.name}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
-      )}
+      {/* Category Filter Sheet */}
+      <FilterSheet
+        visible={activeFilter === 'category'}
+        title="Category"
+        onClose={() => setActiveFilter(null)}
+        colors={colors}
+      >
+        {renderFilterOption(
+          'All Categories',
+          !filterCat,
+          () => {
+            setFilterCat(undefined);
+            setActiveFilter(null);
+          },
+          'grid',
+          colors.textSecondary,
+        )}
+        {categories.map((c) =>
+          renderFilterOption(
+            c.name,
+            filterCat === c.id,
+            () => {
+              setFilterCat(c.id);
+              setActiveFilter(null);
+            },
+            c.icon,
+            c.color,
+          ),
+        )}
+      </FilterSheet>
 
-      {showAccFilter && (
-        <View style={styles.dropdown}>
-          {accounts.map((a) => (
-            <TouchableOpacity
-              key={a.id}
-              style={styles.dropdownItem}
-              onPress={() => {
-                setFilterAcc(filterAcc === a.id ? undefined : a.id);
-                setShowAccFilter(false);
-              }}
-            >
-              <Text
-                style={[
-                  styles.dropdownText,
-                  filterAcc === a.id && {
-                    color: colors.primary,
-                    fontWeight: '700',
-                  },
-                ]}
-              >
-                {a.name}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-      )}
+      {/* Account Filter Sheet */}
+      <FilterSheet
+        visible={activeFilter === 'account'}
+        title="Account"
+        onClose={() => setActiveFilter(null)}
+        colors={colors}
+      >
+        {renderFilterOption(
+          'All Accounts',
+          !filterAcc,
+          () => {
+            setFilterAcc(undefined);
+            setActiveFilter(null);
+          },
+          'wallet',
+          colors.textSecondary,
+        )}
+        {accounts.map((a) =>
+          renderFilterOption(
+            a.name,
+            filterAcc === a.id,
+            () => {
+              setFilterAcc(a.id);
+              setActiveFilter(null);
+            },
+            a.icon,
+            a.color,
+          ),
+        )}
+      </FilterSheet>
 
       {/* Transaction List */}
       <FlashList<ListItem>
         data={listData}
         renderItem={renderItem}
         keyExtractor={(item) => item.key}
-        // @ts-ignore - Property does not exist on type 'IntrinsicAttributes & FlashListProps<ListItem>', likely due to generic type conflict in this environment
-        estimatedItemSize={70}
         contentContainerStyle={{
           paddingHorizontal: SPACING.md,
           paddingTop: SPACING.md,
@@ -425,8 +653,27 @@ export default function TransactionsScreen() {
             </View>
             <Text style={styles.emptyTitle}>No transactions found</Text>
             <Text style={styles.emptySubtitle}>
-              Try adjusting your filters or add a new transaction
+              {activeFilterCount > 0 || search
+                ? 'Try adjusting your filters or search'
+                : 'Tap + to add your first transaction'}
             </Text>
+            {activeFilterCount > 0 && (
+              <TouchableOpacity
+                style={[
+                  styles.emptyCtaBtn,
+                  {
+                    backgroundColor: colors.bgCard,
+                    borderWidth: 1,
+                    borderColor: colors.border,
+                  },
+                ]}
+                onPress={clearAllFilters}
+              >
+                <Text style={[styles.emptyCtaText, { color: colors.primary }]}>
+                  Clear Filters
+                </Text>
+              </TouchableOpacity>
+            )}
             <TouchableOpacity
               style={[styles.emptyCtaBtn, { backgroundColor: colors.primary }]}
               onPress={() => router.push('/transactions/add')}
@@ -447,6 +694,7 @@ export default function TransactionsScreen() {
   );
 }
 
+// ─── Styles ───────────────────────────────────────────────────────────────────
 const createStyles = (colors: ThemeColors) =>
   StyleSheet.create({
     container: { flex: 1, backgroundColor: colors.bg },
@@ -464,11 +712,7 @@ const createStyles = (colors: ThemeColors) =>
       justifyContent: 'center',
       borderRadius: 20,
     },
-    title: {
-      ...TYPOGRAPHY.h3,
-      color: colors.textPrimary,
-      fontWeight: '800',
-    },
+    title: { ...TYPOGRAPHY.h2, color: colors.textPrimary, fontWeight: '800' },
     searchWrap: { paddingHorizontal: SPACING.md, marginBottom: SPACING.sm },
     filterRow: {
       gap: SPACING.sm,
@@ -495,38 +739,49 @@ const createStyles = (colors: ThemeColors) =>
       color: colors.textSecondary,
       fontWeight: '600',
     },
-    dropdown: {
-      marginHorizontal: SPACING.md,
-      backgroundColor: colors.bgCard,
-      borderRadius: RADIUS.md,
+    clearChip: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 4,
+      paddingHorizontal: 12,
+      paddingVertical: 8,
+      borderRadius: RADIUS.xl,
+      backgroundColor: colors.expense + '10',
       borderWidth: 1,
-      borderColor: colors.border,
-      marginBottom: SPACING.sm,
+      borderColor: colors.expense + '20',
     },
-    dropdownScrollable: {
-      maxHeight: 200,
-      marginHorizontal: SPACING.md,
-      backgroundColor: colors.bgCard,
-      borderRadius: RADIUS.md,
-      borderWidth: 1,
-      borderColor: colors.border,
-      marginBottom: SPACING.sm,
-    },
-    dropdownItem: {
+    filterOption: {
       flexDirection: 'row',
       justifyContent: 'space-between',
       alignItems: 'center',
-      paddingHorizontal: SPACING.md,
-      paddingVertical: 12,
+      paddingVertical: 14,
+      paddingHorizontal: 4,
       borderBottomWidth: 1,
       borderBottomColor: colors.border,
     },
-    dropdownText: {
+    filterOptionActive: {
+      backgroundColor: colors.primary + '08',
+      marginHorizontal: -4,
+      paddingHorizontal: 8,
+      borderRadius: RADIUS.sm,
+    },
+    filterOptionLeft: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+    filterOptionIcon: {
+      width: 36,
+      height: 36,
+      borderRadius: 10,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    filterOptionText: {
       ...TYPOGRAPHY.body,
       color: colors.textPrimary,
       fontWeight: '500',
     },
     monthHeader: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
       paddingVertical: SPACING.sm,
       paddingHorizontal: 4,
       marginTop: SPACING.sm,
@@ -538,6 +793,7 @@ const createStyles = (colors: ThemeColors) =>
       letterSpacing: 1.5,
       textTransform: 'uppercase',
     },
+    monthTotal: { fontSize: 12, fontWeight: '700' },
     txCardWrapper: {
       backgroundColor: colors.bgCard,
       borderRadius: RADIUS.lg,
@@ -546,24 +802,7 @@ const createStyles = (colors: ThemeColors) =>
       marginBottom: SPACING.sm,
       overflow: 'hidden',
     },
-    badge: {
-      alignSelf: 'flex-start',
-      marginHorizontal: SPACING.md,
-      marginBottom: 8,
-      paddingHorizontal: 8,
-      paddingVertical: 3,
-      borderRadius: RADIUS.full,
-    },
-    badgeText: {
-      fontSize: 10,
-      fontWeight: '800',
-      letterSpacing: 0.5,
-    },
-    emptyState: {
-      alignItems: 'center',
-      paddingVertical: 60,
-      gap: SPACING.sm,
-    },
+    emptyState: { alignItems: 'center', paddingVertical: 60, gap: SPACING.sm },
     emptyIcon: {
       width: 72,
       height: 72,
@@ -581,6 +820,7 @@ const createStyles = (colors: ThemeColors) =>
     emptySubtitle: {
       ...TYPOGRAPHY.caption,
       color: colors.textMuted,
+      textAlign: 'center',
     },
     emptyCtaBtn: {
       flexDirection: 'row',
@@ -591,17 +831,7 @@ const createStyles = (colors: ThemeColors) =>
       borderRadius: RADIUS.full,
       marginTop: SPACING.sm,
     },
-    emptyCtaText: {
-      fontSize: 14,
-      fontWeight: '700',
-      color: '#fff',
-    },
-    loadingMore: {
-      alignItems: 'center',
-      paddingVertical: SPACING.md,
-    },
-    loadingMoreText: {
-      ...TYPOGRAPHY.caption,
-      color: colors.textMuted,
-    },
+    emptyCtaText: { fontSize: 14, fontWeight: '700', color: '#fff' },
+    loadingMore: { alignItems: 'center', paddingVertical: SPACING.md },
+    loadingMoreText: { ...TYPOGRAPHY.caption, color: colors.textMuted },
   });

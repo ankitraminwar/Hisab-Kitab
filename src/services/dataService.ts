@@ -1,7 +1,6 @@
-import { getDatabase, enqueueSync } from '../database';
-import { supabase } from '../lib/supabase';
 import type { SQLiteBindValue } from 'expo-sqlite';
-import { triggerBackgroundSync } from './syncService';
+import { enqueueSync, getDatabase } from '../database';
+import { supabase } from '../lib/supabase';
 import { useAppStore } from '../store/appStore';
 import { generateId } from '../utils/constants';
 import type {
@@ -14,6 +13,7 @@ import type {
   NetWorthHistory,
   UserProfile,
 } from '../utils/types';
+import { triggerBackgroundSync } from './syncService';
 
 const bindValue = (value: unknown): SQLiteBindValue => {
   if (
@@ -742,6 +742,54 @@ export const DataService = {
 
     return result;
   },
+
+  /** Import a full backup JSON (exported via exportAllData). Inserts rows using INSERT OR REPLACE. */
+  async importAllData(
+    data: Record<string, unknown[]>,
+  ): Promise<{ imported: number }> {
+    const validTables = [
+      'accounts',
+      'categories',
+      'transactions',
+      'budgets',
+      'goals',
+      'assets',
+      'liabilities',
+      'net_worth_history',
+    ];
+
+    let imported = 0;
+    const db = getDatabase();
+
+    for (const table of validTables) {
+      const rows = data[table];
+      if (!Array.isArray(rows) || rows.length === 0) continue;
+
+      for (const row of rows) {
+        if (typeof row !== 'object' || row === null) continue;
+        const record = row as Record<string, unknown>;
+        const keys = Object.keys(record);
+        if (keys.length === 0) continue;
+
+        const placeholders = keys.map(() => '?').join(', ');
+        const values = keys.map((k) => {
+          const v = record[k];
+          if (v === null || v === undefined) return null;
+          if (typeof v === 'boolean') return v ? 1 : 0;
+          return v;
+        });
+
+        await db.runAsync(
+          `INSERT OR REPLACE INTO ${table} (${keys.join(', ')}) VALUES (${placeholders})`,
+          values as (string | number | null)[],
+        );
+        imported++;
+      }
+    }
+
+    useAppStore.getState().bumpDataRevision();
+    return { imported };
+  },
 };
 
 const parseUserProfile = (
@@ -790,7 +838,7 @@ export const UserProfileService = {
       currency: data.currency ?? existing?.currency ?? 'INR',
       monthlyBudget: data.monthlyBudget ?? existing?.monthlyBudget ?? 0,
       themePreference:
-        data.themePreference ?? existing?.themePreference ?? 'dark',
+        data.themePreference ?? existing?.themePreference ?? 'system',
       notificationsEnabled:
         data.notificationsEnabled ?? existing?.notificationsEnabled ?? false,
       biometricEnabled:

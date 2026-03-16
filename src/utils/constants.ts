@@ -148,7 +148,6 @@ export const SYNCABLE_TABLES = [
   'assets',
   'liabilities',
   'net_worth_history',
-  'goal_deposits',
   'split_expenses',
   'split_members',
   'user_profile',

@@ -136,7 +136,7 @@ const transactionalTables = [
     phone TEXT,
     currency TEXT NOT NULL DEFAULT 'INR',
     monthlyBudget REAL NOT NULL DEFAULT 0,
-    themePreference TEXT NOT NULL DEFAULT 'dark' CHECK(themePreference IN ('dark','light')),
+    themePreference TEXT NOT NULL DEFAULT 'system' CHECK(themePreference IN ('dark','light','system')),
     notificationsEnabled INTEGER NOT NULL DEFAULT 0,
     biometricEnabled INTEGER NOT NULL DEFAULT 0,
     createdAt TEXT NOT NULL,
@@ -240,6 +240,7 @@ const indexes = [
 ];
 
 const defaultCategories = [
+  // Expense categories
   {
     id: 'cat_food',
     name: 'Food & Dining',
@@ -283,6 +284,70 @@ const defaultCategories = [
     color: '#EAB308',
   },
   {
+    id: 'cat_entertainment',
+    name: 'Entertainment',
+    type: 'expense',
+    icon: 'film',
+    color: '#E879F9',
+  },
+  {
+    id: 'cat_health',
+    name: 'Health',
+    type: 'expense',
+    icon: 'medkit',
+    color: '#EF4444',
+  },
+  {
+    id: 'cat_education',
+    name: 'Education',
+    type: 'expense',
+    icon: 'school',
+    color: '#06B6D4',
+  },
+  {
+    id: 'cat_personal',
+    name: 'Personal Care',
+    type: 'expense',
+    icon: 'heart',
+    color: '#F472B6',
+  },
+  {
+    id: 'cat_insurance',
+    name: 'Insurance',
+    type: 'expense',
+    icon: 'shield-checkmark',
+    color: '#14B8A6',
+  },
+  {
+    id: 'cat_subscriptions',
+    name: 'Subscriptions',
+    type: 'expense',
+    icon: 'repeat',
+    color: '#A855F7',
+  },
+  {
+    id: 'cat_travel',
+    name: 'Travel',
+    type: 'expense',
+    icon: 'airplane',
+    color: '#0EA5E9',
+  },
+  {
+    id: 'cat_gifts',
+    name: 'Gifts & Donations',
+    type: 'expense',
+    icon: 'gift',
+    color: '#F43F5E',
+  },
+  {
+    id: 'cat_emi',
+    name: 'EMI & Loans',
+    type: 'expense',
+    icon: 'card',
+    color: '#DC2626',
+  },
+  // Income categories
+  {
     id: 'cat_salary',
     name: 'Salary',
     type: 'income',
@@ -303,6 +368,28 @@ const defaultCategories = [
     icon: 'business',
     color: '#F97316',
   },
+  {
+    id: 'cat_investments',
+    name: 'Investments',
+    type: 'income',
+    icon: 'trending-up',
+    color: '#10B981',
+  },
+  {
+    id: 'cat_rental_income',
+    name: 'Rental Income',
+    type: 'income',
+    icon: 'home',
+    color: '#8B5CF6',
+  },
+  {
+    id: 'cat_refunds',
+    name: 'Refunds',
+    type: 'income',
+    icon: 'refresh',
+    color: '#06B6D4',
+  },
+  // Both
   {
     id: 'cat_transfer',
     name: 'Transfer',

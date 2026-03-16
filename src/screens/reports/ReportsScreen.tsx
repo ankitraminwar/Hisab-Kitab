@@ -1,6 +1,22 @@
 import { Ionicons } from '@expo/vector-icons';
-import React, { useEffect, useMemo, useState } from 'react';
 import {
+  addDays,
+  addMonths,
+  addYears,
+  endOfMonth,
+  endOfWeek,
+  endOfYear,
+  format,
+  startOfMonth,
+  startOfWeek,
+  startOfYear,
+  subDays,
+  subMonths,
+  subYears,
+} from 'date-fns';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import {
+  Alert,
   ScrollView,
   StyleSheet,
   Text,
@@ -13,6 +29,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { PeriodTabs } from '../../components/common/PeriodTabs';
 import { ScreenHeader } from '../../components/common/ScreenHeader';
 import { useTheme, type ThemeColors } from '../../hooks/useTheme';
+import { exportService } from '../../services/exportService';
 import { TransactionService } from '../../services/transactionService';
 import { useAppStore } from '../../store/appStore';
 import {
@@ -33,32 +50,107 @@ type CategoryDatum = {
 
 const PERIOD_TABS = ['Weekly', 'Monthly', 'Yearly'];
 
+type Period = 'Weekly' | 'Monthly' | 'Yearly';
+
+function getDateRange(
+  period: Period,
+  anchor: Date,
+): { from: string; to: string; label: string } {
+  const fmt = (d: Date) => format(d, 'yyyy-MM-dd');
+  switch (period) {
+    case 'Weekly': {
+      const start = startOfWeek(anchor, { weekStartsOn: 1 });
+      const end = endOfWeek(anchor, { weekStartsOn: 1 });
+      return {
+        from: fmt(start),
+        to: fmt(end),
+        label: `${format(start, 'dd MMM')} – ${format(end, 'dd MMM yyyy')}`,
+      };
+    }
+    case 'Monthly': {
+      const start = startOfMonth(anchor);
+      const end = endOfMonth(anchor);
+      return {
+        from: fmt(start),
+        to: fmt(end),
+        label: format(anchor, 'MMMM yyyy'),
+      };
+    }
+    case 'Yearly': {
+      const start = startOfYear(anchor);
+      const end = endOfYear(anchor);
+      return {
+        from: fmt(start),
+        to: fmt(end),
+        label: format(anchor, 'yyyy'),
+      };
+    }
+  }
+}
+
+function shiftAnchor(period: Period, anchor: Date, direction: 1 | -1): Date {
+  switch (period) {
+    case 'Weekly':
+      return direction === 1 ? addDays(anchor, 7) : subDays(anchor, 7);
+    case 'Monthly':
+      return direction === 1 ? addMonths(anchor, 1) : subMonths(anchor, 1);
+    case 'Yearly':
+      return direction === 1 ? addYears(anchor, 1) : subYears(anchor, 1);
+  }
+}
+
 export default function ReportsScreen() {
-  const now = new Date();
   const { colors } = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const dataRevision = useAppStore((state) => state.dataRevision);
 
-  const [period, setPeriod] = useState('Monthly');
-  const [year] = useState(now.getFullYear());
-  const [month] = useState(String(now.getMonth() + 1).padStart(2, '0'));
+  const [period, setPeriod] = useState<Period>('Monthly');
+  const [anchor, setAnchor] = useState(new Date());
   const [expenseBreakdown, setExpenseBreakdown] = useState<CategoryDatum[]>([]);
   const [stats, setStats] = useState({ income: 0, expense: 0 });
+  const [prevStats, setPrevStats] = useState({ income: 0, expense: 0 });
+
+  const range = useMemo(() => getDateRange(period, anchor), [period, anchor]);
+  const prevRange = useMemo(() => {
+    const prevAnchor = shiftAnchor(period, anchor, -1);
+    return getDateRange(period, prevAnchor);
+  }, [period, anchor]);
+
+  const loadData = useCallback(async () => {
+    const [breakdown, currentStats, previousStats] = await Promise.all([
+      TransactionService.getCategoryBreakdownByDateRange(
+        range.from,
+        range.to,
+        'expense',
+      ),
+      TransactionService.getStatsByDateRange(range.from, range.to),
+      TransactionService.getStatsByDateRange(prevRange.from, prevRange.to),
+    ]);
+    setExpenseBreakdown(breakdown);
+    setStats(currentStats);
+    setPrevStats(previousStats);
+  }, [range, prevRange]);
 
   useEffect(() => {
-    const loadData = async () => {
-      const [expenseData, monthStats] = await Promise.all([
-        TransactionService.getCategoryBreakdown(year, month, 'expense'),
-        TransactionService.getMonthlyStats(year, month),
-      ]);
-      setExpenseBreakdown(expenseData);
-      setStats(monthStats);
-    };
     void loadData();
-  }, [dataRevision, month, year]);
+  }, [loadData, dataRevision]);
 
   const savings = stats.income - stats.expense;
   const savingsRate = stats.income > 0 ? (savings / stats.income) * 100 : 0;
+
+  const incomeTrend =
+    prevStats.income > 0
+      ? ((stats.income - prevStats.income) / prevStats.income) * 100
+      : 0;
+  const expenseTrend =
+    prevStats.expense > 0
+      ? ((stats.expense - prevStats.expense) / prevStats.expense) * 100
+      : 0;
+
+  const handlePeriodChange = (tab: string) => {
+    setPeriod(tab as Period);
+    setAnchor(new Date());
+  };
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -66,7 +158,27 @@ export default function ReportsScreen() {
         title="Financial Analytics"
         rightAction={{
           icon: 'share-outline',
-          onPress: () => {},
+          onPress: () => {
+            Alert.alert('Export Report', 'Choose export format', [
+              {
+                text: 'PDF Report',
+                onPress: () => {
+                  exportService
+                    .exportTransactionsPdf()
+                    .catch(() => Alert.alert('Error', 'Failed to export PDF'));
+                },
+              },
+              {
+                text: 'CSV Spreadsheet',
+                onPress: () => {
+                  exportService
+                    .exportTransactionsCsv()
+                    .catch(() => Alert.alert('Error', 'Failed to export CSV'));
+                },
+              },
+              { text: 'Cancel', style: 'cancel' },
+            ]);
+          },
         }}
       />
 
@@ -74,8 +186,29 @@ export default function ReportsScreen() {
       <PeriodTabs
         tabs={PERIOD_TABS}
         activeTab={period}
-        onTabChange={setPeriod}
+        onTabChange={handlePeriodChange}
       />
+
+      {/* Period Navigation */}
+      <View style={styles.periodNav}>
+        <TouchableOpacity
+          onPress={() => setAnchor(shiftAnchor(period, anchor, -1))}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+        >
+          <Ionicons name="chevron-back" size={22} color={colors.textPrimary} />
+        </TouchableOpacity>
+        <Text style={styles.periodLabel}>{range.label}</Text>
+        <TouchableOpacity
+          onPress={() => setAnchor(shiftAnchor(period, anchor, 1))}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+        >
+          <Ionicons
+            name="chevron-forward"
+            size={22}
+            color={colors.textPrimary}
+          />
+        </TouchableOpacity>
+      </View>
 
       <ScrollView
         contentContainerStyle={styles.scroll}
@@ -89,16 +222,16 @@ export default function ReportsScreen() {
           <SummaryCard
             label="Income"
             value={formatCompact(stats.income)}
-            trendLabel="12%"
-            trendUp
+            trendLabel={`${Math.abs(incomeTrend).toFixed(0)}%`}
+            trendUp={incomeTrend >= 0}
             colors={colors}
             tintColor={colors.primary}
           />
           <SummaryCard
             label="Expenses"
             value={formatCompact(stats.expense)}
-            trendLabel="4%"
-            trendUp={false}
+            trendLabel={`${Math.abs(expenseTrend).toFixed(0)}%`}
+            trendUp={expenseTrend <= 0}
             colors={colors}
             tintColor={colors.expense}
           />
@@ -120,7 +253,12 @@ export default function ReportsScreen() {
               <BarRow
                 label="Income"
                 amount={formatCurrency(stats.income)}
-                percent={stats.income > 0 ? 85 : 0}
+                percent={
+                  Math.max(stats.income, stats.expense) > 0
+                    ? (stats.income / Math.max(stats.income, stats.expense)) *
+                      100
+                    : 0
+                }
                 color={colors.income}
                 barBg={colors.bgElevated}
                 textColor={colors.textPrimary}
@@ -130,7 +268,10 @@ export default function ReportsScreen() {
                 label="Expenses"
                 amount={formatCurrency(stats.expense)}
                 percent={
-                  stats.income > 0 ? (stats.expense / stats.income) * 100 : 0
+                  Math.max(stats.income, stats.expense) > 0
+                    ? (stats.expense / Math.max(stats.income, stats.expense)) *
+                      100
+                    : 0
                 }
                 color={colors.expense}
                 barBg={colors.bgElevated}
@@ -327,6 +468,18 @@ const createStyles = (colors: ThemeColors) =>
   StyleSheet.create({
     container: { flex: 1, backgroundColor: colors.bg },
     scroll: { paddingHorizontal: SPACING.md },
+    periodNav: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingHorizontal: SPACING.lg,
+      paddingVertical: SPACING.sm,
+    },
+    periodLabel: {
+      ...TYPOGRAPHY.bodyMedium,
+      color: colors.textPrimary,
+      fontWeight: '700',
+    },
     summaryRow: {
       flexDirection: 'row',
       gap: SPACING.sm,

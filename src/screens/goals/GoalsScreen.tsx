@@ -1,28 +1,31 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  TouchableOpacity,
-  Modal,
-  TextInput,
-} from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import Animated, { FadeInDown } from 'react-native-reanimated';
+import { differenceInDays } from 'date-fns';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
-  SPACING,
+  Alert,
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+} from 'react-native';
+import Animated, { FadeInDown } from 'react-native-reanimated';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { Button, Card, EmptyState, ProgressBar } from '../../components/common';
+import { useTheme, type ThemeColors } from '../../hooks/useTheme';
+import { GoalService } from '../../services/dataService';
+import { useAppStore } from '../../store/appStore';
+import {
   RADIUS,
+  SPACING,
   TYPOGRAPHY,
   formatCurrency,
 } from '../../utils/constants';
-import { GoalService } from '../../services/dataService';
 import type { Goal } from '../../utils/types';
-import { Card, ProgressBar, EmptyState, Button } from '../../components/common';
-import { differenceInDays } from 'date-fns';
-import { useAppStore } from '../../store/appStore';
-import { useTheme, type ThemeColors } from '../../hooks/useTheme';
 
 const GOAL_COLORS = [
   '#7C3AED',
@@ -162,6 +165,23 @@ export default function GoalsScreen() {
                   key={goal.id}
                   goal={goal}
                   onFund={() => setSelectedGoal(goal)}
+                  onDelete={() => {
+                    Alert.alert(
+                      'Delete Goal',
+                      `Are you sure you want to delete "${goal.name}"?`,
+                      [
+                        { text: 'Cancel', style: 'cancel' },
+                        {
+                          text: 'Delete',
+                          style: 'destructive',
+                          onPress: async () => {
+                            await GoalService.delete(goal.id);
+                            void loadGoals();
+                          },
+                        },
+                      ],
+                    );
+                  }}
                   colors={colors}
                 />
               ))}
@@ -172,84 +192,110 @@ export default function GoalsScreen() {
       </ScrollView>
 
       {/* Fund Goal Modal */}
-      <Modal visible={!!selectedGoal} animationType="fade" transparent>
-        <View style={StyleSheet.absoluteFillObject}>
-          <View
-            style={[
-              StyleSheet.absoluteFillObject,
-              { backgroundColor: 'rgba(0,0,0,0.6)' },
-            ]}
-          />
-          <View
-            style={{
-              backgroundColor: colors.bgCard,
-              borderRadius: RADIUS.xl,
-              padding: SPACING.xl,
-              width: '90%',
-              alignSelf: 'center',
-              marginTop: '30%',
-              borderWidth: 1,
-              borderColor: colors.border,
+      <Modal
+        visible={!!selectedGoal}
+        animationType="fade"
+        transparent
+        onRequestClose={() => {
+          setSelectedGoal(null);
+          setFundAmount('');
+        }}
+      >
+        <KeyboardAvoidingView
+          style={{ flex: 1 }}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        >
+          <TouchableOpacity
+            style={StyleSheet.absoluteFillObject}
+            activeOpacity={1}
+            onPress={() => {
+              setSelectedGoal(null);
+              setFundAmount('');
             }}
           >
             <View
+              style={[
+                StyleSheet.absoluteFillObject,
+                { backgroundColor: 'rgba(0,0,0,0.6)' },
+              ]}
+            />
+            <TouchableOpacity
+              activeOpacity={1}
+              onPress={() => {}}
               style={{
-                flexDirection: 'row',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                marginBottom: SPACING.sm,
-              }}
-            >
-              <Text style={{ ...TYPOGRAPHY.h3, color: colors.textPrimary }}>
-                Add Funds
-              </Text>
-              <TouchableOpacity
-                onPress={() => {
-                  setSelectedGoal(null);
-                  setFundAmount('');
-                }}
-              >
-                <Ionicons name="close" size={24} color={colors.textSecondary} />
-              </TouchableOpacity>
-            </View>
-
-            <Text
-              style={{
-                ...TYPOGRAPHY.body,
-                color: colors.textSecondary,
-                marginBottom: SPACING.lg,
-              }}
-            >
-              Funding: {selectedGoal?.name}
-            </Text>
-
-            <TextInput
-              style={{
-                backgroundColor: colors.bgInput,
+                backgroundColor: colors.bgCard,
+                borderRadius: RADIUS.xl,
+                padding: SPACING.xl,
+                width: '90%',
+                alignSelf: 'center',
+                marginTop: '30%',
                 borderWidth: 1,
                 borderColor: colors.border,
-                borderRadius: RADIUS.md,
-                padding: SPACING.md,
-                color: colors.textPrimary,
-                ...TYPOGRAPHY.body,
-                marginBottom: SPACING.lg,
               }}
-              keyboardType="numeric"
-              value={fundAmount}
-              onChangeText={setFundAmount}
-              placeholder="0.00"
-              placeholderTextColor={colors.textMuted}
-              autoFocus
-              keyboardAppearance={isDark ? 'dark' : 'light'}
-            />
+            >
+              <View
+                style={{
+                  flexDirection: 'row',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  marginBottom: SPACING.sm,
+                }}
+              >
+                <Text style={{ ...TYPOGRAPHY.h3, color: colors.textPrimary }}>
+                  Add Funds
+                </Text>
+                <TouchableOpacity
+                  onPress={() => {
+                    setSelectedGoal(null);
+                    setFundAmount('');
+                  }}
+                >
+                  <Ionicons
+                    name="close"
+                    size={24}
+                    color={colors.textSecondary}
+                  />
+                </TouchableOpacity>
+              </View>
 
-            <Button
-              title="Add Funds"
-              onPress={() => void handleFund()}
-              disabled={!fundAmount}
-            />
-          </View>
-        </View>
+              <Text
+                style={{
+                  ...TYPOGRAPHY.body,
+                  color: colors.textSecondary,
+                  marginBottom: SPACING.lg,
+                }}
+              >
+                Funding: {selectedGoal?.name}
+              </Text>
+
+              <TextInput
+                style={{
+                  backgroundColor: colors.bgInput,
+                  borderWidth: 1,
+                  borderColor: colors.border,
+                  borderRadius: RADIUS.md,
+                  padding: SPACING.md,
+                  color: colors.textPrimary,
+                  ...TYPOGRAPHY.body,
+                  marginBottom: SPACING.lg,
+                }}
+                keyboardType="numeric"
+                value={fundAmount}
+                onChangeText={setFundAmount}
+                placeholder="0.00"
+                placeholderTextColor={colors.textMuted}
+                autoFocus
+                keyboardAppearance={isDark ? 'dark' : 'light'}
+              />
+
+              <Button
+                title="Add Funds"
+                onPress={() => void handleFund()}
+                disabled={!fundAmount}
+              />
+            </TouchableOpacity>
+          </TouchableOpacity>
+        </KeyboardAvoidingView>
       </Modal>
 
       <AddGoalModal
@@ -269,10 +315,12 @@ export default function GoalsScreen() {
 const GoalCard = ({
   goal,
   onFund,
+  onDelete,
   colors,
 }: {
   goal: Goal;
   onFund: () => void;
+  onDelete: () => void;
   colors: ThemeColors;
 }) => {
   const styles = useMemo(() => cardStyles(colors), [colors]);
@@ -283,7 +331,7 @@ const GoalCard = ({
     : 'No deadline';
 
   return (
-    <Card style={[styles.card, isCompleted ? { opacity: 0.7 } : {}] as any}>
+    <Card style={{ ...styles.card, ...(isCompleted ? { opacity: 0.7 } : {}) }}>
       <View style={styles.header}>
         <View style={styles.iconInfo}>
           <View
@@ -324,17 +372,39 @@ const GoalCard = ({
       </View>
 
       {!isCompleted && (
+        <View style={{ flexDirection: 'row', gap: SPACING.sm }}>
+          <TouchableOpacity
+            style={[
+              styles.fundButton,
+              { backgroundColor: colors.bgElevated, flex: 1 },
+            ]}
+            onPress={onFund}
+          >
+            <Ionicons
+              name="add-circle-outline"
+              size={18}
+              color={colors.primary}
+            />
+            <Text style={[styles.fundText, { color: colors.primary }]}>
+              Add Funds
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.fundButton, { backgroundColor: colors.bgElevated }]}
+            onPress={onDelete}
+          >
+            <Ionicons name="trash-outline" size={18} color={colors.expense} />
+          </TouchableOpacity>
+        </View>
+      )}
+      {isCompleted && (
         <TouchableOpacity
           style={[styles.fundButton, { backgroundColor: colors.bgElevated }]}
-          onPress={onFund}
+          onPress={onDelete}
         >
-          <Ionicons
-            name="add-circle-outline"
-            size={18}
-            color={colors.primary}
-          />
-          <Text style={[styles.fundText, { color: colors.primary }]}>
-            Add Funds
+          <Ionicons name="trash-outline" size={18} color={colors.expense} />
+          <Text style={[styles.fundText, { color: colors.expense }]}>
+            Delete
           </Text>
         </TouchableOpacity>
       )}
@@ -386,96 +456,114 @@ const AddGoalModal = ({
   };
 
   return (
-    <Modal visible={visible} animationType="slide" transparent>
-      <View style={styles.overlay}>
-        <View style={styles.sheet}>
-          <View style={styles.handle} />
-          <Text style={styles.title}>New Goal</Text>
+    <Modal
+      visible={visible}
+      animationType="slide"
+      transparent
+      onRequestClose={onClose}
+    >
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      >
+        <TouchableOpacity
+          style={styles.overlay}
+          activeOpacity={1}
+          onPress={onClose}
+        >
+          <TouchableOpacity
+            style={styles.sheet}
+            activeOpacity={1}
+            onPress={() => {}}
+          >
+            <View style={styles.handle} />
+            <Text style={styles.title}>New Goal</Text>
 
-          <ScrollView showsVerticalScrollIndicator={false}>
-            <TextInput
-              style={styles.input}
-              placeholder="Goal Name (e.g. New Car)"
-              placeholderTextColor={colors.textMuted}
-              value={name}
-              onChangeText={setName}
-            />
+            <ScrollView showsVerticalScrollIndicator={false}>
+              <TextInput
+                style={styles.input}
+                placeholder="Goal Name (e.g. New Car)"
+                placeholderTextColor={colors.textMuted}
+                value={name}
+                onChangeText={setName}
+              />
 
-            <TextInput
-              style={styles.input}
-              placeholder="Target Amount"
-              placeholderTextColor={colors.textMuted}
-              keyboardType="numeric"
-              value={targetAmount}
-              onChangeText={setTargetAmount}
-              keyboardAppearance={isDark ? 'dark' : 'light'}
-            />
+              <TextInput
+                style={styles.input}
+                placeholder="Target Amount"
+                placeholderTextColor={colors.textMuted}
+                keyboardType="numeric"
+                value={targetAmount}
+                onChangeText={setTargetAmount}
+                keyboardAppearance={isDark ? 'dark' : 'light'}
+              />
 
-            <Text style={styles.label}>Style</Text>
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              style={styles.selector}
-            >
-              {GOAL_COLORS.map((c) => (
-                <TouchableOpacity
-                  key={c}
-                  onPress={() => setColor(c)}
-                  style={[
-                    styles.colorOption,
-                    { backgroundColor: c },
-                    color === c && styles.selectedOption,
-                  ]}
-                />
-              ))}
-            </ScrollView>
-
-            <Text style={styles.label}>Icon</Text>
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              style={styles.selector}
-            >
-              {GOAL_ICONS.map((i) => (
-                <TouchableOpacity
-                  key={i}
-                  onPress={() => setIcon(i)}
-                  style={[
-                    styles.iconOption,
-                    { backgroundColor: colors.bgElevated },
-                    icon === i && [
-                      styles.selectedOption,
-                      { borderColor: color },
-                    ],
-                  ]}
-                >
-                  <Ionicons
-                    name={i as never}
-                    size={24}
-                    color={icon === i ? color : colors.textMuted}
+              <Text style={styles.label}>Style</Text>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                style={styles.selector}
+              >
+                {GOAL_COLORS.map((c) => (
+                  <TouchableOpacity
+                    key={c}
+                    onPress={() => setColor(c)}
+                    style={[
+                      styles.colorOption,
+                      { backgroundColor: c },
+                      color === c && styles.selectedOption,
+                    ]}
                   />
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
+                ))}
+              </ScrollView>
 
-            <View style={styles.actions}>
-              <Button
-                title="Cancel"
-                variant="secondary"
-                onPress={onClose}
-                style={styles.flex1}
-              />
-              <Button
-                title="Save Goal"
-                onPress={() => void handleSave()}
-                loading={loading}
-                style={styles.flex1}
-                disabled={!name || !targetAmount}
-              />
-            </View>
-          </ScrollView>
-        </View>
-      </View>
+              <Text style={styles.label}>Icon</Text>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                style={styles.selector}
+              >
+                {GOAL_ICONS.map((i) => (
+                  <TouchableOpacity
+                    key={i}
+                    onPress={() => setIcon(i)}
+                    style={[
+                      styles.iconOption,
+                      { backgroundColor: colors.bgElevated },
+                      icon === i && [
+                        styles.selectedOption,
+                        { borderColor: color },
+                      ],
+                    ]}
+                  >
+                    <Ionicons
+                      name={i as never}
+                      size={24}
+                      color={icon === i ? color : colors.textMuted}
+                    />
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+
+              <View style={styles.actions}>
+                <Button
+                  title="Cancel"
+                  variant="secondary"
+                  onPress={onClose}
+                  style={styles.flex1}
+                />
+                <Button
+                  title="Save Goal"
+                  onPress={() => void handleSave()}
+                  loading={loading}
+                  style={styles.flex1}
+                  disabled={!name || !targetAmount}
+                />
+              </View>
+            </ScrollView>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </KeyboardAvoidingView>
     </Modal>
   );
 };

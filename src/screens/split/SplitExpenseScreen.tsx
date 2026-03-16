@@ -1,10 +1,18 @@
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useLocalSearchParams, useRouter } from 'expo-router';
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { useLocalSearchParams, useRouter, type Href } from 'expo-router';
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import {
+  KeyboardAvoidingView,
   Modal,
+  Platform,
   ScrollView,
   StyleSheet,
   Text,
@@ -40,6 +48,7 @@ interface LocalMember {
   name: string;
   role: 'owner' | 'member';
   amount: number;
+  sharePercent?: number;
   status?: SplitStatus;
   dbId?: string; // ID from the database for existing members
 }
@@ -81,6 +90,7 @@ export default function SplitExpenseScreen() {
   }>({ visible: false, title: '', message: '', type: 'info' });
 
   const [saving, setSaving] = useState(false);
+  const friendSearchRef = useRef<TextInput>(null);
 
   const totalExpense = selectedTransaction?.amount || 0;
 
@@ -102,16 +112,10 @@ export default function SplitExpenseScreen() {
     if (!isNewSplit) {
       void loadExistingSplit();
     }
-  }, [loadExistingSplit, dataRevision]);
+  }, [loadExistingSplit, dataRevision, isNewSplit]);
 
   // ── Load transactions for new split ──────────────────────────────────────
-  useEffect(() => {
-    if (isNewSplit) {
-      void loadTransactions();
-    }
-  }, [isNewSplit]);
-
-  const loadTransactions = async () => {
+  const loadTransactions = useCallback(async () => {
     const data = await TransactionService.getAll();
     const expenseList = data.filter((t) => t.type === 'expense');
     setTransactions(expenseList);
@@ -119,10 +123,16 @@ export default function SplitExpenseScreen() {
       ? expenseList.find((t) => t.id === txId)
       : expenseList[0];
     if (preselected) setSelectedTransaction(preselected);
-  };
+  }, [txId]);
+
+  useEffect(() => {
+    if (isNewSplit) {
+      void loadTransactions();
+    }
+  }, [isNewSplit, loadTransactions]);
 
   // ── Recalculate equal split ──────────────────────────────────────────────
-  useMemo(() => {
+  useEffect(() => {
     if (isNewSplit && splitMethod === 'equal' && members.length > 0) {
       const splitAmount = totalExpense / members.length;
       setMembers((current) => {
@@ -134,6 +144,18 @@ export default function SplitExpenseScreen() {
       });
     }
   }, [isNewSplit, splitMethod, members.length, totalExpense]);
+
+  // ── Recalculate amounts when percent changes ────────────────────────────
+  useEffect(() => {
+    if (isNewSplit && splitMethod === 'percent' && totalExpense > 0) {
+      setMembers((current) =>
+        current.map((m) => {
+          const pct = m.sharePercent ?? 0;
+          return { ...m, amount: (totalExpense * pct) / 100 };
+        }),
+      );
+    }
+  }, [isNewSplit, splitMethod, totalExpense]);
 
   const totalToReceive = members
     .filter((m) => m.role === 'member')
@@ -157,6 +179,22 @@ export default function SplitExpenseScreen() {
         type: 'error',
       });
       return;
+    }
+
+    if (splitMethod === 'percent') {
+      const totalPercent = members.reduce(
+        (sum, m) => sum + (m.sharePercent ?? 0),
+        0,
+      );
+      if (Math.abs(totalPercent - 100) > 0.5) {
+        setPopupConfig({
+          visible: true,
+          title: 'Percent Mismatch',
+          message: `Total percentage is ${totalPercent.toFixed(1)}%. It must add up to 100%.`,
+          type: 'error',
+        });
+        return;
+      }
     }
 
     const totalSplit = members.reduce((sum, m) => sum + m.amount, 0);
@@ -196,6 +234,7 @@ export default function SplitExpenseScreen() {
         otherMembers.map((m) => ({
           name: m.name,
           shareAmount: m.amount,
+          sharePercent: splitMethod === 'percent' ? m.sharePercent : undefined,
           status: 'pending' as const,
         })),
       );
@@ -206,7 +245,7 @@ export default function SplitExpenseScreen() {
         title: 'Success',
         message: 'Expense split successfully!',
         type: 'success',
-        onClose: () => router.back(),
+        onClose: () => router.replace('/splits' as Href),
       });
     } catch {
       setPopupConfig({
@@ -589,210 +628,292 @@ export default function SplitExpenseScreen() {
         </TouchableOpacity>
       </View>
 
-      <ScrollView
-        contentContainerStyle={styles.scroll}
-        showsVerticalScrollIndicator={false}
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
-        {/* Transaction Selection */}
-        <Animated.View entering={FadeInDown.duration(400)}>
-          <TouchableOpacity
-            style={styles.expenseCard}
-            onPress={() => setShowTransactionModal(true)}
-            activeOpacity={0.8}
-          >
-            <View style={{ flex: 1 }}>
-              <Text style={styles.paidBy}>SELECTED EXPENSE</Text>
-              <Text style={styles.expenseName}>
-                {selectedTransaction
-                  ? selectedTransaction.merchant ||
-                    selectedTransaction.notes ||
-                    'Unnamed Expense'
-                  : 'Tap to select an expense'}
-              </Text>
-              <Text style={styles.expenseAmount}>
-                {formatCurrency(totalExpense)}
+        <ScrollView
+          contentContainerStyle={styles.scroll}
+          showsVerticalScrollIndicator={false}
+        >
+          {/* Transaction Selection */}
+          <Animated.View entering={FadeInDown.duration(400)}>
+            <TouchableOpacity
+              style={styles.expenseCard}
+              onPress={() => setShowTransactionModal(true)}
+              activeOpacity={0.8}
+            >
+              <View style={{ flex: 1 }}>
+                <Text style={styles.paidBy}>SELECTED EXPENSE</Text>
+                <Text style={styles.expenseName}>
+                  {selectedTransaction
+                    ? selectedTransaction.merchant ||
+                      selectedTransaction.notes ||
+                      'Unnamed Expense'
+                    : 'Tap to select an expense'}
+                </Text>
+                <Text style={styles.expenseAmount}>
+                  {formatCurrency(totalExpense)}
+                </Text>
+              </View>
+              <Ionicons
+                name="chevron-down"
+                size={24}
+                color={colors.textMuted}
+              />
+            </TouchableOpacity>
+          </Animated.View>
+
+          {/* Select Friends */}
+          <Animated.View entering={FadeInDown.duration(400).delay(100)}>
+            <Text style={styles.sectionLabel}>ADD FRIENDS</Text>
+            <View style={styles.searchBox}>
+              <Ionicons name="search" size={18} color={colors.textMuted} />
+              <TextInput
+                ref={friendSearchRef}
+                value={friendSearch}
+                onChangeText={setFriendSearch}
+                placeholder="Enter friend's name and press Add"
+                placeholderTextColor={colors.textMuted}
+                style={styles.searchInput}
+                onSubmitEditing={handleAddFriend}
+                returnKeyType="done"
+              />
+              {friendSearch.trim() !== '' && (
+                <TouchableOpacity onPress={handleAddFriend}>
+                  <Ionicons
+                    name="add-circle"
+                    size={24}
+                    color={colors.primary}
+                  />
+                </TouchableOpacity>
+              )}
+            </View>
+            <View style={styles.chipRow}>
+              {members.map((m) => (
+                <View
+                  key={m.id}
+                  style={[
+                    styles.friendChip,
+                    m.id === 'you' && {
+                      backgroundColor: colors.primary + '20',
+                      borderWidth: 1,
+                      borderColor: colors.primary + '30',
+                    },
+                  ]}
+                >
+                  <View
+                    style={[
+                      styles.chipAvatar,
+                      { backgroundColor: colors.primary + '30' },
+                    ]}
+                  >
+                    <Text
+                      style={[styles.chipInitial, { color: colors.primary }]}
+                    >
+                      {getInitial(m.name)}
+                    </Text>
+                  </View>
+                  <Text style={styles.chipName}>{m.name}</Text>
+                  {m.id !== 'you' && (
+                    <TouchableOpacity onPress={() => handleRemoveFriend(m.id)}>
+                      <Ionicons
+                        name="close"
+                        size={14}
+                        color={colors.textMuted}
+                      />
+                    </TouchableOpacity>
+                  )}
+                </View>
+              ))}
+            </View>
+          </Animated.View>
+
+          {/* Split Method */}
+          <Animated.View entering={FadeInDown.duration(400).delay(200)}>
+            <Text style={styles.sectionLabel}>SPLIT METHOD</Text>
+            <View style={styles.methodRow}>
+              {METHODS.map((m) => (
+                <TouchableOpacity
+                  key={m.key}
+                  style={[
+                    styles.methodBtn,
+                    splitMethod === m.key && styles.methodBtnActive,
+                  ]}
+                  onPress={() => setSplitMethod(m.key)}
+                >
+                  <Text
+                    style={[
+                      styles.methodBtnText,
+                      splitMethod === m.key && styles.methodBtnTextActive,
+                    ]}
+                  >
+                    {m.label}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </Animated.View>
+
+          {/* Members List */}
+          <Animated.View entering={FadeInDown.duration(400).delay(300)}>
+            <View style={styles.membersHeader}>
+              <Text style={styles.sectionLabel}>
+                SPLITTING WITH ({members.length})
               </Text>
             </View>
-            <Ionicons name="chevron-down" size={24} color={colors.textMuted} />
-          </TouchableOpacity>
-        </Animated.View>
-
-        {/* Select Friends */}
-        <Animated.View entering={FadeInDown.duration(400).delay(100)}>
-          <Text style={styles.sectionLabel}>ADD FRIENDS</Text>
-          <View style={styles.searchBox}>
-            <Ionicons name="search" size={18} color={colors.textMuted} />
-            <TextInput
-              value={friendSearch}
-              onChangeText={setFriendSearch}
-              placeholder="Type a name and press Add..."
-              placeholderTextColor={colors.textMuted}
-              style={styles.searchInput}
-              onSubmitEditing={handleAddFriend}
-              returnKeyType="done"
-            />
-            {friendSearch.trim() !== '' && (
-              <TouchableOpacity onPress={handleAddFriend}>
-                <Ionicons name="add-circle" size={24} color={colors.primary} />
-              </TouchableOpacity>
-            )}
-          </View>
-          <View style={styles.chipRow}>
-            {members.map((m) => (
-              <View
-                key={m.id}
-                style={[
-                  styles.friendChip,
-                  m.id === 'you' && {
-                    backgroundColor: colors.primary + '20',
-                    borderWidth: 1,
-                    borderColor: colors.primary + '30',
-                  },
-                ]}
-              >
+            {members.map((member) => (
+              <View key={member.id} style={styles.memberRow}>
                 <View
                   style={[
-                    styles.chipAvatar,
+                    styles.memberAvatar,
                     { backgroundColor: colors.primary + '30' },
                   ]}
                 >
-                  <Text style={[styles.chipInitial, { color: colors.primary }]}>
-                    {getInitial(m.name)}
+                  <Text
+                    style={[styles.memberInitial, { color: colors.primary }]}
+                  >
+                    {getInitial(member.name)}
                   </Text>
                 </View>
-                <Text style={styles.chipName}>{m.name}</Text>
-                {m.id !== 'you' && (
-                  <TouchableOpacity onPress={() => handleRemoveFriend(m.id)}>
-                    <Ionicons name="close" size={14} color={colors.textMuted} />
+                <View style={styles.memberInfo}>
+                  <Text style={styles.memberName}>{member.name}</Text>
+                  <Text style={styles.memberRole}>
+                    {member.role === 'owner' ? 'PAID BY YOU' : 'OWES YOU'}
+                  </Text>
+                </View>
+                {splitMethod === 'percent' && (
+                  <View
+                    style={[
+                      styles.memberAmountBox,
+                      {
+                        minWidth: 60,
+                        borderWidth: 1,
+                        borderColor: colors.border,
+                      },
+                    ]}
+                  >
+                    <TextInput
+                      style={styles.memberAmountInput}
+                      value={
+                        member.sharePercent ? String(member.sharePercent) : ''
+                      }
+                      keyboardType="numeric"
+                      onChangeText={(val) => {
+                        const pct = parseFloat(val) || 0;
+                        setMembers(
+                          members.map((m) =>
+                            m.id === member.id
+                              ? {
+                                  ...m,
+                                  sharePercent: pct,
+                                  amount: (totalExpense * pct) / 100,
+                                }
+                              : m,
+                          ),
+                        );
+                      }}
+                      placeholder="0"
+                      placeholderTextColor={colors.textMuted}
+                    />
+                    <Text style={styles.memberCurrency}>%</Text>
+                  </View>
+                )}
+                <View
+                  style={[
+                    styles.memberAmountBox,
+                    splitMethod !== 'equal' && {
+                      borderWidth: 1,
+                      borderColor: colors.border,
+                    },
+                  ]}
+                >
+                  <Text style={styles.memberCurrency}>₹</Text>
+                  {splitMethod === 'equal' || splitMethod === 'percent' ? (
+                    <Text style={styles.memberAmount}>
+                      {member.amount.toFixed(2)}
+                    </Text>
+                  ) : (
+                    <TextInput
+                      style={styles.memberAmountInput}
+                      value={member.amount ? String(member.amount) : ''}
+                      keyboardType="numeric"
+                      onChangeText={(val) => {
+                        const num = parseFloat(val) || 0;
+                        setMembers(
+                          members.map((m) =>
+                            m.id === member.id ? { ...m, amount: num } : m,
+                          ),
+                        );
+                      }}
+                      placeholder="0.00"
+                      placeholderTextColor={colors.textMuted}
+                    />
+                  )}
+                </View>
+                {member.id !== 'you' && (
+                  <TouchableOpacity
+                    onPress={() => handleRemoveFriend(member.id)}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  >
+                    <Ionicons
+                      name="close-circle"
+                      size={20}
+                      color={colors.textMuted}
+                    />
                   </TouchableOpacity>
                 )}
               </View>
             ))}
-          </View>
-        </Animated.View>
 
-        {/* Split Method */}
-        <Animated.View entering={FadeInDown.duration(400).delay(200)}>
-          <Text style={styles.sectionLabel}>SPLIT METHOD</Text>
-          <View style={styles.methodRow}>
-            {METHODS.map((m) => (
-              <TouchableOpacity
-                key={m.key}
-                style={[
-                  styles.methodBtn,
-                  splitMethod === m.key && styles.methodBtnActive,
-                ]}
-                onPress={() => setSplitMethod(m.key)}
-              >
-                <Text
-                  style={[
-                    styles.methodBtnText,
-                    splitMethod === m.key && styles.methodBtnTextActive,
-                  ]}
-                >
-                  {m.label}
+            {/* Add Friend */}
+            <TouchableOpacity
+              style={styles.addFriendBtn}
+              onPress={() => {
+                friendSearchRef.current?.focus();
+              }}
+            >
+              <Ionicons name="person-add" size={18} color={colors.primary} />
+              <Text style={styles.addFriendText}>Add Friend</Text>
+            </TouchableOpacity>
+          </Animated.View>
+
+          {/* Total To Receive */}
+          <Animated.View entering={FadeInDown.duration(400).delay(400)}>
+            <LinearGradient
+              colors={[colors.primary, '#6D28D9']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.totalCard}
+            >
+              <View>
+                <Text style={styles.totalLabel}>TOTAL TO RECEIVE</Text>
+                <Text style={styles.totalAmount}>
+                  {formatCurrency(totalToReceive)}
                 </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        </Animated.View>
-
-        {/* Members List */}
-        <Animated.View entering={FadeInDown.duration(400).delay(300)}>
-          <View style={styles.membersHeader}>
-            <Text style={styles.sectionLabel}>
-              SPLITTING WITH ({members.length})
-            </Text>
-          </View>
-          {members.map((member) => (
-            <View key={member.id} style={styles.memberRow}>
-              <View
-                style={[
-                  styles.memberAvatar,
-                  { backgroundColor: colors.primary + '30' },
-                ]}
-              >
-                <Text style={[styles.memberInitial, { color: colors.primary }]}>
-                  {getInitial(member.name)}
+                <Text style={styles.totalSub}>
+                  from {members.filter((m) => m.role === 'member').length}{' '}
+                  people
                 </Text>
               </View>
-              <View style={styles.memberInfo}>
-                <Text style={styles.memberName}>{member.name}</Text>
-                <Text style={styles.memberRole}>
-                  {member.role === 'owner' ? 'PAID BY YOU' : 'OWES YOU'}
-                </Text>
+              <View style={styles.totalAvatars}>
+                {members
+                  .filter((m) => m.role === 'member')
+                  .slice(0, 3)
+                  .map((m) => (
+                    <View key={m.id} style={styles.totalAvatarCircle}>
+                      <Text style={styles.totalAvatarText}>
+                        {getInitial(m.name)}
+                      </Text>
+                    </View>
+                  ))}
               </View>
-              <View style={styles.memberAmountBox}>
-                <Text style={styles.memberCurrency}>₹</Text>
-                {splitMethod === 'equal' ? (
-                  <Text style={styles.memberAmount}>
-                    {member.amount.toFixed(2)}
-                  </Text>
-                ) : (
-                  <TextInput
-                    style={styles.memberAmountInput}
-                    value={member.amount ? String(member.amount) : ''}
-                    keyboardType="numeric"
-                    onChangeText={(val) => {
-                      const num = parseFloat(val) || 0;
-                      setMembers(
-                        members.map((m) =>
-                          m.id === member.id ? { ...m, amount: num } : m,
-                        ),
-                      );
-                    }}
-                    placeholder="0.00"
-                    placeholderTextColor={colors.textMuted}
-                  />
-                )}
-              </View>
-            </View>
-          ))}
+            </LinearGradient>
+          </Animated.View>
 
-          {/* Add Friend */}
-          <TouchableOpacity
-            style={styles.addFriendBtn}
-            onPress={handleAddFriend}
-          >
-            <Ionicons name="person-add" size={18} color={colors.primary} />
-            <Text style={styles.addFriendText}>Add Friend</Text>
-          </TouchableOpacity>
-        </Animated.View>
-
-        {/* Total To Receive */}
-        <Animated.View entering={FadeInDown.duration(400).delay(400)}>
-          <LinearGradient
-            colors={[colors.primary, '#6D28D9']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={styles.totalCard}
-          >
-            <View>
-              <Text style={styles.totalLabel}>TOTAL TO RECEIVE</Text>
-              <Text style={styles.totalAmount}>
-                {formatCurrency(totalToReceive)}
-              </Text>
-              <Text style={styles.totalSub}>
-                from {members.filter((m) => m.role === 'member').length} people
-              </Text>
-            </View>
-            <View style={styles.totalAvatars}>
-              {members
-                .filter((m) => m.role === 'member')
-                .slice(0, 3)
-                .map((m) => (
-                  <View key={m.id} style={styles.totalAvatarCircle}>
-                    <Text style={styles.totalAvatarText}>
-                      {getInitial(m.name)}
-                    </Text>
-                  </View>
-                ))}
-            </View>
-          </LinearGradient>
-        </Animated.View>
-
-        <View style={{ height: 100 }} />
-      </ScrollView>
+          <View style={{ height: 100 }} />
+        </ScrollView>
+      </KeyboardAvoidingView>
 
       {/* Transaction Selection Modal */}
       <Modal visible={showTransactionModal} transparent animationType="slide">

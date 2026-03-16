@@ -2,86 +2,138 @@
 
 ## 1. Environment Variables
 
-Create `.env` with:
+Create `.env` in the project root with:
 
 ```env
 EXPO_PUBLIC_SUPABASE_URL=your-project-url
 EXPO_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
 ```
 
-Use `EXPO_PUBLIC_SUPABASE_ANON_KEY`.
-Do not use `EXPO_PUBLIC_SUPABASE_KEY`.
+Use `EXPO_PUBLIC_SUPABASE_ANON_KEY` (not `EXPO_PUBLIC_SUPABASE_KEY`).
+
+These are the only secrets needed in the app. Never add service role keys or other secrets.
 
 ## 2. Apply Schema
 
-Run the single file in the Supabase SQL editor:
+Paste the following file into the Supabase SQL editor and run it:
 
 - [supabase/schema.sql](./supabase/schema.sql)
 
-This creates all tables, indexes, triggers, RLS policies, and seed data.
+This single idempotent file creates:
 
-Without this, the app will log errors like:
+- All tables (accounts, categories, transactions, budgets, goals, assets, liabilities, net_worth_history, user_profile, recurring_templates, split_expenses, split_members, payment_methods, sync_queue, sync_state)
+- All indexes and foreign keys
+- RLS policies (per-user isolation via `auth.uid()`)
+- Triggers (e.g. auto-create `user_profile` on new auth user)
+- Seed data for default categories and payment methods
+- Backfill for existing auth users missing `user_profile`
 
-- `PGRST205`
-- `Could not find the table 'public.accounts' in the schema cache`
+Safe to run multiple times — triggers and policies are dropped and recreated.
 
-The schema is intentionally idempotent:
+Without this schema the app will log errors like:
 
-- triggers are dropped and recreated
-- RLS policies are dropped and recreated
-- indexes are created only if missing
-- budget uniqueness is enforced per `user_id + category_id + month + year`
-- new auth users automatically get a `public.user_profile` row
-- existing auth users missing `public.user_profile` are backfilled automatically
+```
+PGRST205
+Could not find the table 'public.accounts' in the schema cache
+```
 
-## 3. Edge Function
+The app still works locally in offline mode — sync errors are non-fatal.
 
-Deploy:
+## 3. Edge Function — Email Reports
 
-- [supabase/functions/send-email/index.ts](./supabase/functions/send-email/index.ts)
+Deploy the email edge function:
 
-Required secret in Supabase:
+```bash
+supabase functions deploy send-email
+```
 
-- `RESEND_API_KEY`
+Add the required secret in the Supabase dashboard → Edge Functions → Secrets:
+
+| Secret           | Value                               |
+| ---------------- | ----------------------------------- |
+| `RESEND_API_KEY` | Your Resend API key from resend.com |
+
+Source file: [supabase/functions/send-email/index.ts](./supabase/functions/send-email/index.ts)
+
+This function is called from `src/services/emailReportService.ts` to send monthly financial summary emails to the signed-in user.
 
 ## 4. Auth Settings
 
-Enable email/password auth in Supabase.
+In Supabase dashboard → Authentication → Providers:
 
-Optional:
+- Enable **Email** provider (email + password)
 
-- email confirmation
-- password reset redirect to `hisabkitab://reset-password`
+Optional settings:
 
-Current mobile auth behavior:
+| Setting                     | Notes                                                      |
+| --------------------------- | ---------------------------------------------------------- |
+| Email confirmation          | Optional — app works either way                            |
+| Password reset redirect URL | Set to `hisabkitab://reset-password` for deep-link support |
 
-- unauthenticated users are redirected to `/login`
-- authenticated users are redirected away from auth screens
-- logout clears local SQLite data before returning to login
-- biometric preference is stored locally and mirrored to `user_profile`
-- if a signed-in user is missing `user_profile`, the app creates it locally and syncs it
+Current auth behavior in the app:
+
+- Unauthenticated users → redirected to `/login`
+- Authenticated users → redirected away from auth screens
+- Logout → clears local SQLite data, resets app store, returns to `/login`
+- Biometric lock preference stored locally and mirrored to `user_profile`
+- If a signed-in user is missing `user_profile`, the app creates it locally and syncs on next connection
 
 ## 5. Sync Behavior
 
-- SQLite remains the source of truth for active app usage
-- writes are saved locally first and queued in `sync_queue`
-- the app automatically pushes queued writes when internet is available
-- remote changes are pulled back into SQLite during sync
-- SMS-imported transactions follow the same offline-first flow
+The app is fully offline-first:
+
+- All writes go to SQLite immediately and are queued in `sync_queue`
+- Push: queued writes are sent to Supabase when internet is available
+- Pull: remote rows updated since last sync are merged into local SQLite
+- Conflict resolution: latest `updated_at` wins
+- Soft deletes: `deletedAt` field set — rows are never hard-deleted
+- Only tables listed in `SYNCABLE_TABLES` (in `src/utils/constants.ts`) participate in sync
+- Sync triggers: app start, auth change, network reconnect, manual sync button, after each local write
 
 ## 6. Android SMS Import
 
-- the app uses `react-native-get-sms-android`
-- required Android permissions are declared in [app.json](./app.json)
-- this feature requires a native Android build and does not work in Expo Go
-- imported messages are deduplicated with SMS tags before transaction creation
+SMS import requires a **native Android build** (not Expo Go):
 
-## 7. After Deployment
+```bash
+npm run android   # npx expo run:android
+```
 
-Restart the app or trigger sync again from an authenticated session.
+- Uses `react-native-get-sms-android ^2.1.0`
+- Required permissions declared in `app.json` (`READ_SMS`)
+- Parser scans inbox for bank/UPI keywords (`debited`, `credited`, `spent`, `received`, etc.)
+- Extracts INR amounts with regex (`INR 100.00` / `Rs. 100` patterns)
+- Deduplicates imported messages before creating transactions
+- Imported transactions sync to Supabase like any other transaction
 
-Recommended restart command:
+## 7. Android Home Screen Widgets
+
+Widgets also require a native Android build:
+
+```bash
+npm run android
+```
+
+Three widgets available:
+
+| Widget          | Description                                    |
+| --------------- | ---------------------------------------------- |
+| Expense Summary | Current month income, expenses, top categories |
+| Budget Health   | Per-budget spend bars, overall percent         |
+| Quick Add       | Tap-to-open shortcut to add a new transaction  |
+
+Widgets are powered by `react-native-android-widget` and read data via `WidgetDataService`.
+
+## 8. After Initial Setup
+
+Restart the app after applying the schema:
 
 ```bash
 npx expo start -c
 ```
+
+To verify sync is working, sign in, add a transaction, and check the Supabase table editor — the row should appear within seconds.
+
+If the `send-email` edge function returns an error, check:
+
+1. `RESEND_API_KEY` secret is set in Supabase
+2. The email address is verified in your Resend account (if in sandbox mode)

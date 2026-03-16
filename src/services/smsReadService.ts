@@ -1,7 +1,14 @@
 import { PermissionsAndroid, Platform } from 'react-native';
 import SmsAndroid from 'react-native-get-sms-android';
-import { TransactionService } from './transactionService';
 import { CategoryService } from './dataServices';
+import { TransactionService } from './transactionService';
+
+interface SmsMessage {
+  _id: number;
+  address: string;
+  body: string;
+  date: number;
+}
 
 export interface ParsedSms {
   id: string;
@@ -63,7 +70,7 @@ export const SmsReadService = {
         },
         async (count: number, smsList: string) => {
           try {
-            const messages = JSON.parse(smsList) as any[];
+            const messages = JSON.parse(smsList) as SmsMessage[];
             const parsedResults: ParsedSms[] = [];
 
             for (const msg of messages) {
@@ -82,7 +89,7 @@ export const SmsReadService = {
     });
   },
 
-  parseMessage(msg: any): ParsedSms | null {
+  parseMessage(msg: SmsMessage): ParsedSms | null {
     const body = msg.body;
     const cleanBody = body.toLowerCase();
 
@@ -136,12 +143,17 @@ export const SmsReadService = {
     const otherCat =
       categories.find((c) => c.name === 'Other') || categories[0];
 
+    const { AccountService: AccService } = await import('./dataServices');
+    const accounts = await AccService.getAll();
+    const defaultAccount = accounts.find((a) => a.isDefault) || accounts[0];
+    const accountId = defaultAccount?.id ?? 'default';
+
     for (const sms of smsList) {
       await TransactionService.create({
         amount: sms.amount,
         type: sms.type,
         categoryId: otherCat.id,
-        accountId: 'default_account', // Should probably let user pick or handle multiple accounts
+        accountId,
         merchant: sms.merchant,
         notes: `Imported from SMS: ${sms.body.substring(0, 50)}...`,
         date: new Date(sms.date).toISOString().split('T')[0],

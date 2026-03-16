@@ -4,6 +4,8 @@ import * as LocalAuthentication from 'expo-local-authentication';
 import { useRouter, type Href } from 'expo-router';
 import React, { useEffect, useMemo, useState } from 'react';
 import {
+  ActivityIndicator,
+  Alert,
   Image,
   ScrollView,
   StyleSheet,
@@ -18,6 +20,7 @@ import { CustomPopup, CustomSwitch } from '../../components/common/index';
 import { ScreenHeader } from '../../components/common/ScreenHeader';
 import { useTheme, type ThemeColors } from '../../hooks/useTheme';
 import { authService, setBiometricPreference } from '../../services/auth';
+import { sendMonthlyReport } from '../../services/emailReportService';
 import { exportService } from '../../services/exportService';
 import { syncService } from '../../services/syncService';
 import { useAppStore } from '../../store/appStore';
@@ -50,6 +53,7 @@ export default function SettingsScreen() {
   }>({ visible: false, title: '', message: '', type: 'info' });
   const [showExportPicker, setShowExportPicker] = useState(false);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
+  const [syncing, setSyncing] = useState(false);
 
   useEffect(() => {
     const checkBiometrics = async () => {
@@ -76,22 +80,27 @@ export default function SettingsScreen() {
   };
 
   const handleSync = async () => {
-    const result = await syncService.sync('manual');
-    if (result.success) {
+    setSyncing(true);
+    try {
+      const result = await syncService.sync('manual');
+      if (result.success) {
+        setPopupConfig({
+          visible: true,
+          title: 'Success',
+          message: 'Data synced successfully to the cloud.',
+          type: 'success',
+        });
+        return;
+      }
       setPopupConfig({
         visible: true,
-        title: 'Success',
-        message: 'Data synced successfully to the cloud.',
-        type: 'success',
+        title: 'Sync Failed',
+        message: result.error ?? 'Could not sync data. Check your connection.',
+        type: 'error',
       });
-      return;
+    } finally {
+      setSyncing(false);
     }
-    setPopupConfig({
-      visible: true,
-      title: 'Sync Failed',
-      message: result.error ?? 'Could not sync data. Check your connection.',
-      type: 'error',
-    });
   };
 
   const handleExportCsv = async () => {
@@ -115,29 +124,70 @@ export default function SettingsScreen() {
     }
   };
 
-  const handleExportJson = async () => {
-    setShowExportPicker(false);
+  const handleExport = () => {
+    setShowExportPicker(true);
+  };
+
+  const handleImportBackup = () => {
+    Alert.alert(
+      'Import Backup',
+      'This will merge the backup data into your existing data. Any conflicting records will be overwritten. Continue?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Choose File',
+          onPress: async () => {
+            try {
+              const result = await exportService.importBackupJson();
+              if (result) {
+                setPopupConfig({
+                  visible: true,
+                  title: 'Import Successful',
+                  message: `${result.imported} records imported.`,
+                  type: 'success',
+                });
+              }
+            } catch {
+              setPopupConfig({
+                visible: true,
+                title: 'Import Failed',
+                message:
+                  'Could not import backup. Make sure you selected a valid Hisab Kitab backup file.',
+                type: 'error',
+              });
+            }
+          },
+        },
+      ],
+    );
+  };
+
+  const handleEmailReport = async () => {
     try {
-      const uri = await exportService.exportFullBackupJson();
-      if (uri)
+      const result = await sendMonthlyReport();
+      if (result.ok) {
         setPopupConfig({
           visible: true,
-          title: 'Success',
-          message: `Backup exported to:\n${uri}`,
+          title: 'Report Sent',
+          message: 'Monthly report has been sent to your email.',
           type: 'success',
         });
+      } else {
+        setPopupConfig({
+          visible: true,
+          title: 'Failed',
+          message: result.error ?? 'Could not send report.',
+          type: 'error',
+        });
+      }
     } catch {
       setPopupConfig({
         visible: true,
-        title: 'Export Failed',
-        message: 'Could not export JSON backup.',
+        title: 'Failed',
+        message: 'Could not send email report. Please check your connection.',
         type: 'error',
       });
     }
-  };
-
-  const handleExport = () => {
-    setShowExportPicker(true);
   };
 
   const handleLogout = () => {
@@ -175,7 +225,7 @@ export default function SettingsScreen() {
         title="Settings"
         rightAction={{
           icon: 'help-circle-outline',
-          onPress: () => {},
+          onPress: () => router.push('/faq' as Href),
         }}
       />
 
@@ -376,9 +426,14 @@ export default function SettingsScreen() {
             </View>
             <TouchableOpacity
               onPress={() => void handleSync()}
-              style={styles.actionBtn}
+              style={[styles.actionBtn, syncing && { opacity: 0.6 }]}
+              disabled={syncing}
             >
-              <Text style={styles.actionBtnText}>Sync Now</Text>
+              {syncing ? (
+                <ActivityIndicator size="small" color={colors.primary} />
+              ) : (
+                <Text style={styles.actionBtnText}>Sync Now</Text>
+              )}
             </TouchableOpacity>
           </View>
 
@@ -407,6 +462,44 @@ export default function SettingsScreen() {
                 color={colors.textMuted}
               />
             </View>
+          </TouchableOpacity>
+
+          {/* Import Backup */}
+          <TouchableOpacity style={styles.prefRow} onPress={handleImportBackup}>
+            <View style={styles.prefLeft}>
+              <View style={styles.iconBox}>
+                <Ionicons
+                  name="push-outline"
+                  size={20}
+                  color={colors.primary}
+                />
+              </View>
+              <Text style={styles.prefTitle}>Import Backup</Text>
+            </View>
+            <Ionicons
+              name="chevron-forward"
+              size={16}
+              color={colors.textMuted}
+            />
+          </TouchableOpacity>
+
+          {/* Email Monthly Report */}
+          <TouchableOpacity style={styles.prefRow} onPress={handleEmailReport}>
+            <View style={styles.prefLeft}>
+              <View style={styles.iconBox}>
+                <Ionicons
+                  name="mail-outline"
+                  size={20}
+                  color={colors.primary}
+                />
+              </View>
+              <Text style={styles.prefTitle}>Email Monthly Report</Text>
+            </View>
+            <Ionicons
+              name="chevron-forward"
+              size={16}
+              color={colors.textMuted}
+            />
           </TouchableOpacity>
         </Animated.View>
 

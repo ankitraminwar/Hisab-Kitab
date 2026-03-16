@@ -1,5 +1,4 @@
-import { getDatabase, enqueueSync } from '@/database';
-import type { SQLiteBindValue } from 'expo-sqlite';
+import { enqueueSync, getDatabase } from '@/database';
 import { triggerBackgroundSync } from '@/services/syncService';
 import { useAppStore } from '@/store/appStore';
 import { generateId } from '@/utils/constants';
@@ -8,6 +7,15 @@ import type {
   TransactionFilters,
   TransactionType,
 } from '@/utils/types';
+import type { SQLiteBindValue } from 'expo-sqlite';
+
+/** Lazy-import to break the require cycle:
+ *  transactionService → refreshWidgets → widgetDataService → transactionService */
+const refreshAllWidgets = async () => {
+  const { refreshAllWidgets: refresh } =
+    await import('@/widgets/refreshWidgets');
+  return refresh();
+};
 
 const bindValue = (value: unknown): SQLiteBindValue => {
   if (
@@ -126,9 +134,10 @@ export const TransactionService = {
       params.push(filters.maxAmount);
     }
     if (filters?.search) {
-      query += ' AND (t.merchant LIKE ? OR t.notes LIKE ? OR t.tags LIKE ?)';
+      query +=
+        ' AND (t.merchant LIKE ? OR t.notes LIKE ? OR t.tags LIKE ? OR c.name LIKE ?)';
       const searchTerm = `%${filters.search}%`;
-      params.push(searchTerm, searchTerm, searchTerm);
+      params.push(searchTerm, searchTerm, searchTerm, searchTerm);
     }
 
     query += ' ORDER BY t.date DESC, t.createdAt DESC LIMIT ? OFFSET ?';
@@ -223,6 +232,7 @@ export const TransactionService = {
     });
     useAppStore.getState().bumpDataRevision();
     void triggerBackgroundSync('transaction-created');
+    void refreshAllWidgets();
 
     const created = await this.getById(transaction.id);
     if (!created) {
@@ -288,6 +298,7 @@ export const TransactionService = {
     });
     useAppStore.getState().bumpDataRevision();
     void triggerBackgroundSync('transaction-updated');
+    void refreshAllWidgets();
   },
 
   async delete(id: string): Promise<void> {
@@ -317,6 +328,7 @@ export const TransactionService = {
     });
     useAppStore.getState().bumpDataRevision();
     void triggerBackgroundSync('transaction-deleted');
+    void refreshAllWidgets();
   },
 
   async hasImportedSms(messageId: string): Promise<boolean> {
@@ -393,6 +405,54 @@ export const TransactionService = {
        GROUP BY month
        ORDER BY month ASC`,
       [`-${months} months`],
+    );
+  },
+
+  /** Get stats for a date range (dateFrom inclusive, dateTo inclusive) */
+  async getStatsByDateRange(
+    dateFrom: string,
+    dateTo: string,
+  ): Promise<{ income: number; expense: number }> {
+    const rows = await getDatabase().getAllAsync<{
+      type: string;
+      total: number;
+    }>(
+      `SELECT type, COALESCE(SUM(amount), 0) as total
+       FROM transactions
+       WHERE deletedAt IS NULL AND date >= ? AND date <= ? AND type != 'transfer'
+       GROUP BY type`,
+      [dateFrom, dateTo],
+    );
+    return rows.reduce(
+      (acc, row) => {
+        if (row.type === 'income') acc.income = row.total;
+        if (row.type === 'expense') acc.expense = row.total;
+        return acc;
+      },
+      { income: 0, expense: 0 },
+    );
+  },
+
+  /** Get category breakdown for a date range */
+  async getCategoryBreakdownByDateRange(
+    dateFrom: string,
+    dateTo: string,
+    type: TransactionType = 'expense',
+  ) {
+    return getDatabase().getAllAsync<{
+      categoryId: string;
+      categoryName: string;
+      categoryColor: string;
+      categoryIcon: string;
+      total: number;
+    }>(
+      `SELECT t.categoryId, c.name as categoryName, c.color as categoryColor, c.icon as categoryIcon, COALESCE(SUM(t.amount), 0) as total
+       FROM transactions t
+       LEFT JOIN categories c ON t.categoryId = c.id
+       WHERE t.deletedAt IS NULL AND t.date >= ? AND t.date <= ? AND t.type = ?
+       GROUP BY t.categoryId
+       ORDER BY total DESC`,
+      [dateFrom, dateTo, type],
     );
   },
 

@@ -4,6 +4,7 @@ import * as Haptics from 'expo-haptics';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
+  KeyboardAvoidingView,
   Modal,
   Platform,
   ScrollView,
@@ -29,6 +30,7 @@ import { RADIUS, SPACING } from '../../utils/constants';
 import type {
   Account,
   Category,
+  IoniconsName,
   PaymentMethod,
   TransactionType,
 } from '../../utils/types';
@@ -69,6 +71,8 @@ export default function AddTransactionScreen() {
     useState(false);
   const [newPmName, setNewPmName] = useState('');
   const [showNewPmInput, setShowNewPmInput] = useState(false);
+  const [showAccountPicker, setShowAccountPicker] = useState(false);
+  const [showToAccountPicker, setShowToAccountPicker] = useState(false);
 
   const [selectedCategory, setSelectedCategory] = useState<Category | null>(
     null,
@@ -326,158 +330,198 @@ export default function AddTransactionScreen() {
         </View>
       </View>
 
-      <ScrollView style={styles.scroll} showsVerticalScrollIndicator={false}>
-        {/* Big Amount */}
-        <View style={styles.amountWrap}>
-          <Text style={styles.amountLabel}>ENTER AMOUNT</Text>
-          <Text style={styles.amountValue}>
-            {amountStr === '0' || amountStr === ''
-              ? '₹0'
-              : amountStr.startsWith('₹')
-                ? amountStr
-                : `₹${amountStr}`}
-          </Text>
-        </View>
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      >
+        <ScrollView style={styles.scroll} showsVerticalScrollIndicator={false}>
+          {/* Big Amount */}
+          <View style={styles.amountWrap}>
+            <Text style={styles.amountLabel}>ENTER AMOUNT</Text>
+            <Text style={styles.amountValue}>
+              {amountStr === '0' || amountStr === ''
+                ? '₹0'
+                : amountStr.startsWith('₹')
+                  ? amountStr
+                  : `₹${amountStr}`}
+            </Text>
+          </View>
 
-        {/* Categories Grid */}
-        <CategoryGrid
-          categories={filteredCategories}
-          selectedId={selectedCategory?.id}
-          onSelect={setSelectedCategory}
-          columns={4}
-        />
+          {/* Categories Grid */}
+          <CategoryGrid
+            categories={filteredCategories}
+            selectedId={selectedCategory?.id}
+            onSelect={setSelectedCategory}
+            columns={4}
+          />
 
-        {/* Details */}
-        <View style={styles.detailsWrap}>
-          {/* Account */}
-          <TouchableOpacity style={styles.detailRow} onPress={() => {}}>
-            <View
-              style={[
-                styles.detailIcon,
-                { backgroundColor: colors.primary + '20' },
-              ]}
-            >
-              <Ionicons name="wallet" size={20} color={colors.primary} />
-            </View>
-            <View style={styles.detailContent}>
-              <Text style={styles.detailLabel}>PAYMENT ACCOUNT</Text>
-              <Text style={styles.detailText}>
-                {selectedAccount?.name || 'Select Account'}
-              </Text>
-            </View>
-            <Ionicons
-              name="chevron-forward"
-              size={20}
-              color={colors.textMuted}
-            />
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.detailRow}
-            onPress={() => setShowPaymentMethodOptions(true)}
-          >
-            <View
-              style={[
-                styles.detailIcon,
-                { backgroundColor: colors.primary + '20' },
-              ]}
-            >
-              <Ionicons name="card" size={20} color={colors.primary} />
-            </View>
-            <View style={styles.detailContent}>
-              <Text style={styles.detailLabel}>PAYMENT METHOD</Text>
-              <Text style={styles.detailText}>
-                {paymentMethod || 'Select Method'}
-              </Text>
-            </View>
-            <Ionicons
-              name="chevron-forward"
-              size={20}
-              color={colors.textMuted}
-            />
-          </TouchableOpacity>
-
-          <View style={styles.halfRows}>
+          {/* Details */}
+          <View style={styles.detailsWrap}>
+            {/* Account */}
             <TouchableOpacity
-              style={styles.halfRow}
-              onPress={() => setShowDatePicker(true)}
+              style={styles.detailRow}
+              onPress={() => setShowAccountPicker(true)}
             >
-              <Ionicons name="calendar" size={20} color={colors.textMuted} />
+              <View
+                style={[
+                  styles.detailIcon,
+                  { backgroundColor: colors.primary + '20' },
+                ]}
+              >
+                <Ionicons name="wallet" size={20} color={colors.primary} />
+              </View>
               <View style={styles.detailContent}>
-                <Text style={styles.detailLabel}>DATE</Text>
+                <Text style={styles.detailLabel}>PAYMENT ACCOUNT</Text>
                 <Text style={styles.detailText}>
-                  {toDateString(selectedDate) === toDateString(new Date())
-                    ? 'Today'
-                    : toDateString(selectedDate)}
+                  {selectedAccount?.name || 'Select Account'}
                 </Text>
               </View>
-            </TouchableOpacity>
-            <View style={styles.halfRow}>
               <Ionicons
-                name="document-text"
+                name="chevron-forward"
                 size={20}
                 color={colors.textMuted}
               />
-              <View style={styles.detailContent}>
-                <Text style={styles.detailLabel}>NOTES</Text>
-                <TextInput
-                  value={notes}
-                  onChangeText={(text) => {
-                    if (text.length <= 120) setNotes(text);
-                  }}
-                  placeholder="Add notes..."
-                  placeholderTextColor={colors.textMuted}
-                  style={[styles.detailText, { padding: 0 }]}
-                />
-                <Text
-                  style={{
-                    fontSize: 10,
-                    color: colors.textMuted,
-                    marginTop: 4,
-                  }}
-                >
-                  {notes.length}/120
-                </Text>
-              </View>
-            </View>
-          </View>
+            </TouchableOpacity>
 
-          {/* Split This Expense */}
-          {isEditing && type === 'expense' && (
+            {/* Transfer: Destination Account */}
+            {type === 'transfer' && (
+              <TouchableOpacity
+                style={styles.detailRow}
+                onPress={() => setShowToAccountPicker(true)}
+              >
+                <View
+                  style={[
+                    styles.detailIcon,
+                    { backgroundColor: colors.transfer + '20' },
+                  ]}
+                >
+                  <Ionicons
+                    name="swap-horizontal"
+                    size={20}
+                    color={colors.transfer}
+                  />
+                </View>
+                <View style={styles.detailContent}>
+                  <Text style={styles.detailLabel}>DESTINATION ACCOUNT</Text>
+                  <Text style={styles.detailText}>
+                    {selectedToAccount?.name || 'Select Destination'}
+                  </Text>
+                </View>
+                <Ionicons
+                  name="chevron-forward"
+                  size={20}
+                  color={colors.textMuted}
+                />
+              </TouchableOpacity>
+            )}
+
             <TouchableOpacity
-              style={styles.splitBtn}
-              onPress={() => router.push(`/split-expense/new?txId=${id}`)}
-              activeOpacity={0.8}
+              style={styles.detailRow}
+              onPress={() => setShowPaymentMethodOptions(true)}
             >
-              <Ionicons
-                name="people-outline"
-                size={20}
-                color={colors.primary}
-              />
-              <Text
+              <View
                 style={[
-                  styles.detailLabel,
-                  { color: colors.primary, marginLeft: 8 },
+                  styles.detailIcon,
+                  { backgroundColor: colors.primary + '20' },
                 ]}
               >
-                Split This Expense
-              </Text>
-              <View style={{ flex: 1 }} />
+                <Ionicons name="card" size={20} color={colors.primary} />
+              </View>
+              <View style={styles.detailContent}>
+                <Text style={styles.detailLabel}>PAYMENT METHOD</Text>
+                <Text style={styles.detailText}>
+                  {paymentMethod || 'Select Method'}
+                </Text>
+              </View>
               <Ionicons
                 name="chevron-forward"
-                size={18}
-                color={colors.primary}
+                size={20}
+                color={colors.textMuted}
               />
             </TouchableOpacity>
-          )}
-        </View>
-      </ScrollView>
 
-      <NumericKeypad
-        onDigit={handleDigit}
-        onBackspace={handleBackspace}
-        onDone={() => void handleDone()}
-      />
+            <View style={styles.halfRows}>
+              <TouchableOpacity
+                style={styles.halfRow}
+                onPress={() => setShowDatePicker(true)}
+              >
+                <Ionicons name="calendar" size={20} color={colors.textMuted} />
+                <View style={styles.detailContent}>
+                  <Text style={styles.detailLabel}>DATE</Text>
+                  <Text style={styles.detailText}>
+                    {toDateString(selectedDate) === toDateString(new Date())
+                      ? 'Today'
+                      : toDateString(selectedDate)}
+                  </Text>
+                </View>
+              </TouchableOpacity>
+              <View style={styles.halfRow}>
+                <Ionicons
+                  name="document-text"
+                  size={20}
+                  color={colors.textMuted}
+                />
+                <View style={styles.detailContent}>
+                  <Text style={styles.detailLabel}>NOTES</Text>
+                  <TextInput
+                    value={notes}
+                    onChangeText={(text) => {
+                      if (text.length <= 120) setNotes(text);
+                    }}
+                    placeholder="Add notes..."
+                    placeholderTextColor={colors.textMuted}
+                    style={[styles.detailText, { padding: 0 }]}
+                  />
+                  <Text
+                    style={{
+                      fontSize: 10,
+                      color: colors.textMuted,
+                      marginTop: 4,
+                    }}
+                  >
+                    {notes.length}/120
+                  </Text>
+                </View>
+              </View>
+            </View>
+
+            {/* Split This Expense */}
+            {isEditing && type === 'expense' && (
+              <TouchableOpacity
+                style={styles.splitBtn}
+                onPress={() => router.push(`/split-expense/new?txId=${id}`)}
+                activeOpacity={0.8}
+              >
+                <Ionicons
+                  name="people-outline"
+                  size={20}
+                  color={colors.primary}
+                />
+                <Text
+                  style={[
+                    styles.detailLabel,
+                    { color: colors.primary, marginLeft: 8 },
+                  ]}
+                >
+                  Split This Expense
+                </Text>
+                <View style={{ flex: 1 }} />
+                <Ionicons
+                  name="chevron-forward"
+                  size={18}
+                  color={colors.primary}
+                />
+              </TouchableOpacity>
+            )}
+          </View>
+        </ScrollView>
+
+        <NumericKeypad
+          onDigit={handleDigit}
+          onBackspace={handleBackspace}
+          onDone={() => void handleDone()}
+        />
+      </KeyboardAvoidingView>
 
       {showDatePicker && (
         <DateTimePicker
@@ -552,7 +596,7 @@ export default function AddTransactionScreen() {
                     }}
                   >
                     <Ionicons
-                      name={pm.icon as any}
+                      name={pm.icon as IoniconsName}
                       size={18}
                       color={colors.textMuted}
                     />
@@ -632,6 +676,180 @@ export default function AddTransactionScreen() {
                 </TouchableOpacity>
               </View>
             )}
+          </View>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* Account Picker Modal */}
+      <Modal visible={showAccountPicker} transparent animationType="fade">
+        <TouchableOpacity
+          style={styles.pmOverlay}
+          activeOpacity={1}
+          onPress={() => setShowAccountPicker(false)}
+        >
+          <View
+            style={{
+              backgroundColor: colors.bgCard,
+              margin: SPACING.xl,
+              marginTop: 'auto',
+              marginBottom: 'auto',
+              borderRadius: RADIUS.lg,
+              padding: SPACING.md,
+              maxHeight: '60%',
+            }}
+          >
+            <Text
+              style={{
+                fontSize: 16,
+                fontWeight: '700',
+                color: colors.textPrimary,
+                marginBottom: SPACING.md,
+                paddingHorizontal: SPACING.xs,
+              }}
+            >
+              Select Account
+            </Text>
+            <ScrollView>
+              {accounts.map((acc) => (
+                <TouchableOpacity
+                  key={acc.id}
+                  style={{
+                    padding: SPACING.md,
+                    borderBottomWidth: 1,
+                    borderBottomColor: colors.border,
+                    flexDirection: 'row',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                  }}
+                  onPress={() => {
+                    setSelectedAccount(acc);
+                    setShowAccountPicker(false);
+                  }}
+                >
+                  <View
+                    style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      gap: 12,
+                    }}
+                  >
+                    <Ionicons
+                      name={(acc.icon || 'wallet') as IoniconsName}
+                      size={18}
+                      color={acc.color || colors.textMuted}
+                    />
+                    <Text
+                      style={{
+                        fontSize: 15,
+                        fontWeight:
+                          selectedAccount?.id === acc.id ? '700' : '400',
+                        color:
+                          selectedAccount?.id === acc.id
+                            ? colors.primary
+                            : colors.textPrimary,
+                      }}
+                    >
+                      {acc.name}
+                    </Text>
+                  </View>
+                  {selectedAccount?.id === acc.id && (
+                    <Ionicons
+                      name="checkmark-circle"
+                      size={20}
+                      color={colors.primary}
+                    />
+                  )}
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </View>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* Destination Account Picker Modal (Transfer) */}
+      <Modal visible={showToAccountPicker} transparent animationType="fade">
+        <TouchableOpacity
+          style={styles.pmOverlay}
+          activeOpacity={1}
+          onPress={() => setShowToAccountPicker(false)}
+        >
+          <View
+            style={{
+              backgroundColor: colors.bgCard,
+              margin: SPACING.xl,
+              marginTop: 'auto',
+              marginBottom: 'auto',
+              borderRadius: RADIUS.lg,
+              padding: SPACING.md,
+              maxHeight: '60%',
+            }}
+          >
+            <Text
+              style={{
+                fontSize: 16,
+                fontWeight: '700',
+                color: colors.textPrimary,
+                marginBottom: SPACING.md,
+                paddingHorizontal: SPACING.xs,
+              }}
+            >
+              Destination Account
+            </Text>
+            <ScrollView>
+              {accounts
+                .filter((acc) => acc.id !== selectedAccount?.id)
+                .map((acc) => (
+                  <TouchableOpacity
+                    key={acc.id}
+                    style={{
+                      padding: SPACING.md,
+                      borderBottomWidth: 1,
+                      borderBottomColor: colors.border,
+                      flexDirection: 'row',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                    }}
+                    onPress={() => {
+                      setSelectedToAccount(acc);
+                      setShowToAccountPicker(false);
+                    }}
+                  >
+                    <View
+                      style={{
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        gap: 12,
+                      }}
+                    >
+                      <Ionicons
+                        name={(acc.icon || 'wallet') as IoniconsName}
+                        size={18}
+                        color={acc.color || colors.textMuted}
+                      />
+                      <Text
+                        style={{
+                          fontSize: 15,
+                          fontWeight:
+                            selectedToAccount?.id === acc.id ? '700' : '400',
+                          color:
+                            selectedToAccount?.id === acc.id
+                              ? colors.primary
+                              : colors.textPrimary,
+                        }}
+                      >
+                        {acc.name}
+                      </Text>
+                    </View>
+                    {selectedToAccount?.id === acc.id && (
+                      <Ionicons
+                        name="checkmark-circle"
+                        size={20}
+                        color={colors.primary}
+                      />
+                    )}
+                  </TouchableOpacity>
+                ))}
+            </ScrollView>
           </View>
         </TouchableOpacity>
       </Modal>

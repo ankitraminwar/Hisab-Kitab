@@ -391,3 +391,18 @@ create policy "own_user_profile" on public.user_profile for all using (auth.uid(
 create policy "own_split_expenses" on public.split_expenses for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
 create policy "own_split_members" on public.split_members for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
 create policy "own_payment_methods" on public.payment_methods for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+
+-- ============================================================
+-- Schema & Table Grants
+-- ============================================================
+
+grant usage on schema public to anon, authenticated;
+
+grant select on all tables in schema public to anon;
+grant select, insert, update, delete on all tables in schema public to authenticated;
+
+alter default privileges in schema public grant select on tables to anon;
+alter default privileges in schema public grant select, insert, update, delete on tables to authenticated;
+
+grant usage on all sequences in schema public to authenticated;
+alter default privileges in schema public grant usage on sequences to authenticated;

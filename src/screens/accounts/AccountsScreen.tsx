@@ -1,27 +1,31 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  TouchableOpacity,
-  Modal,
-  TextInput,
-} from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import Animated, { FadeInDown } from 'react-native-reanimated';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  SPACING,
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+} from 'react-native';
+import Animated, { FadeInDown } from 'react-native-reanimated';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { Button, Card } from '../../components/common';
+import { useTheme, type ThemeColors } from '../../hooks/useTheme';
+import { AccountService } from '../../services/dataServices';
+import { triggerBackgroundSync } from '../../services/syncService';
+import { useAppStore } from '../../store/appStore';
+import {
   RADIUS,
+  SPACING,
   TYPOGRAPHY,
   formatCurrency,
 } from '../../utils/constants';
-import { useTheme } from '../../hooks/useTheme';
-import { AccountService } from '../../services/dataServices';
-import { Account, AccountType } from '../../utils/types';
-import { Card, Button } from '../../components/common';
-import { useAppStore } from '../../store/appStore';
+import type { Account, AccountType, IoniconsName } from '../../utils/types';
 
 const ACCOUNT_TYPES: {
   key: AccountType;
@@ -59,14 +63,22 @@ export default function AccountsScreen() {
   const styles = useMemo(() => createStyles(colors), [colors]);
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [showAdd, setShowAdd] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
 
-  useEffect(() => {
-    loadAccounts();
-  }, [dataRevision]);
-
-  const loadAccounts = async () => {
+  const loadAccounts = useCallback(async () => {
     const data = await AccountService.getAll();
     setAccounts(data);
+  }, []);
+
+  useEffect(() => {
+    void loadAccounts();
+  }, [dataRevision, loadAccounts]);
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await triggerBackgroundSync('pull-to-refresh');
+    await loadAccounts();
+    setRefreshing(false);
   };
 
   const totalBalance = accounts.reduce((s, a) => s + a.balance, 0);
@@ -86,6 +98,13 @@ export default function AccountsScreen() {
       <ScrollView
         contentContainerStyle={styles.scroll}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={colors.primary}
+          />
+        }
       >
         {/* Total Balance */}
         <Card style={styles.totalCard} glow>
@@ -111,7 +130,7 @@ export default function AccountsScreen() {
             account={account}
             onDelete={async () => {
               await AccountService.delete(account.id);
-              loadAccounts();
+              void loadAccounts();
             }}
           />
         ))}
@@ -123,7 +142,7 @@ export default function AccountsScreen() {
         visible={showAdd}
         onClose={() => setShowAdd(false)}
         onSave={() => {
-          loadAccounts();
+          void loadAccounts();
           setShowAdd(false);
         }}
       />
@@ -149,7 +168,7 @@ const AccountCard: React.FC<{ account: Account; onDelete: () => void }> = ({
           ]}
         >
           <Ionicons
-            name={account.icon as any}
+            name={account.icon as IoniconsName}
             size={22}
             color={account.color}
           />
@@ -227,101 +246,114 @@ const AddAccountModal: React.FC<{
       animationType="slide"
       onRequestClose={onClose}
     >
-      <View style={mStyles.overlay}>
-        <View style={mStyles.sheet}>
-          <View style={mStyles.handle} />
-          <Text style={mStyles.title}>Add Account</Text>
-
-          <Text style={mStyles.label}>Account Type</Text>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            style={{ marginBottom: SPACING.md }}
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      >
+        <TouchableOpacity
+          style={mStyles.overlay}
+          activeOpacity={1}
+          onPress={onClose}
+        >
+          <TouchableOpacity
+            style={mStyles.sheet}
+            activeOpacity={1}
+            onPress={() => {}}
           >
-            {ACCOUNT_TYPES.map((t) => (
-              <TouchableOpacity
-                key={t.key}
-                onPress={() => setType(t.key)}
-                style={[
-                  mStyles.typeChip,
-                  type === t.key && {
-                    backgroundColor: t.color,
-                    borderColor: t.color,
-                  },
-                ]}
-              >
-                <Ionicons
-                  name={t.icon as any}
-                  size={14}
-                  color={type === t.key ? '#fff' : colors.textMuted}
-                />
-                <Text
+            <View style={mStyles.handle} />
+            <Text style={mStyles.title}>Add Account</Text>
+
+            <Text style={mStyles.label}>Account Type</Text>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              style={{ marginBottom: SPACING.md }}
+            >
+              {ACCOUNT_TYPES.map((t) => (
+                <TouchableOpacity
+                  key={t.key}
+                  onPress={() => setType(t.key)}
                   style={[
-                    mStyles.typeLabel,
-                    type === t.key && { color: '#fff' },
+                    mStyles.typeChip,
+                    type === t.key && {
+                      backgroundColor: t.color,
+                      borderColor: t.color,
+                    },
                   ]}
                 >
-                  {t.label}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
+                  <Ionicons
+                    name={t.icon as IoniconsName}
+                    size={14}
+                    color={type === t.key ? '#fff' : colors.textMuted}
+                  />
+                  <Text
+                    style={[
+                      mStyles.typeLabel,
+                      type === t.key && { color: '#fff' },
+                    ]}
+                  >
+                    {t.label}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
 
-          <TextInput
-            value={name}
-            onChangeText={setName}
-            placeholder="Account name (e.g. HDFC Savings)"
-            placeholderTextColor={colors.textMuted}
-            style={mStyles.input}
-          />
-          <TextInput
-            value={balance}
-            onChangeText={setBalance}
-            keyboardType="numeric"
-            placeholder="Opening balance (₹)"
-            placeholderTextColor={colors.textMuted}
-            style={mStyles.input}
-          />
+            <TextInput
+              value={name}
+              onChangeText={setName}
+              placeholder="Account name (e.g. HDFC Savings)"
+              placeholderTextColor={colors.textMuted}
+              style={mStyles.input}
+            />
+            <TextInput
+              value={balance}
+              onChangeText={setBalance}
+              keyboardType="numeric"
+              placeholder="Opening balance (₹)"
+              placeholderTextColor={colors.textMuted}
+              style={mStyles.input}
+            />
 
-          <Text style={mStyles.label}>Color</Text>
-          <View style={mStyles.colorRow}>
-            {ACCOUNT_COLORS.map((c) => (
-              <TouchableOpacity
-                key={c}
-                onPress={() => setColor(c)}
-                style={[
-                  mStyles.colorDot,
-                  {
-                    backgroundColor: c,
-                    borderWidth: color === c ? 3 : 0,
-                    borderColor: '#fff',
-                  },
-                ]}
+            <Text style={mStyles.label}>Color</Text>
+            <View style={mStyles.colorRow}>
+              {ACCOUNT_COLORS.map((c) => (
+                <TouchableOpacity
+                  key={c}
+                  onPress={() => setColor(c)}
+                  style={[
+                    mStyles.colorDot,
+                    {
+                      backgroundColor: c,
+                      borderWidth: color === c ? 3 : 0,
+                      borderColor: '#fff',
+                    },
+                  ]}
+                />
+              ))}
+            </View>
+
+            <View style={mStyles.actions}>
+              <Button
+                title="Cancel"
+                onPress={onClose}
+                variant="ghost"
+                style={{ flex: 1 }}
               />
-            ))}
-          </View>
-
-          <View style={mStyles.actions}>
-            <Button
-              title="Cancel"
-              onPress={onClose}
-              variant="ghost"
-              style={{ flex: 1 }}
-            />
-            <Button
-              title="Add Account"
-              onPress={handleSave}
-              loading={loading}
-              style={{ flex: 1 }}
-            />
-          </View>
-        </View>
-      </View>
+              <Button
+                title="Add Account"
+                onPress={handleSave}
+                loading={loading}
+                style={{ flex: 1 }}
+              />
+            </View>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </KeyboardAvoidingView>
     </Modal>
   );
 };
 
-function createModalStyles(colors: any) {
+function createModalStyles(colors: ThemeColors) {
   return StyleSheet.create({
     overlay: {
       flex: 1,
@@ -389,7 +421,7 @@ function createModalStyles(colors: any) {
   });
 }
 
-function createStyles(colors: any) {
+function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
     container: { flex: 1, backgroundColor: colors.bg },
     header: {

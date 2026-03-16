@@ -1,34 +1,38 @@
-import React, { useCallback, useEffect, useState, useMemo } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  TouchableOpacity,
-  TextInput,
-  Modal,
-} from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import Animated, { FadeInDown } from 'react-native-reanimated';
+import { format } from 'date-fns';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  SPACING,
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+} from 'react-native';
+import Animated, { FadeInDown } from 'react-native-reanimated';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import {
+  Button,
+  Card,
+  EmptyState,
+  ProgressBar,
+  SectionHeader,
+} from '../../components/common';
+import { useTheme, type ThemeColors } from '../../hooks/useTheme';
+import { BudgetService, CategoryService } from '../../services/dataService';
+import { triggerBackgroundSync } from '../../services/syncService';
+import { useAppStore } from '../../store/appStore';
+import {
   RADIUS,
+  SPACING,
   TYPOGRAPHY,
   formatCurrency,
 } from '../../utils/constants';
-import { BudgetService, CategoryService } from '../../services/dataService';
 import type { Budget, Category } from '../../utils/types';
-import { useAppStore } from '../../store/appStore';
-import {
-  Card,
-  ProgressBar,
-  EmptyState,
-  Button,
-  SectionHeader,
-} from '../../components/common';
-import { format } from 'date-fns';
-import { useTheme, type ThemeColors } from '../../hooks/useTheme';
 
 export default function BudgetsScreen() {
   const { colors, isDark } = useTheme();
@@ -42,6 +46,7 @@ export default function BudgetsScreen() {
   const [budgets, setBudgets] = useState<Budget[]>([]);
   const [showAdd, setShowAdd] = useState(false);
   const [categories, setCategories] = useState<Category[]>([]);
+  const [refreshing, setRefreshing] = useState(false);
 
   const loadData = useCallback(async () => {
     const [b, c] = await Promise.all([
@@ -57,6 +62,13 @@ export default function BudgetsScreen() {
   useEffect(() => {
     void loadData();
   }, [dataRevision, loadData]);
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await triggerBackgroundSync('pull-to-refresh');
+    await loadData();
+    setRefreshing(false);
+  };
 
   const totalBudget = budgets.reduce((s, b) => s + b.limit_amount, 0);
   const totalSpent = budgets.reduce((s, b) => s + b.spent, 0);
@@ -107,6 +119,13 @@ export default function BudgetsScreen() {
       <ScrollView
         contentContainerStyle={styles.scroll}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={colors.primary}
+          />
+        }
       >
         <Animated.View entering={FadeInDown.duration(400).delay(200)}>
           <Card style={styles.summaryCard}>
@@ -315,75 +334,93 @@ const AddBudgetModal = ({
   };
 
   return (
-    <Modal visible={visible} animationType="slide" transparent>
-      <View style={styles.overlay}>
-        <View style={styles.sheet}>
-          <View style={styles.handle} />
-          <Text style={styles.title}>New Budget</Text>
-
-          <Text style={styles.label}>Select Category</Text>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            style={styles.categories}
+    <Modal
+      visible={visible}
+      animationType="slide"
+      transparent
+      onRequestClose={onClose}
+    >
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      >
+        <TouchableOpacity
+          style={styles.overlay}
+          activeOpacity={1}
+          onPress={onClose}
+        >
+          <TouchableOpacity
+            style={styles.sheet}
+            activeOpacity={1}
+            onPress={() => {}}
           >
-            {availableCategories.map((cat) => (
-              <TouchableOpacity
-                key={cat.id}
-                onPress={() => setCategoryId(cat.id)}
-                style={[
-                  styles.categoryChip,
-                  categoryId === cat.id && {
-                    backgroundColor: cat.color + '20',
-                    borderColor: cat.color,
-                  },
-                ]}
-              >
-                <Ionicons
-                  name={cat.icon as never}
-                  size={16}
-                  color={categoryId === cat.id ? cat.color : colors.textMuted}
-                />
-                <Text
+            <View style={styles.handle} />
+            <Text style={styles.title}>New Budget</Text>
+
+            <Text style={styles.label}>Select Category</Text>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              style={styles.categories}
+            >
+              {availableCategories.map((cat) => (
+                <TouchableOpacity
+                  key={cat.id}
+                  onPress={() => setCategoryId(cat.id)}
                   style={[
-                    styles.categoryChipText,
-                    categoryId === cat.id && { color: cat.color },
+                    styles.categoryChip,
+                    categoryId === cat.id && {
+                      backgroundColor: cat.color + '20',
+                      borderColor: cat.color,
+                    },
                   ]}
                 >
-                  {cat.name}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
+                  <Ionicons
+                    name={cat.icon as never}
+                    size={16}
+                    color={categoryId === cat.id ? cat.color : colors.textMuted}
+                  />
+                  <Text
+                    style={[
+                      styles.categoryChipText,
+                      categoryId === cat.id && { color: cat.color },
+                    ]}
+                  >
+                    {cat.name}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
 
-          <Text style={styles.label}>Monthly Limit</Text>
-          <TextInput
-            style={styles.input}
-            keyboardType="numeric"
-            value={amount}
-            onChangeText={setAmount}
-            placeholder="0.00"
-            placeholderTextColor={colors.textMuted}
-            keyboardAppearance={isDark ? 'dark' : 'light'}
-          />
+            <Text style={styles.label}>Monthly Limit</Text>
+            <TextInput
+              style={styles.input}
+              keyboardType="numeric"
+              value={amount}
+              onChangeText={setAmount}
+              placeholder="0.00"
+              placeholderTextColor={colors.textMuted}
+              keyboardAppearance={isDark ? 'dark' : 'light'}
+            />
 
-          <View style={styles.actions}>
-            <Button
-              title="Cancel"
-              variant="secondary"
-              onPress={onClose}
-              style={styles.flex1}
-            />
-            <Button
-              title="Save"
-              onPress={() => void handleSave()}
-              loading={loading}
-              style={styles.flex1}
-              disabled={!categoryId || !amount}
-            />
-          </View>
-        </View>
-      </View>
+            <View style={styles.actions}>
+              <Button
+                title="Cancel"
+                variant="secondary"
+                onPress={onClose}
+                style={styles.flex1}
+              />
+              <Button
+                title="Save"
+                onPress={() => void handleSave()}
+                loading={loading}
+                style={styles.flex1}
+                disabled={!categoryId || !amount}
+              />
+            </View>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </KeyboardAvoidingView>
     </Modal>
   );
 };
@@ -423,37 +460,55 @@ const EditBudgetModal = ({
   };
 
   return (
-    <Modal visible={visible} animationType="slide" transparent>
-      <View style={styles.overlay}>
-        <View style={styles.sheet}>
-          <View style={styles.handle} />
-          <Text style={styles.title}>Edit Budget</Text>
-          <Text style={styles.subtitle}>{category?.name}</Text>
+    <Modal
+      visible={visible}
+      animationType="slide"
+      transparent
+      onRequestClose={onClose}
+    >
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      >
+        <TouchableOpacity
+          style={styles.overlay}
+          activeOpacity={1}
+          onPress={onClose}
+        >
+          <TouchableOpacity
+            style={styles.sheet}
+            activeOpacity={1}
+            onPress={() => {}}
+          >
+            <View style={styles.handle} />
+            <Text style={styles.title}>Edit Budget</Text>
+            <Text style={styles.subtitle}>{category?.name}</Text>
 
-          <Text style={styles.label}>Monthly Limit</Text>
-          <TextInput
-            style={styles.input}
-            keyboardType="numeric"
-            value={amount}
-            onChangeText={setAmount}
-          />
+            <Text style={styles.label}>Monthly Limit</Text>
+            <TextInput
+              style={styles.input}
+              keyboardType="numeric"
+              value={amount}
+              onChangeText={setAmount}
+            />
 
-          <View style={styles.actions}>
-            <Button
-              title="Delete"
-              variant="danger"
-              onPress={() => void handleDelete()}
-              style={styles.flex1}
-            />
-            <Button
-              title="Update"
-              onPress={() => void handleSave()}
-              loading={loading}
-              style={styles.flex1}
-            />
-          </View>
-        </View>
-      </View>
+            <View style={styles.actions}>
+              <Button
+                title="Delete"
+                variant="danger"
+                onPress={() => void handleDelete()}
+                style={styles.flex1}
+              />
+              <Button
+                title="Update"
+                onPress={() => void handleSave()}
+                loading={loading}
+                style={styles.flex1}
+              />
+            </View>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </KeyboardAvoidingView>
     </Modal>
   );
 };

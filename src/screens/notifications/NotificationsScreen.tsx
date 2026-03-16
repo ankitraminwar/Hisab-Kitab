@@ -1,19 +1,26 @@
-import React, { useMemo } from 'react';
+import { Ionicons } from '@expo/vector-icons';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  View,
-  StyleSheet,
   FlatList,
+  StyleSheet,
   Text,
   TouchableOpacity,
+  View,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
 import Animated, { FadeInDown } from 'react-native-reanimated';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { ScreenHeader } from '../../components/common/ScreenHeader';
 import { EmptyState } from '../../components/common';
+import { ScreenHeader } from '../../components/common/ScreenHeader';
 import { useTheme, type ThemeColors } from '../../hooks/useTheme';
-import { SPACING, RADIUS, TYPOGRAPHY } from '../../utils/constants';
+import { BudgetService, GoalService } from '../../services/dataService';
+import { useAppStore } from '../../store/appStore';
+import {
+  RADIUS,
+  SPACING,
+  TYPOGRAPHY,
+  formatCurrency,
+} from '../../utils/constants';
 
 interface NotificationItem {
   id: string;
@@ -24,38 +31,90 @@ interface NotificationItem {
   isRead: boolean;
 }
 
-// Mock data for now, could be wired up to a real store later
-const MOCK_NOTIFICATIONS: NotificationItem[] = [
-  {
-    id: '1',
-    title: 'Budget Exceeded',
-    message: 'You have exceeded your food budget for this month by ₹500.',
-    type: 'alert',
-    time: '2 hours ago',
-    isRead: false,
-  },
-  {
-    id: '2',
-    title: 'Monthly Report Ready',
-    message: 'Your financial report for last month is now available.',
-    type: 'info',
-    time: '1 day ago',
-    isRead: false,
-  },
-  {
-    id: '3',
-    title: 'Goal Achieved!',
-    message:
-      'Congratulations! You have reached your savings goal for "New Laptop".',
-    type: 'success',
-    time: '3 days ago',
-    isRead: true,
-  },
-];
-
 export default function NotificationsScreen() {
   const { colors } = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
+  const dataRevision = useAppStore((s) => s.dataRevision);
+  const [notifications, setNotifications] = useState<NotificationItem[]>([]);
+
+  const buildNotifications = useCallback(async () => {
+    const items: NotificationItem[] = [];
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+
+    // Budget-based notifications
+    const budgets = await BudgetService.getForMonth(year, month);
+    for (const b of budgets) {
+      if (b.limit_amount <= 0) continue;
+      const pct = b.spent / b.limit_amount;
+      if (pct >= 1) {
+        items.push({
+          id: `budget-over-${b.id}`,
+          title: 'Budget Exceeded',
+          message: `You have exceeded your ${b.categoryName ?? 'budget'} limit by ${formatCurrency(b.spent - b.limit_amount)}.`,
+          type: 'alert',
+          time: 'This month',
+          isRead: false,
+        });
+      } else if (pct >= 0.8) {
+        items.push({
+          id: `budget-warn-${b.id}`,
+          title: 'Budget Warning',
+          message: `${b.categoryName ?? 'Budget'} is ${Math.round(pct * 100)}% used. ${formatCurrency(b.limit_amount - b.spent)} remaining.`,
+          type: 'alert',
+          time: 'This month',
+          isRead: false,
+        });
+      }
+    }
+
+    // Goal-based notifications
+    const goals = await GoalService.getAll();
+    for (const g of goals) {
+      if (g.currentAmount >= g.targetAmount) {
+        items.push({
+          id: `goal-done-${g.id}`,
+          title: 'Goal Achieved!',
+          message: `Congratulations! You have reached your savings goal for "${g.name}".`,
+          type: 'success',
+          time: 'Recently',
+          isRead: true,
+        });
+      } else if (
+        g.targetAmount > 0 &&
+        g.currentAmount / g.targetAmount >= 0.75
+      ) {
+        items.push({
+          id: `goal-near-${g.id}`,
+          title: 'Almost There!',
+          message: `"${g.name}" is ${Math.round((g.currentAmount / g.targetAmount) * 100)}% funded. Keep it up!`,
+          type: 'info',
+          time: 'Recently',
+          isRead: true,
+        });
+      }
+    }
+
+    // Monthly report reminder (always show on 1st of month)
+    if (now.getDate() <= 3) {
+      items.push({
+        id: 'monthly-report',
+        title: 'Monthly Report Ready',
+        message:
+          'Your financial report for last month is now available. Review your spending patterns.',
+        type: 'info',
+        time: 'Today',
+        isRead: false,
+      });
+    }
+
+    setNotifications(items);
+  }, []);
+
+  useEffect(() => {
+    void buildNotifications();
+  }, [buildNotifications, dataRevision]);
 
   const getIconForType = (type: NotificationItem['type']) => {
     switch (type) {
@@ -125,7 +184,7 @@ export default function NotificationsScreen() {
       <ScreenHeader title="Notifications" />
 
       <FlatList
-        data={MOCK_NOTIFICATIONS}
+        data={notifications}
         renderItem={renderItem}
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.listContent}

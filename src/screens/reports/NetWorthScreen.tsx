@@ -1,30 +1,32 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  TouchableOpacity,
-  Modal,
-  TextInput,
-} from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import Animated, { FadeInDown } from 'react-native-reanimated';
-import Svg, { Path, Defs, LinearGradient, Stop } from 'react-native-svg';
-import { ScreenHeader } from '../../components/common/ScreenHeader';
-import { Button } from '../../components/common';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
-  SPACING,
-  RADIUS,
-  TYPOGRAPHY,
-  formatCurrency,
-  formatCompact,
-} from '../../utils/constants';
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+} from 'react-native';
+import Animated, { FadeInDown } from 'react-native-reanimated';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import Svg, { Defs, LinearGradient, Path, Stop } from 'react-native-svg';
+import { Button } from '../../components/common';
+import { ScreenHeader } from '../../components/common/ScreenHeader';
 import { useTheme, type ThemeColors } from '../../hooks/useTheme';
 import { NetWorthService } from '../../services/dataService';
-import { Asset, Liability, AssetType, LiabilityType } from '../../utils/types';
 import { useAppStore } from '../../store/appStore';
+import {
+  RADIUS,
+  SPACING,
+  TYPOGRAPHY,
+  formatCompact,
+  formatCurrency,
+} from '../../utils/constants';
+import { Asset, AssetType, Liability, LiabilityType } from '../../utils/types';
 
 const ASSET_TYPES: {
   key: AssetType;
@@ -512,74 +514,79 @@ const AddAssetModal: React.FC<{
       animationType="slide"
       onRequestClose={onClose}
     >
-      <View style={mStyles.overlay}>
-        <View style={mStyles.sheet}>
-          <View style={mStyles.handle} />
-          <Text style={mStyles.title}>Add Asset</Text>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            style={{ marginBottom: SPACING.md }}
-          >
-            {ASSET_TYPES.map((t) => (
-              <TouchableOpacity
-                key={t.key}
-                onPress={() => setType(t.key)}
-                style={[
-                  mStyles.chip,
-                  type === t.key && {
-                    backgroundColor: t.color,
-                    borderColor: t.color,
-                  },
-                ]}
-              >
-                <Ionicons
-                  name={t.icon as never}
-                  size={14}
-                  color={type === t.key ? '#fff' : colors.textMuted}
-                />
-                <Text
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      >
+        <View style={mStyles.overlay}>
+          <View style={mStyles.sheet}>
+            <View style={mStyles.handle} />
+            <Text style={mStyles.title}>Add Asset</Text>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              style={{ marginBottom: SPACING.md }}
+            >
+              {ASSET_TYPES.map((t) => (
+                <TouchableOpacity
+                  key={t.key}
+                  onPress={() => setType(t.key)}
                   style={[
-                    mStyles.chipText,
-                    type === t.key && { color: '#fff' },
+                    mStyles.chip,
+                    type === t.key && {
+                      backgroundColor: t.color,
+                      borderColor: t.color,
+                    },
                   ]}
                 >
-                  {t.label}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
-          <TextInput
-            value={name}
-            onChangeText={setName}
-            placeholder="Asset name"
-            placeholderTextColor={colors.textMuted}
-            style={mStyles.input}
-          />
-          <TextInput
-            value={value}
-            onChangeText={setValue}
-            keyboardType="numeric"
-            placeholder="Current value (₹)"
-            placeholderTextColor={colors.textMuted}
-            style={mStyles.input}
-          />
-          <View style={mStyles.actions}>
-            <Button
-              title="Cancel"
-              onPress={onClose}
-              variant="ghost"
-              style={{ flex: 1 }}
+                  <Ionicons
+                    name={t.icon as never}
+                    size={14}
+                    color={type === t.key ? '#fff' : colors.textMuted}
+                  />
+                  <Text
+                    style={[
+                      mStyles.chipText,
+                      type === t.key && { color: '#fff' },
+                    ]}
+                  >
+                    {t.label}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+            <TextInput
+              value={name}
+              onChangeText={setName}
+              placeholder="Asset name"
+              placeholderTextColor={colors.textMuted}
+              style={mStyles.input}
             />
-            <Button
-              title="Add Asset"
-              onPress={() => void handleSave()}
-              loading={loading}
-              style={{ flex: 1 }}
+            <TextInput
+              value={value}
+              onChangeText={setValue}
+              keyboardType="numeric"
+              placeholder="Current value (₹)"
+              placeholderTextColor={colors.textMuted}
+              style={mStyles.input}
             />
+            <View style={mStyles.actions}>
+              <Button
+                title="Cancel"
+                onPress={onClose}
+                variant="ghost"
+                style={{ flex: 1 }}
+              />
+              <Button
+                title="Add Asset"
+                onPress={() => void handleSave()}
+                loading={loading}
+                style={{ flex: 1 }}
+              />
+            </View>
           </View>
         </View>
-      </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 };
@@ -621,80 +628,85 @@ const AddLiabilityModal: React.FC<{
       animationType="slide"
       onRequestClose={onClose}
     >
-      <View style={mStyles.overlay}>
-        <View style={mStyles.sheet}>
-          <View style={mStyles.handle} />
-          <Text style={mStyles.title}>Add Liability</Text>
-          <View
-            style={{
-              flexDirection: 'row',
-              flexWrap: 'wrap',
-              gap: 8,
-              marginBottom: SPACING.md,
-            }}
-          >
-            {LIABILITY_TYPES.map((t) => (
-              <TouchableOpacity
-                key={t.key}
-                onPress={() => setType(t.key)}
-                style={[
-                  mStyles.chip,
-                  type === t.key && {
-                    backgroundColor: t.color,
-                    borderColor: t.color,
-                  },
-                ]}
-              >
-                <Text
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      >
+        <View style={mStyles.overlay}>
+          <View style={mStyles.sheet}>
+            <View style={mStyles.handle} />
+            <Text style={mStyles.title}>Add Liability</Text>
+            <View
+              style={{
+                flexDirection: 'row',
+                flexWrap: 'wrap',
+                gap: 8,
+                marginBottom: SPACING.md,
+              }}
+            >
+              {LIABILITY_TYPES.map((t) => (
+                <TouchableOpacity
+                  key={t.key}
+                  onPress={() => setType(t.key)}
                   style={[
-                    mStyles.chipText,
-                    type === t.key && { color: '#fff' },
+                    mStyles.chip,
+                    type === t.key && {
+                      backgroundColor: t.color,
+                      borderColor: t.color,
+                    },
                   ]}
                 >
-                  {t.label}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-          <TextInput
-            value={name}
-            onChangeText={setName}
-            placeholder="Liability name"
-            placeholderTextColor={colors.textMuted}
-            style={mStyles.input}
-          />
-          <TextInput
-            value={amount}
-            onChangeText={setAmount}
-            keyboardType="numeric"
-            placeholder="Outstanding amount (₹)"
-            placeholderTextColor={colors.textMuted}
-            style={mStyles.input}
-          />
-          <TextInput
-            value={rate}
-            onChangeText={setRate}
-            keyboardType="numeric"
-            placeholder="Interest rate % (optional)"
-            placeholderTextColor={colors.textMuted}
-            style={mStyles.input}
-          />
-          <View style={mStyles.actions}>
-            <Button
-              title="Cancel"
-              onPress={onClose}
-              variant="ghost"
-              style={{ flex: 1 }}
+                  <Text
+                    style={[
+                      mStyles.chipText,
+                      type === t.key && { color: '#fff' },
+                    ]}
+                  >
+                    {t.label}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+            <TextInput
+              value={name}
+              onChangeText={setName}
+              placeholder="Liability name"
+              placeholderTextColor={colors.textMuted}
+              style={mStyles.input}
             />
-            <Button
-              title="Add Liability"
-              onPress={() => void handleSave()}
-              loading={loading}
-              style={{ flex: 1 }}
+            <TextInput
+              value={amount}
+              onChangeText={setAmount}
+              keyboardType="numeric"
+              placeholder="Outstanding amount (₹)"
+              placeholderTextColor={colors.textMuted}
+              style={mStyles.input}
             />
+            <TextInput
+              value={rate}
+              onChangeText={setRate}
+              keyboardType="numeric"
+              placeholder="Interest rate % (optional)"
+              placeholderTextColor={colors.textMuted}
+              style={mStyles.input}
+            />
+            <View style={mStyles.actions}>
+              <Button
+                title="Cancel"
+                onPress={onClose}
+                variant="ghost"
+                style={{ flex: 1 }}
+              />
+              <Button
+                title="Add Liability"
+                onPress={() => void handleSave()}
+                loading={loading}
+                style={{ flex: 1 }}
+              />
+            </View>
           </View>
         </View>
-      </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 };
