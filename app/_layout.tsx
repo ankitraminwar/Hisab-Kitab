@@ -6,6 +6,7 @@ import { StatusBar } from 'expo-status-bar';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  LogBox,
   Platform,
   StyleSheet,
   Text,
@@ -31,6 +32,9 @@ import { syncService } from '@/services/syncService';
 import { useAppStore } from '@/store/appStore';
 import { SPACING, TYPOGRAPHY } from '@/utils/constants';
 import { widgetTaskHandler } from '@/widgets/widgetTaskHandler';
+
+// Suppress the expo-keep-awake warning that fires in dev mode
+LogBox.ignoreLogs(['Unable to activate keep awake']);
 
 // Register Android widget task handler at module level
 if (Platform.OS === 'android') {
@@ -138,6 +142,14 @@ export default function RootLayout() {
         }
 
         if (nextSession) {
+          // First-time login: pull all data from Supabase
+          if (!previousSession) {
+            try {
+              await syncService.requestSync('first-login');
+            } catch {
+              // sync errors are non-fatal
+            }
+          }
           setLocked(useAppStore.getState().biometricsEnabled);
           void syncService.requestSync('auth-state-change');
           smsImportService.start();

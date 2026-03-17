@@ -1,8 +1,16 @@
+import {
+  EXPO_PUBLIC_SUPABASE_ANON_KEY,
+  EXPO_PUBLIC_SUPABASE_KEY,
+  EXPO_PUBLIC_SUPABASE_URL,
+} from '@env';
+
 const requiredEnv = {
-  supabaseUrl: process.env.EXPO_PUBLIC_SUPABASE_URL,
+  supabaseUrl: process.env.EXPO_PUBLIC_SUPABASE_URL || EXPO_PUBLIC_SUPABASE_URL,
   supabaseAnonKey:
     process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ??
-    process.env.EXPO_PUBLIC_SUPABASE_KEY,
+    process.env.EXPO_PUBLIC_SUPABASE_KEY ??
+    EXPO_PUBLIC_SUPABASE_ANON_KEY ??
+    EXPO_PUBLIC_SUPABASE_KEY,
 };
 
 const missingKeys = Object.entries(requiredEnv)
