@@ -3,6 +3,7 @@ import { format } from 'date-fns';
 import { useLocalSearchParams, useRouter, type Href } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
+  ActivityIndicator,
   Alert,
   ScrollView,
   StyleSheet,
@@ -23,17 +24,43 @@ import {
 } from '../../utils/constants';
 import type { IoniconsName, Transaction } from '../../utils/types';
 
+/** Check if a transaction was imported via SMS */
+const isSmsTransaction = (tx: Transaction): boolean => {
+  if (!Array.isArray(tx.tags)) return false;
+  return tx.tags.some((tag) => tag === 'sms-import' || tag.startsWith('sms:'));
+};
+
+const safeFormatDate = (dateStr: string, fmt: string): string => {
+  try {
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return dateStr;
+    return format(d, fmt);
+  } catch {
+    return dateStr;
+  }
+};
+
 export default function TransactionDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const { colors } = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const [tx, setTx] = useState<Transaction | null>(null);
+  const [loading, setLoading] = useState(true);
 
   const load = useCallback(async () => {
-    if (!id) return;
-    const data = await TransactionService.getById(id);
-    setTx(data ?? null);
+    if (!id) {
+      setLoading(false);
+      return;
+    }
+    try {
+      const data = await TransactionService.getById(id);
+      setTx(data ?? null);
+    } catch {
+      setTx(null);
+    } finally {
+      setLoading(false);
+    }
   }, [id]);
 
   useEffect(() => {
@@ -51,13 +78,28 @@ export default function TransactionDetailScreen() {
           style: 'destructive',
           onPress: async () => {
             if (!id) return;
-            await TransactionService.delete(id);
+            try {
+              await TransactionService.delete(id);
+            } catch {
+              // ignore delete errors
+            }
             router.back();
           },
         },
       ],
     );
   };
+
+  if (loading) {
+    return (
+      <SafeAreaView style={styles.container} edges={['top']}>
+        <ScreenHeader title="Transaction" />
+        <View style={styles.emptyWrap}>
+          <ActivityIndicator size="large" color={colors.primary} />
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   if (!tx) {
     return (
@@ -69,6 +111,8 @@ export default function TransactionDetailScreen() {
       </SafeAreaView>
     );
   }
+
+  const isSms = isSmsTransaction(tx);
 
   const amountColor =
     tx.type === 'income'
@@ -83,11 +127,16 @@ export default function TransactionDetailScreen() {
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <ScreenHeader
-        title="Transaction Details"
-        rightAction={{
-          icon: 'create-outline',
-          onPress: () => router.push(`/transactions/${id}?edit=1` as Href),
-        }}
+        title={isSms ? 'SMS Transaction' : 'Transaction Details'}
+        rightAction={
+          isSms
+            ? undefined
+            : {
+                icon: 'create-outline' as IoniconsName,
+                onPress: () =>
+                  router.push(`/transactions/${id}?edit=1` as Href),
+              }
+        }
       />
       <ScrollView
         contentContainerStyle={styles.scroll}
@@ -109,7 +158,7 @@ export default function TransactionDetailScreen() {
             </Text>
             {tx.date && (
               <Text style={styles.dateText}>
-                {format(new Date(tx.date), 'EEEE, dd MMMM yyyy')}
+                {safeFormatDate(tx.date, 'EEEE, dd MMMM yyyy')}
               </Text>
             )}
           </View>
@@ -158,7 +207,7 @@ export default function TransactionDetailScreen() {
               icon="time"
               iconColor={colors.primary}
               label="Time"
-              value={format(new Date(tx.date), 'hh:mm a')}
+              value={safeFormatDate(tx.date, 'hh:mm a')}
               colors={colors}
             />
           )}
@@ -201,19 +250,26 @@ export default function TransactionDetailScreen() {
         {/* Actions */}
         <Animated.View entering={FadeInDown.duration(400).delay(300)}>
           <View style={styles.actionsRow}>
-            <TouchableOpacity
-              style={[styles.actionBtn, { borderColor: colors.primary + '40' }]}
-              onPress={() => router.push(`/transactions/${id}?edit=1` as Href)}
-            >
-              <Ionicons
-                name="create-outline"
-                size={20}
-                color={colors.primary}
-              />
-              <Text style={[styles.actionBtnText, { color: colors.primary }]}>
-                Edit
-              </Text>
-            </TouchableOpacity>
+            {!isSms && (
+              <TouchableOpacity
+                style={[
+                  styles.actionBtn,
+                  { borderColor: colors.primary + '40' },
+                ]}
+                onPress={() =>
+                  router.push(`/transactions/${id}?edit=1` as Href)
+                }
+              >
+                <Ionicons
+                  name="create-outline"
+                  size={20}
+                  color={colors.primary}
+                />
+                <Text style={[styles.actionBtnText, { color: colors.primary }]}>
+                  Edit
+                </Text>
+              </TouchableOpacity>
+            )}
             <TouchableOpacity
               style={[styles.actionBtn, { borderColor: colors.expense + '40' }]}
               onPress={handleDelete}
@@ -224,6 +280,12 @@ export default function TransactionDetailScreen() {
               </Text>
             </TouchableOpacity>
           </View>
+          {isSms && (
+            <Text style={styles.smsNote}>
+              This transaction was imported from SMS and can only be previewed
+              or deleted.
+            </Text>
+          )}
         </Animated.View>
 
         <View style={{ height: 80 }} />
@@ -349,4 +411,11 @@ const createStyles = (colors: ThemeColors) =>
       borderWidth: 1,
     },
     actionBtnText: { fontSize: 15, fontWeight: '700' },
+    smsNote: {
+      ...TYPOGRAPHY.caption,
+      color: colors.textMuted,
+      textAlign: 'center',
+      marginTop: SPACING.md,
+      paddingHorizontal: SPACING.lg,
+    },
   });

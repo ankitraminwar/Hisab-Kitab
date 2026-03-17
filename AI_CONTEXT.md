@@ -104,6 +104,7 @@ src/
     accounts/AccountsScreen.tsx
     notifications/NotificationsScreen.tsx
     profile/EditProfileScreen.tsx
+    faq/FaqScreen.tsx             # FAQ & Help screen (accordion)
   services/
     transactionService.ts        # Transaction CRUD, filtered queries, monthly stats, CSV export
     splitService.ts              # Split expenses CRUD (createSplit, getAll, getById, markSharePaid, deleteSplit)
@@ -146,7 +147,7 @@ stitch_designs/                  # Reference UI mockups (PNG) — light + dark p
 
 ## Sync System
 
-- Local writes call `enqueueSync(table, id, 'upsert'|'delete')` → adds to `sync_queue`.
+- Local writes call `enqueueSync(table, id, 'upsert'|'delete', payload)` → adds to `sync_queue`. The 4th argument is the **full record as a plain object** (`Record<string, unknown>`). Three-argument calls are wrong and will cause TypeScript errors.
 - `syncService` pushes pending queue items → pulls remote changes by `updated_at`.
 - Only tables in `SYNCABLE_TABLES` (constants.ts) are synced.
 - Soft-delete: `deletedAt` timestamp, not row removal.
@@ -163,29 +164,31 @@ stitch_designs/                  # Reference UI mockups (PNG) — light + dark p
 
 ## Navigation Map
 
-| Route                   | Screen                        | Type       |
-| ----------------------- | ----------------------------- | ---------- |
-| `/`                     | redirect → `/(tabs)/`         | —          |
-| `/(tabs)/`              | DashboardScreen               | Tab        |
-| `/(tabs)/transactions`  | TransactionsScreen            | Tab        |
-| `/(tabs)/budgets`       | BudgetsScreen                 | Tab        |
-| `/(tabs)/profile`       | SettingsScreen (profile view) | Tab        |
-| `/(tabs)/goals`         | GoalsScreen                   | Hidden tab |
-| `/(tabs)/reports`       | ReportsScreen                 | Hidden tab |
-| `/transactions/add`     | AddTransactionScreen          | Modal      |
-| `/transactions/[id]`    | AddTransactionScreen (edit)   | Modal      |
-| `/split-expense/new`    | SplitExpenseScreen (create)   | Modal      |
-| `/split-expense/[id]`   | SplitExpenseScreen (detail)   | Modal      |
-| `/splits`               | SplitListScreen               | Screen     |
-| `/accounts`             | AccountsScreen                | Screen     |
-| `/settings`             | SettingsScreen                | Screen     |
-| `/sms-import`           | SmsImportScreen               | Modal      |
-| `/login`                | AuthScreen (login)            | Screen     |
-| `/auth/signup`          | AuthScreen (signup)           | Screen     |
-| `/auth/forgot-password` | AuthScreen (forgot)           | Screen     |
-| `/auth/reset-password`  | AuthScreen (reset)            | Screen     |
-| `/notifications`        | NotificationsScreen           | Screen     |
-| `/profile/edit`         | EditProfileScreen             | Screen     |
+| Route                       | Screen                         | Type       |
+| --------------------------- | ------------------------------ | ---------- |
+| `/`                         | redirect → `/(tabs)/`          | —          |
+| `/(tabs)/`                  | DashboardScreen                | Tab        |
+| `/(tabs)/transactions`      | TransactionsScreen             | Tab        |
+| `/(tabs)/budgets`           | BudgetsScreen                  | Tab        |
+| `/(tabs)/profile`           | SettingsScreen (profile view)  | Tab        |
+| `/(tabs)/goals`             | GoalsScreen                    | Hidden tab |
+| `/(tabs)/reports`           | ReportsScreen                  | Hidden tab |
+| `/transactions/add`         | AddTransactionScreen           | Modal      |
+| `/transactions/[id]`        | TransactionDetailScreen (view) | Modal      |
+| `/transactions/[id]?edit=1` | AddTransactionScreen (edit)    | Modal      |
+| `/faq`                      | FaqScreen                      | Screen     |
+| `/split-expense/new`        | SplitExpenseScreen (create)    | Modal      |
+| `/split-expense/[id]`       | SplitExpenseScreen (detail)    | Modal      |
+| `/splits`                   | SplitListScreen                | Screen     |
+| `/accounts`                 | AccountsScreen                 | Screen     |
+| `/settings`                 | SettingsScreen                 | Screen     |
+| `/sms-import`               | SmsImportScreen                | Modal      |
+| `/login`                    | AuthScreen (login)             | Screen     |
+| `/auth/signup`              | AuthScreen (signup)            | Screen     |
+| `/auth/forgot-password`     | AuthScreen (forgot)            | Screen     |
+| `/auth/reset-password`      | AuthScreen (reset)             | Screen     |
+| `/notifications`            | NotificationsScreen            | Screen     |
+| `/profile/edit`             | EditProfileScreen              | Screen     |
 
 ## Entry Points to Key Screens
 

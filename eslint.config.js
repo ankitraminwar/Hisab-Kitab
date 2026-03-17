@@ -7,4 +7,15 @@ module.exports = defineConfig([
   {
     ignores: ['dist/*', '.expo/*', 'supabase/functions/*'],
   },
+  {
+    settings: {
+      'import/ignore': ['react-native', '@react-native-community', '@env'],
+    },
+    rules: {
+      'import/no-unresolved': ['error', { ignore: ['^@env$'] }],
+      'import/namespace': 'off',
+      'import/no-named-as-default': 'off',
+      'import/no-named-as-default-member': 'off',
+    },
+  },
 ]);
