@@ -52,7 +52,7 @@ function buildWidget(data: WidgetExpenseSummary, colors: C) {
         justifyContent: 'space-between',
       }}
       clickAction="OPEN_URI"
-      clickActionData={{ uri: 'hisabkitab:///(tabs)/history' }}
+      clickActionData={{ uri: 'hisabkitab:///(tabs)/transactions' }}
     >
       {/* Header Row */}
       <FlexWidget

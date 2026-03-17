@@ -1,14 +1,17 @@
 import NetInfo from '@react-native-community/netinfo';
 
 import {
+  enqueueSync,
   fetchTableRows,
   getLastSyncTimestamp,
   getSyncableTables,
+  getSyncState,
   incrementSyncRetry,
   listPendingSyncItems,
   markRecordSyncStatus,
   removeFromSyncQueue,
   setLastSyncTimestamp,
+  setSyncState,
   softDeleteLocalRecord,
   upsertLocalRecord,
 } from '../database';
@@ -52,6 +55,9 @@ const sleep = (ms: number) =>
 
 class SyncService {
   private syncing = false;
+  private syncStartedAt?: number;
+  private syncRequested = false;
+  private syncDebounceTimer?: ReturnType<typeof setTimeout>;
   private remoteSchemaAvailable = true;
 
   private unsubscribe?: () => void;
@@ -108,6 +114,7 @@ class SyncService {
     }
 
     this.syncing = true;
+    this.syncStartedAt = Date.now();
     useAppStore
       .getState()
       .setSyncState({ syncInProgress: true, lastSyncError: null });
@@ -148,11 +155,36 @@ class SyncService {
   }
 
   async requestSync(reason = 'manual') {
-    try {
-      await this.sync(reason);
-    } catch (error) {
-      console.warn('Background sync failed', error);
+    // Sync watchdog: if syncing stuck for >60s, force reset
+    if (
+      this.syncing &&
+      this.syncStartedAt &&
+      Date.now() - this.syncStartedAt > 60000
+    ) {
+      console.warn('Sync watchdog: forcing reset after 60s');
+      this.syncing = false;
     }
+
+    // If a sync is in progress, mark that another is requested
+    if (this.syncing) {
+      this.syncRequested = true;
+      return;
+    }
+
+    // Debounce rapid-fire requests
+    clearTimeout(this.syncDebounceTimer);
+    this.syncDebounceTimer = setTimeout(async () => {
+      try {
+        await this.sync(reason);
+      } catch (error) {
+        console.warn('Background sync failed', error);
+      }
+      // If another sync was requested while this one ran, run it now
+      if (this.syncRequested) {
+        this.syncRequested = false;
+        void this.requestSync('queued');
+      }
+    }, 500);
   }
 
   private isRemoteSchemaMissing(error: unknown) {
@@ -197,6 +229,10 @@ class SyncService {
     if (!userId) {
       return;
     }
+
+    // One-time: enqueue default categories & payment methods for sync
+    await this.ensureDefaultsSynced();
+
     const pendingItems = await listPendingSyncItems();
 
     // Sort by FK dependency order so parent rows are pushed before children
@@ -226,12 +262,29 @@ class SyncService {
     }
 
     if (failures.length > 0) {
-      throw new Error(
-        `Failed to sync ${failures.length} record(s): ${failures
-          .slice(0, 3)
-          .map((failure) => `${failure.item.entity}/${failure.item.recordId}`)
-          .join(', ')}`,
-      );
+      // RLS violations on default categories (shared PK across users) are expected
+      // on shared devices — skip them so the rest of sync can succeed.
+      const critical = failures.filter((f) => {
+        const isDefault =
+          f.item.entity === 'categories' && f.item.recordId.startsWith('cat_');
+        const isRls =
+          f.reason.includes('row-level security') || f.reason.includes('42501');
+        if (isDefault && isRls) {
+          void markRecordSyncStatus('categories', f.item.recordId, 'synced');
+          void removeFromSyncQueue(f.item.id);
+          return false;
+        }
+        return true;
+      });
+
+      if (critical.length > 0) {
+        throw new Error(
+          `Failed to sync ${critical.length} record(s): ${critical
+            .slice(0, 3)
+            .map((failure) => `${failure.item.entity}/${failure.item.recordId}`)
+            .join(', ')}`,
+        );
+      }
     }
   }
 
@@ -244,6 +297,15 @@ class SyncService {
         payload,
       );
       const recordId = String(payload.id ?? item.recordId);
+
+      // tags is stored as a JSON string in SQLite; Supabase expects jsonb (object/array)
+      if ('tags' in remoteData && typeof remoteData.tags === 'string') {
+        try {
+          remoteData.tags = JSON.parse(remoteData.tags as string);
+        } catch {
+          remoteData.tags = [];
+        }
+      }
 
       const { data: remoteRecord, error: remoteError } = await supabase
         .from(table)
@@ -320,6 +382,35 @@ class SyncService {
     }
   }
 
+  /**
+   * One-time step: enqueue all default (non-custom) categories and payment
+   * methods so they are pushed to Supabase alongside user-created data.
+   */
+  private async ensureDefaultsSynced() {
+    const flag = await getSyncState('defaultsSynced');
+    if (flag === 'true') return;
+
+    const categories = await fetchTableRows<Record<string, unknown>>(
+      'categories',
+      'isCustom = 0 AND deletedAt IS NULL',
+    );
+    for (const cat of categories) {
+      await enqueueSync('categories', String(cat.id), 'upsert', cat);
+      await markRecordSyncStatus('categories', String(cat.id), 'pending');
+    }
+
+    const paymentMethods = await fetchTableRows<Record<string, unknown>>(
+      'payment_methods',
+      'isCustom = 0 AND deletedAt IS NULL',
+    );
+    for (const pm of paymentMethods) {
+      await enqueueSync('payment_methods', String(pm.id), 'upsert', pm);
+      await markRecordSyncStatus('payment_methods', String(pm.id), 'pending');
+    }
+
+    await setSyncState('defaultsSynced', 'true');
+  }
+
   private async pullRemoteChanges() {
     const session = await supabase.auth.getSession();
     const userId = session.data.session?.user?.id;
@@ -379,6 +470,18 @@ class SyncService {
           : 0;
 
         if (!localRecord || remoteUpdatedAt >= localUpdatedAt) {
+          // Bug 4 fix: protect custom user profile name from being overwritten by default
+          if (table === 'user_profile') {
+            const remoteIsDefault =
+              String(localRecordData.name) === 'Hisab Kitab User';
+            const localIsCustom =
+              localRecord?.name &&
+              String(localRecord.name) !== 'Hisab Kitab User';
+            if (remoteIsDefault && localIsCustom) {
+              localRecordData.name = localRecord.name;
+            }
+          }
+
           await upsertLocalRecord(table, {
             ...localRecordData,
             syncStatus: 'synced',
@@ -391,6 +494,91 @@ class SyncService {
 
     if (changed) {
       useAppStore.getState().bumpDataRevision();
+    }
+  }
+
+  /** Full sync for first login — pulls ALL remote data regardless of lastSyncAt */
+  async initialSync(): Promise<{
+    success: boolean;
+    recordsPulled: number;
+    error?: string;
+  }> {
+    await setLastSyncTimestamp('1970-01-01T00:00:00.000Z');
+
+    const networkState = await NetInfo.fetch();
+    if (!networkState.isConnected) {
+      return { success: false, recordsPulled: 0, error: 'offline' };
+    }
+
+    if (this.syncing) {
+      return {
+        success: false,
+        recordsPulled: 0,
+        error: 'Sync already in progress',
+      };
+    }
+
+    this.syncing = true;
+    this.syncStartedAt = Date.now();
+    useAppStore
+      .getState()
+      .setSyncState({ syncInProgress: true, lastSyncError: null });
+
+    try {
+      const session = await supabase.auth.getSession();
+      const userId = session.data.session?.user?.id;
+      if (!userId) {
+        return { success: false, recordsPulled: 0, error: 'Not authenticated' };
+      }
+
+      let totalPulled = 0;
+
+      for (const table of getSyncableTables()) {
+        const { data, error } = await supabase
+          .from(table)
+          .select('*')
+          .eq('user_id', userId)
+          .is('deleted_at', null)
+          .order('updated_at', { ascending: true });
+
+        if (error) {
+          console.warn(`Initial pull failed for ${table}:`, error.message);
+          continue;
+        }
+
+        for (const record of data ?? []) {
+          const localData = mapRemoteToLocalRecord(
+            table,
+            record as Record<string, unknown>,
+          );
+          await upsertLocalRecord(table, {
+            ...localData,
+            syncStatus: 'synced',
+            lastSyncedAt: new Date().toISOString(),
+          });
+        }
+
+        totalPulled += data?.length ?? 0;
+      }
+
+      const completedAt = new Date().toISOString();
+      await setLastSyncTimestamp(completedAt);
+      useAppStore.getState().setSyncState({
+        syncInProgress: false,
+        lastSyncAt: completedAt,
+        lastSyncError: null,
+      });
+      useAppStore.getState().bumpDataRevision();
+
+      return { success: true, recordsPulled: totalPulled };
+    } catch (error) {
+      const msg = errorMessage(error);
+      useAppStore
+        .getState()
+        .setSyncState({ syncInProgress: false, lastSyncError: msg });
+      return { success: false, recordsPulled: 0, error: msg };
+    } finally {
+      this.syncing = false;
     }
   }
 }

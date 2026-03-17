@@ -149,6 +149,8 @@ stitch_designs/                  # Reference UI mockups (PNG) — light + dark p
 
 - Local writes call `enqueueSync(table, id, 'upsert'|'delete', payload)` → adds to `sync_queue`. The 4th argument is the **full record as a plain object** (`Record<string, unknown>`). Three-argument calls are wrong and will cause TypeScript errors.
 - `syncService` pushes pending queue items → pulls remote changes by `updated_at`.
+- **Default data bootstrap**: On first push per device, `ensureDefaultsSynced()` runs once and enqueues all default (non-custom) categories and payment methods, so they exist in Supabase before transactions reference them. Tracked with a `defaultsSynced` flag in `sync_state`.
+- **`tags` field**: Stored as a JSON string (`TEXT`) in SQLite but Supabase stores it as `jsonb`. The sync service automatically parses the string to an array on push — do not pre-parse it in payloads.
 - Only tables in `SYNCABLE_TABLES` (constants.ts) are synced.
 - Soft-delete: `deletedAt` timestamp, not row removal.
 - Unreachable Supabase → app works locally; sync retries on reconnect.
@@ -216,6 +218,13 @@ stitch_designs/                  # Reference UI mockups (PNG) — light + dark p
 
 Run `supabase/schema.sql` in the Supabase SQL editor. Single file — all tables, indexes, triggers, RLS policies, and backfill logic. No separate migration files.
 
+**Schema design decisions**:
+
+- **No inter-table FK constraints** — constraints like `transactions.category_id → categories.id` have been intentionally dropped. SQLite enforces referential integrity locally; removing them from Supabase allows offline-first sync without FK violations when records arrive out of order.
+- **`user_id → auth.users(id)`** FK is retained on all tables for RLS and cascade delete.
+- **`user_profile.avatar`** — `TEXT` column for avatar URI (added in SQLite migration v2, applied to Supabase).
+- **`payment_method`** — no CHECK constraint; accepts any string to support SMS-imported transactions with varied payment method strings.
+
 ## Caveats & Known State
 
 - Supabase schema not applied → sync returns `PGRST205`. App continues locally — this is expected.
@@ -224,6 +233,7 @@ Run `supabase/schema.sql` in the Supabase SQL editor. Single file — all tables
 - `NotificationsScreen` has no persistent bell icon in the tab bar — entry is from dashboard header only.
 - `NetWorthScreen` is reached from within `ReportsScreen`, not from a direct route shown in tab bar.
 - `/(tabs)/goals` and `/(tabs)/reports` are valid navigable routes but excluded from the tab bar (`href: null`).
+- **Default categories** use fixed IDs (prefix `cat_`) shared across all installs. They are pushed to Supabase on first sync via `ensureDefaultsSynced()`. If two devices sync the same default category, the RLS `user_id` check may reject the second push as a non-critical failure — this is silently handled.
 
 ## Code Quality Status
 

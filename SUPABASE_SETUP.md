@@ -21,12 +21,18 @@ Paste the following file into the Supabase SQL editor and run it:
 
 This single idempotent file creates:
 
-- All tables (accounts, categories, transactions, budgets, goals, assets, liabilities, net_worth_history, user_profile, recurring_templates, split_expenses, split_members, payment_methods, sync_queue, sync_state)
-- All indexes and foreign keys
+- All tables (accounts, categories, transactions, budgets, goals, assets, liabilities, net_worth_history, user_profile, split_expenses, split_members, payment_methods)
+- All indexes and triggers
 - RLS policies (per-user isolation via `auth.uid()`)
-- Triggers (e.g. auto-create `user_profile` on new auth user)
-- Seed data for default categories and payment methods
+- `handle_new_user` trigger (auto-creates `user_profile` on new auth user with `theme_preference: 'system'`)
 - Backfill for existing auth users missing `user_profile`
+
+**Design decisions**:
+
+- **No inter-table FK constraints** — e.g. `transactions.category_id → categories.id` is intentionally absent. SQLite enforces FK integrity locally. Removing them from Supabase prevents FK violations when offline-first sync pushes records out of dependency order.
+- **`user_id → auth.users(id)`** FK is retained on all tables.
+- **`payment_method`** column on `transactions` has no CHECK constraint — accepts any string (SMS imports use varied values).
+- **`user_profile.avatar`** — `TEXT` column for profile photo URI.
 
 Safe to run multiple times — triggers and policies are dropped and recreated.
 

@@ -237,6 +237,8 @@ const indexes = [
   `CREATE INDEX IF NOT EXISTS idx_sync_queue_retryCount ON sync_queue(retryCount, updatedAt)`,
   `CREATE INDEX IF NOT EXISTS idx_split_expenses_transaction ON split_expenses(transaction_id)`,
   `CREATE INDEX IF NOT EXISTS idx_split_members_split_id ON split_members(split_expense_id)`,
+  `CREATE INDEX IF NOT EXISTS idx_transactions_type_date_category ON transactions(type, date DESC, categoryId)`,
+  `CREATE INDEX IF NOT EXISTS idx_transactions_tags ON transactions(tags)`,
 ];
 
 const defaultCategories = [

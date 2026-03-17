@@ -83,6 +83,16 @@ const migrations: Migration[] = [
       }
     },
   },
+  {
+    version: 2,
+    name: 'add_avatar_column_to_user_profile',
+    run: async (db) => {
+      const columns = await getTableColumns(db, 'user_profile');
+      if (!columns.has('avatar')) {
+        await db.execAsync(`ALTER TABLE user_profile ADD COLUMN avatar TEXT;`);
+      }
+    },
+  },
 ];
 
 export const runMigrations = async (db: SQLite.SQLiteDatabase) => {

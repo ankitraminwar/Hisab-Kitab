@@ -1,8 +1,15 @@
-import SmsAndroid from 'react-native-get-sms-android';
 import NetInfo from '@react-native-community/netinfo';
 import { PermissionsAndroid, Platform } from 'react-native';
+import SmsAndroid from 'react-native-get-sms-android';
 
 import { getSyncState, setSyncState } from '../database';
+import { useAppStore } from '../store/appStore';
+import type {
+  Account,
+  Category,
+  PaymentMethod,
+  TransactionType,
+} from '../utils/types';
 import {
   AccountService,
   CategoryService,
@@ -10,12 +17,6 @@ import {
 } from './dataServices';
 import { triggerBackgroundSync } from './syncService';
 import { TransactionService } from './transactionService';
-import type {
-  Account,
-  Category,
-  PaymentMethod,
-  TransactionType,
-} from '../utils/types';
 
 const SMS_IMPORT_STATE_KEY = 'sms.lastImportedAt';
 const SMS_POLL_INTERVAL_MS = 60_000;
@@ -461,6 +462,10 @@ class SmsImportService {
   }
 
   async run() {
+    const autoImportEnabled = useAppStore.getState().smsEnabled;
+    if (!autoImportEnabled) {
+      return;
+    }
     try {
       await importSmsTransactions(false);
     } catch (error) {

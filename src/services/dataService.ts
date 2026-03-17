@@ -829,14 +829,26 @@ export const UserProfileService = {
     const sessionUserId = session.data.session?.user?.id ?? null;
     const sessionEmail = session.data.session?.user?.email ?? '';
     const existing = await this.getProfile();
+    const sessionName = session.data.session?.user?.user_metadata?.name as
+      | string
+      | undefined;
     const now = new Date().toISOString();
+
+    // Resolve name: only fall back to default for INSERT, not UPDATE
+    const resolvedName =
+      data.name?.trim() ||
+      existing?.name?.trim() ||
+      sessionName?.trim() ||
+      null;
+
     const profile: UserProfile = {
       id: existing?.id ?? sessionUserId ?? 'profile_local',
-      name: data.name ?? existing?.name ?? 'Hisab Kitab User',
+      name: resolvedName ?? (existing ? existing.name : 'Hisab Kitab User'),
       email: data.email ?? existing?.email ?? sessionEmail,
       phone: data.phone ?? existing?.phone,
       currency: data.currency ?? existing?.currency ?? 'INR',
       monthlyBudget: data.monthlyBudget ?? existing?.monthlyBudget ?? 0,
+      avatar: data.avatar ?? existing?.avatar ?? undefined,
       themePreference:
         data.themePreference ?? existing?.themePreference ?? 'system',
       notificationsEnabled:
@@ -853,12 +865,13 @@ export const UserProfileService = {
 
     await getDatabase().runAsync(
       `INSERT INTO user_profile
-        (id, name, email, phone, currency, monthlyBudget, themePreference, notificationsEnabled, biometricEnabled, createdAt, updatedAt, userId, syncStatus, lastSyncedAt, deletedAt)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        (id, name, email, phone, avatar, currency, monthlyBudget, themePreference, notificationsEnabled, biometricEnabled, createdAt, updatedAt, userId, syncStatus, lastSyncedAt, deletedAt)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
        ON CONFLICT(id) DO UPDATE SET
          name = excluded.name,
          email = excluded.email,
          phone = excluded.phone,
+         avatar = excluded.avatar,
          currency = excluded.currency,
          monthlyBudget = excluded.monthlyBudget,
          themePreference = excluded.themePreference,
@@ -873,6 +886,7 @@ export const UserProfileService = {
         profile.name,
         profile.email,
         bindValue(profile.phone),
+        bindValue(profile.avatar),
         profile.currency,
         profile.monthlyBudget,
         profile.themePreference,

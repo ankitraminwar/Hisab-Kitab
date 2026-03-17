@@ -71,7 +71,9 @@ export const CategoryGrid: React.FC<CategoryGridProps> = ({
                     styles.itemLabel,
                     { color: isSelected ? catColor : colors.textMuted },
                   ]}
-                  numberOfLines={1}
+                  numberOfLines={2}
+                  adjustsFontSizeToFit
+                  minimumFontScale={0.7}
                 >
                   {cat.name}
                 </Text>
@@ -104,13 +106,18 @@ const styles = StyleSheet.create({
   },
   item: {
     alignItems: 'center',
-    gap: 6,
-    paddingVertical: SPACING.md,
+    gap: 4,
+    paddingVertical: SPACING.sm,
+    paddingHorizontal: 4,
     borderRadius: RADIUS.lg,
+    minHeight: 72,
+    justifyContent: 'center',
   },
   itemLabel: {
     ...TYPOGRAPHY.caption,
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: '700',
+    textAlign: 'center',
+    lineHeight: 13,
   },
 });

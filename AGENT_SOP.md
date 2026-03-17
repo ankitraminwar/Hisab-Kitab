@@ -40,8 +40,7 @@ The following screens still use `Alert.alert`. When editing them, migrate to `Cu
 
 - `src/screens/goals/GoalsScreen.tsx` — delete goal confirmation
 - `src/screens/transactions/TransactionDetailScreen.tsx` — delete transaction confirmation
-- `src/screens/reports/ReportsScreen.tsx` — export format picker
-- `src/screens/settings/SettingsScreen.tsx` — import backup confirmation
+- `src/screens/reports/ReportsScreen.tsx` — export format picker and PDF/CSV error alerts
 
 ---
 
@@ -398,6 +397,13 @@ Every write to a syncable table follows this exact pattern. Steps 2-4 are all re
 The `payload` (4th arg to `enqueueSync`) must be the full record as `Record<string, unknown>`. Convert booleans to 0/1 for SQLite boolean fields.
 
 Tables in `SYNCABLE_TABLES` in `src/utils/constants.ts` participate in sync. Others are local-only.
+
+### Sync Internals — Important Behaviors
+
+- **Default data bootstrap**: On the first push per device, `syncService.ensureDefaultsSynced()` automatically enqueues all default (non-custom) categories and payment methods so they reach Supabase before transactions that reference them. This is tracked via a `defaultsSynced` flag in `sync_state`.
+- **`tags` field**: Stored as a JSON string in SQLite (`TEXT DEFAULT '[]'`) but Supabase expects `jsonb`. The sync service auto-parses the string to an array before pushing — do not pre-parse it yourself in the payload.
+- **Supabase FK constraints**: Inter-table FK constraints (e.g. `transactions.category_id → categories.id`) have been intentionally removed from Supabase. SQLite enforces FK integrity locally. Only the `user_id → auth.users(id)` FK remains on all tables.
+- **`payment_method`**: No CHECK constraint on Supabase — accepts any string. This is intentional to allow SMS-imported transactions with varied payment method strings.
 
 ---
 

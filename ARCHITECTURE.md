@@ -40,6 +40,8 @@ Schema defined in `src/database/index.ts`. Tables:
 Mirrors local tables with snake_case columns. Full idempotent schema in `supabase/schema.sql`.
 RLS policies enforce per-user data isolation via `auth.uid()`.
 
+**FK constraint design**: Inter-table foreign keys (e.g. `transactions.category_id → categories.id`) have been intentionally removed from Supabase. Only the `user_id → auth.users(id)` FK is retained on each table. This allows offline-first sync to push records in any order without FK violations. SQLite enforces relational integrity locally via its own FK constraints.
+
 ### Column Mapping
 
 `src/services/syncTransform.ts` maps between local camelCase and remote snake_case:

@@ -16,7 +16,11 @@ import {
 import { registerWidgetTaskHandler } from 'react-native-android-widget';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
-import { clearLocalData, initializeDatabase } from '@/database';
+import {
+  clearLocalData,
+  getLastSyncTimestamp,
+  initializeDatabase,
+} from '@/database';
 import { useTheme, type ThemeColors } from '@/hooks/useTheme';
 import { queryClient } from '@/lib/queryClient';
 import {
@@ -58,16 +62,44 @@ export default function RootLayout() {
     resetAppState,
   } = useAppStore();
   const [initializing, setInitializing] = useState(true);
+  const [slowLoad, setSlowLoad] = useState(false);
   const [session, setSession] = useState<Session | null>(null);
 
   const { colors } = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
 
+  // Max-wait safeguard: if initializing is still true after 8s, force it off
   useEffect(() => {
+    const maxWait = setTimeout(() => setInitializing(false), 8000);
+    return () => clearTimeout(maxWait);
+  }, []);
+
+  // Show slow-load message after 3s
+  useEffect(() => {
+    if (!initializing) return;
+    const t = setTimeout(() => setSlowLoad(true), 3000);
+    return () => clearTimeout(t);
+  }, [initializing]);
+
+  useEffect(() => {
+    const withTimeout = <T,>(
+      promise: Promise<T>,
+      ms: number,
+      fallback: T,
+    ): Promise<T> =>
+      Promise.race([
+        promise,
+        new Promise<T>((resolve) => setTimeout(() => resolve(fallback), ms)),
+      ]);
+
     const bootstrap = async () => {
       try {
-        await initializeDatabase();
-        const currentSession = await authService.getSession();
+        await withTimeout(initializeDatabase(), 5000, undefined);
+        const currentSession = await withTimeout(
+          authService.getSession(),
+          5000,
+          { data: { session: null }, error: null },
+        );
         const nextSession = currentSession.data.session ?? null;
         setSession(nextSession);
         previousSessionRef.current = nextSession;
@@ -116,7 +148,7 @@ export default function RootLayout() {
           void smsImportService.run();
         }
       } catch (error) {
-        console.error('Initialization failed', error);
+        console.warn('Bootstrap failed, continuing in offline mode', error);
         setLocked(false);
       } finally {
         setInitializing(false);
@@ -142,16 +174,18 @@ export default function RootLayout() {
         }
 
         if (nextSession) {
-          // First-time login: pull all data from Supabase
           if (!previousSession) {
-            try {
-              await syncService.requestSync('first-login');
-            } catch {
-              // sync errors are non-fatal
+            // Fresh login: check if this is first time
+            const lastSync = await getLastSyncTimestamp();
+            if (!lastSync || lastSync === '1970-01-01T00:00:00.000Z') {
+              void syncService.initialSync();
+            } else {
+              void syncService.requestSync('auth-state-change');
             }
+          } else {
+            void syncService.requestSync('auth-state-change');
           }
           setLocked(useAppStore.getState().biometricsEnabled);
-          void syncService.requestSync('auth-state-change');
           smsImportService.start();
           void smsImportService.run();
         }
@@ -206,6 +240,11 @@ export default function RootLayout() {
       <View style={styles.lockContainer}>
         <ActivityIndicator size="large" color={colors.primary} />
         <Text style={styles.loadingText}>Loading Hisab Kitab...</Text>
+        {slowLoad && (
+          <Text style={styles.loadingSubtext}>
+            Taking longer than usual. Please wait...
+          </Text>
+        )}
       </View>
     );
   }
@@ -311,6 +350,11 @@ const createStyles = (colors: ThemeColors) =>
       ...TYPOGRAPHY.body,
       color: colors.textSecondary,
       marginTop: SPACING.md,
+    },
+    loadingSubtext: {
+      ...TYPOGRAPHY.caption,
+      color: colors.textMuted,
+      marginTop: SPACING.sm,
     },
     unlockButton: {
       flexDirection: 'row',

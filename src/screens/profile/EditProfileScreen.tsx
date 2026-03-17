@@ -1,7 +1,15 @@
 import { Ionicons } from '@expo/vector-icons';
+import {
+  copyAsync,
+  documentDirectory,
+  getInfoAsync,
+  makeDirectoryAsync,
+} from 'expo-file-system/legacy';
+import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
 import React, { useMemo, useState } from 'react';
 import {
+  Image,
   KeyboardAvoidingView,
   Platform,
   StyleSheet,
@@ -28,6 +36,9 @@ export default function EditProfileScreen() {
 
   const [name, setName] = useState(userProfile?.name || '');
   const [phone, setPhone] = useState(userProfile?.phone || '');
+  const [avatarUri, setAvatarUri] = useState<string | undefined>(
+    userProfile?.avatar,
+  );
   const [isSaving, setIsSaving] = useState(false);
   const [popupConfig, setPopupConfig] = useState<{
     visible: boolean;
@@ -35,6 +46,34 @@ export default function EditProfileScreen() {
     message: string;
     type: 'success' | 'error' | 'info';
   }>({ visible: false, title: '', message: '', type: 'info' });
+
+  const handlePickImage = async () => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') {
+      setPopupConfig({
+        visible: true,
+        title: 'Permission Required',
+        message: 'Please allow photo access to change your profile picture.',
+        type: 'info',
+      });
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.7,
+    });
+    if (result.canceled || !result.assets[0]) return;
+
+    const source = result.assets[0].uri;
+    const dir = `${documentDirectory}avatars/`;
+    const dirInfo = await getInfoAsync(dir);
+    if (!dirInfo.exists) await makeDirectoryAsync(dir, { intermediates: true });
+    const dest = `${dir}profile_avatar.jpg`;
+    await copyAsync({ from: source, to: dest });
+    setAvatarUri(dest);
+  };
 
   const handleSave = async () => {
     if (!name.trim()) {
@@ -54,6 +93,7 @@ export default function EditProfileScreen() {
         userId: userProfile.userId,
         name: name.trim(),
         phone: phone.trim() || undefined,
+        avatar: avatarUri,
       });
       setUserProfile(updatedProfile);
       router.back();
@@ -80,9 +120,16 @@ export default function EditProfileScreen() {
         <View style={styles.content}>
           <View style={styles.avatarSection}>
             <View style={styles.avatar}>
-              <Ionicons name="person" size={48} color={colors.primary} />
+              {avatarUri ? (
+                <Image source={{ uri: avatarUri }} style={styles.avatarImage} />
+              ) : (
+                <Ionicons name="person" size={48} color={colors.primary} />
+              )}
             </View>
-            <TouchableOpacity style={styles.changePhotoBtn}>
+            <TouchableOpacity
+              style={styles.changePhotoBtn}
+              onPress={() => void handlePickImage()}
+            >
               <Text style={styles.changePhotoText}>Change Photo</Text>
             </TouchableOpacity>
           </View>
@@ -197,6 +244,12 @@ const createStyles = (colors: ThemeColors) =>
       marginBottom: SPACING.md,
       borderWidth: 2,
       borderColor: colors.primary + '50',
+      overflow: 'hidden' as const,
+    },
+    avatarImage: {
+      width: '100%' as const,
+      height: '100%' as const,
+      borderRadius: 50,
     },
     changePhotoBtn: {
       paddingVertical: SPACING.sm,

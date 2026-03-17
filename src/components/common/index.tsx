@@ -436,6 +436,7 @@ interface CustomPopupProps {
   onClose: () => void;
   actionLabel?: string;
   onAction?: () => void;
+  actions?: { label: string; onPress: () => void }[];
 }
 export const CustomPopup: React.FC<CustomPopupProps> = ({
   visible,
@@ -445,6 +446,7 @@ export const CustomPopup: React.FC<CustomPopupProps> = ({
   onClose,
   actionLabel = 'OK',
   onAction,
+  actions,
 }) => {
   const { colors } = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
@@ -480,12 +482,34 @@ export const CustomPopup: React.FC<CustomPopupProps> = ({
           <Text style={styles.popupTitle}>{title}</Text>
           <Text style={styles.popupMessage}>{message}</Text>
 
-          <Button
-            title={actionLabel}
-            onPress={onAction || onClose}
-            style={{ width: '100%', marginTop: SPACING.md }}
-            variant={type === 'error' ? 'danger' : 'primary'}
-          />
+          {actions ? (
+            <View
+              style={{ width: '100%', gap: SPACING.sm, marginTop: SPACING.md }}
+            >
+              {actions.map((action) => (
+                <Button
+                  key={action.label}
+                  title={action.label}
+                  onPress={action.onPress}
+                  style={{ width: '100%' }}
+                  variant="primary"
+                />
+              ))}
+              <Button
+                title="Cancel"
+                onPress={onClose}
+                style={{ width: '100%' }}
+                variant="ghost"
+              />
+            </View>
+          ) : (
+            <Button
+              title={actionLabel}
+              onPress={onAction || onClose}
+              style={{ width: '100%', marginTop: SPACING.md }}
+              variant={type === 'error' ? 'danger' : 'primary'}
+            />
+          )}
         </Animated.View>
       </Animated.View>
     </Modal>

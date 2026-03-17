@@ -220,8 +220,16 @@ export const SplitService = {
       ]);
 
       results.push({
-        expense,
-        members,
+        expense: {
+          ...expense,
+          totalAmount: Number(expense.totalAmount) || 0,
+        },
+        members: members.map((m) => ({
+          ...m,
+          shareAmount: Number(m.shareAmount) || 0,
+          sharePercent:
+            m.sharePercent != null ? Number(m.sharePercent) : undefined,
+        })),
         transactionMerchant: tx?.merchant || tx?.notes || undefined,
         transactionDate: tx?.date,
       });
@@ -257,11 +265,52 @@ export const SplitService = {
     ]);
 
     return {
-      expense,
-      members,
+      expense: {
+        ...expense,
+        totalAmount: Number(expense.totalAmount) || 0,
+      },
+      members: members.map((m) => ({
+        ...m,
+        shareAmount: Number(m.shareAmount) || 0,
+        sharePercent:
+          m.sharePercent != null ? Number(m.sharePercent) : undefined,
+      })),
       transactionMerchant: tx?.merchant || tx?.notes || undefined,
       transactionDate: tx?.date,
     };
+  },
+
+  /** Record a payment from a split member */
+  async recordPayment(memberId: string, amountPaid: number) {
+    const member = await getDatabase().getFirstAsync<SplitMember>(
+      'SELECT * FROM split_members WHERE id = ?',
+      [memberId],
+    );
+    if (!member) throw new Error('Member not found');
+
+    const remaining = (Number(member.shareAmount) || 0) - amountPaid;
+    const newStatus: SplitStatus = remaining <= 0 ? 'paid' : 'pending';
+    const updatedAt = new Date().toISOString();
+
+    await getDatabase().runAsync(
+      `UPDATE split_members
+       SET status = ?, share_amount = ?, updatedAt = ?, syncStatus = 'pending'
+       WHERE id = ?`,
+      [newStatus, Math.max(remaining, 0), updatedAt, memberId],
+    );
+
+    const updatedMember = {
+      ...member,
+      status: newStatus,
+      shareAmount: Math.max(remaining, 0),
+      updatedAt,
+      syncStatus: 'pending' as const,
+    };
+    await queueEntitySync(
+      'split_members',
+      memberId,
+      updatedMember as unknown as Record<string, unknown>,
+    );
   },
 
   /** Soft-delete a split expense and its members */

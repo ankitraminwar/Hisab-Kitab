@@ -3,6 +3,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter, type Href } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
+  ActivityIndicator,
   RefreshControl,
   ScrollView,
   StyleSheet,
@@ -275,17 +276,16 @@ export default function DashboardScreen() {
   const router = useRouter();
   const { colors } = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
-  const {
-    dashboardStats,
-    setDashboardStats,
-    recentTransactions,
-    setRecentTransactions,
-    setAccounts,
-    budgets,
-    setBudgets,
-    dataRevision,
-    userProfile,
-  } = useAppStore();
+  const dashboardStats = useAppStore((s) => s.dashboardStats);
+  const setDashboardStats = useAppStore((s) => s.setDashboardStats);
+  const recentTransactions = useAppStore((s) => s.recentTransactions);
+  const setRecentTransactions = useAppStore((s) => s.setRecentTransactions);
+  const setAccounts = useAppStore((s) => s.setAccounts);
+  const budgets = useAppStore((s) => s.budgets);
+  const setBudgets = useAppStore((s) => s.setBudgets);
+  const dataRevision = useAppStore((s) => s.dataRevision);
+  const userProfile = useAppStore((s) => s.userProfile);
+  const syncInProgress = useAppStore((s) => s.syncInProgress);
   const [refreshing, setRefreshing] = useState(false);
   const [spendingSlices, setSpendingSlices] = useState<DonutSlice[]>([]);
   const [totalSpent, setTotalSpent] = useState(0);
@@ -401,16 +401,21 @@ export default function DashboardScreen() {
               <Text style={styles.welcomeText}>Welcome, {displayName}</Text>
             </View>
           </View>
-          <TouchableOpacity
-            onPress={() => router.push('/notifications')}
-            style={styles.bellButton}
-          >
-            <Ionicons
-              name="notifications-outline"
-              size={22}
-              color={colors.textSecondary}
-            />
-          </TouchableOpacity>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            {syncInProgress && (
+              <ActivityIndicator size="small" color={colors.primary} />
+            )}
+            <TouchableOpacity
+              onPress={() => router.push('/notifications')}
+              style={styles.bellButton}
+            >
+              <Ionicons
+                name="notifications-outline"
+                size={22}
+                color={colors.textSecondary}
+              />
+            </TouchableOpacity>
+          </View>
         </Animated.View>
 
         {/* Hero Card — Net Balance + Income + Expense */}

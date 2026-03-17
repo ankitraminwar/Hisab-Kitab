@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { FlashList } from '@shopify/flash-list';
 import { format } from 'date-fns';
-import { useRouter } from 'expo-router';
+import { useRouter, type Href } from 'expo-router';
 import React, {
   useCallback,
   useEffect,
@@ -21,7 +21,7 @@ import {
 } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { SearchBar } from '../../components/common';
+import { AmountText, Button, SearchBar } from '../../components/common';
 import TransactionItem from '../../components/TransactionItem';
 import { useTheme, type ThemeColors } from '../../hooks/useTheme';
 import { AccountService, CategoryService } from '../../services/dataServices';
@@ -129,6 +129,258 @@ const filterSheetStyles = StyleSheet.create({
   sheetContent: { paddingHorizontal: 20, paddingBottom: 32 },
 });
 
+// ─── Transaction Preview Sheet ────────────────────────────────────────────────
+const TransactionPreviewSheet: React.FC<{
+  transaction: Transaction | null;
+  visible: boolean;
+  onClose: () => void;
+  onEdit: (id: string) => void;
+  onDelete: (id: string) => void;
+  colors: ReturnType<typeof useTheme>['colors'];
+}> = ({ transaction, visible, onClose, onEdit, onDelete, colors }) => {
+  const isSmsImported =
+    transaction?.tags?.some((t) => t.startsWith('sms:')) ?? false;
+
+  return (
+    <Modal
+      visible={visible}
+      transparent
+      animationType="slide"
+      onRequestClose={onClose}
+    >
+      <Pressable style={previewStyles.overlay} onPress={onClose}>
+        <Pressable
+          style={[
+            previewStyles.sheet,
+            { backgroundColor: colors.bgCard, borderColor: colors.border },
+          ]}
+          onPress={(e) => e.stopPropagation()}
+        >
+          <View style={previewStyles.handle}>
+            <View
+              style={[
+                previewStyles.handleBar,
+                { backgroundColor: colors.textMuted },
+              ]}
+            />
+          </View>
+
+          {transaction && (
+            <>
+              <AmountText
+                amount={transaction.amount}
+                type={transaction.type}
+                size="xl"
+              />
+
+              <View style={previewStyles.detailGrid}>
+                {transaction.categoryName ? (
+                  <View
+                    style={[
+                      previewStyles.chip,
+                      { backgroundColor: colors.bgElevated },
+                    ]}
+                  >
+                    <Ionicons
+                      name="pricetag"
+                      size={14}
+                      color={colors.textSecondary}
+                    />
+                    <Text
+                      style={[
+                        previewStyles.chipText,
+                        { color: colors.textPrimary },
+                      ]}
+                      numberOfLines={1}
+                    >
+                      {transaction.categoryName}
+                    </Text>
+                  </View>
+                ) : null}
+                {transaction.accountName ? (
+                  <View
+                    style={[
+                      previewStyles.chip,
+                      { backgroundColor: colors.bgElevated },
+                    ]}
+                  >
+                    <Ionicons
+                      name="wallet"
+                      size={14}
+                      color={colors.textSecondary}
+                    />
+                    <Text
+                      style={[
+                        previewStyles.chipText,
+                        { color: colors.textPrimary },
+                      ]}
+                      numberOfLines={1}
+                    >
+                      {transaction.accountName}
+                    </Text>
+                  </View>
+                ) : null}
+                {transaction.paymentMethod ? (
+                  <View
+                    style={[
+                      previewStyles.chip,
+                      { backgroundColor: colors.bgElevated },
+                    ]}
+                  >
+                    <Ionicons
+                      name="card"
+                      size={14}
+                      color={colors.textSecondary}
+                    />
+                    <Text
+                      style={[
+                        previewStyles.chipText,
+                        { color: colors.textPrimary },
+                      ]}
+                      numberOfLines={1}
+                    >
+                      {transaction.paymentMethod}
+                    </Text>
+                  </View>
+                ) : null}
+                <View
+                  style={[
+                    previewStyles.chip,
+                    { backgroundColor: colors.bgElevated },
+                  ]}
+                >
+                  <Ionicons
+                    name="calendar"
+                    size={14}
+                    color={colors.textSecondary}
+                  />
+                  <Text
+                    style={[
+                      previewStyles.chipText,
+                      { color: colors.textPrimary },
+                    ]}
+                  >
+                    {transaction.date
+                      ? format(new Date(transaction.date), 'dd MMM yyyy')
+                      : ''}
+                  </Text>
+                </View>
+              </View>
+
+              {transaction.notes ? (
+                <Text
+                  style={{
+                    color: colors.textSecondary,
+                    marginTop: 8,
+                    fontSize: 13,
+                  }}
+                  numberOfLines={3}
+                >
+                  {transaction.notes}
+                </Text>
+              ) : null}
+
+              {isSmsImported && (
+                <View
+                  style={[
+                    previewStyles.smsBadge,
+                    { backgroundColor: colors.primary + '20' },
+                  ]}
+                >
+                  <Ionicons
+                    name="chatbubble-ellipses"
+                    size={14}
+                    color={colors.primary}
+                  />
+                  <Text
+                    style={{
+                      color: colors.primary,
+                      fontSize: 12,
+                      fontWeight: '600',
+                    }}
+                  >
+                    Imported from SMS
+                  </Text>
+                </View>
+              )}
+
+              <View style={previewStyles.actions}>
+                <Button
+                  title="Delete"
+                  variant="danger"
+                  onPress={() => {
+                    void (async () => {
+                      await TransactionService.delete(transaction.id);
+                      onDelete(transaction.id);
+                    })();
+                  }}
+                  style={{ flex: 1 }}
+                />
+                <Button
+                  title="Edit"
+                  variant="primary"
+                  onPress={() => {
+                    onEdit(transaction.id);
+                    onClose();
+                  }}
+                  style={{ flex: 1 }}
+                />
+              </View>
+            </>
+          )}
+        </Pressable>
+      </Pressable>
+    </Modal>
+  );
+};
+
+const previewStyles = StyleSheet.create({
+  overlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'flex-end',
+  },
+  sheet: {
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    padding: 20,
+    borderWidth: 1,
+    borderBottomWidth: 0,
+  },
+  handle: { alignItems: 'center', marginBottom: 16 },
+  handleBar: { width: 40, height: 4, borderRadius: 2, opacity: 0.3 },
+  detailGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginTop: 16,
+  },
+  chip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 20,
+  },
+  chipText: { fontSize: 13, fontWeight: '600' },
+  smsBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    marginTop: 12,
+    alignSelf: 'flex-start',
+  },
+  actions: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 20,
+  },
+});
+
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 export default function TransactionsScreen() {
   const router = useRouter();
@@ -136,6 +388,7 @@ export default function TransactionsScreen() {
   const styles = useMemo(() => createStyles(colors), [colors]);
 
   const dataRevision = useAppStore((state) => state.dataRevision);
+  const [previewTx, setPreviewTx] = useState<Transaction | null>(null);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
@@ -294,12 +547,13 @@ export default function TransactionsScreen() {
         <View style={styles.txCardWrapper}>
           <TransactionItem
             item={item.data}
-            onPress={() => router.push(`/transactions/${item.data.id}`)}
+            onPress={() => setPreviewTx(item.data)}
+            onLongPress={() => setPreviewTx(item.data)}
           />
         </View>
       );
     },
-    [styles, colors, router],
+    [styles, colors],
   );
 
   const renderFilterOption = (
@@ -622,6 +876,19 @@ export default function TransactionsScreen() {
           ),
         )}
       </FilterSheet>
+
+      {/* Transaction Preview Sheet */}
+      <TransactionPreviewSheet
+        transaction={previewTx}
+        visible={previewTx !== null}
+        onClose={() => setPreviewTx(null)}
+        onEdit={(id) => {
+          setPreviewTx(null);
+          router.push(`/transactions/${id}?edit=1` as Href);
+        }}
+        onDelete={() => setPreviewTx(null)}
+        colors={colors}
+      />
 
       {/* Transaction List */}
       <FlashList<ListItem>

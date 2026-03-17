@@ -5,7 +5,6 @@ import { useRouter, type Href } from 'expo-router';
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Image,
   ScrollView,
   StyleSheet,
@@ -52,6 +51,7 @@ export default function SettingsScreen() {
     onClose?: () => void;
   }>({ visible: false, title: '', message: '', type: 'info' });
   const [showExportPicker, setShowExportPicker] = useState(false);
+  const [showImportConfirm, setShowImportConfirm] = useState(false);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [syncing, setSyncing] = useState(false);
 
@@ -103,22 +103,27 @@ export default function SettingsScreen() {
     }
   };
 
-  const handleExportCsv = async () => {
+  const handleExportFormat = async (format: 'csv' | 'pdf' | 'json') => {
     setShowExportPicker(false);
     try {
-      const uri = await exportService.exportTransactionsCsv();
+      let uri: string | undefined;
+      if (format === 'csv') uri = await exportService.exportTransactionsCsv();
+      else if (format === 'pdf')
+        uri = await exportService.exportTransactionsPdf();
+      else uri = await exportService.exportFullBackupJson();
+
       if (uri)
         setPopupConfig({
           visible: true,
           title: 'Success',
-          message: `Data exported to:\n${uri}`,
+          message: `${format.toUpperCase()} exported successfully.`,
           type: 'success',
         });
     } catch {
       setPopupConfig({
         visible: true,
         title: 'Export Failed',
-        message: 'Could not export CSV data.',
+        message: `Could not export ${format.toUpperCase()} data.`,
         type: 'error',
       });
     }
@@ -129,37 +134,30 @@ export default function SettingsScreen() {
   };
 
   const handleImportBackup = () => {
-    Alert.alert(
-      'Import Backup',
-      'This will merge the backup data into your existing data. Any conflicting records will be overwritten. Continue?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Choose File',
-          onPress: async () => {
-            try {
-              const result = await exportService.importBackupJson();
-              if (result) {
-                setPopupConfig({
-                  visible: true,
-                  title: 'Import Successful',
-                  message: `${result.imported} records imported.`,
-                  type: 'success',
-                });
-              }
-            } catch {
-              setPopupConfig({
-                visible: true,
-                title: 'Import Failed',
-                message:
-                  'Could not import backup. Make sure you selected a valid Hisab Kitab backup file.',
-                type: 'error',
-              });
-            }
-          },
-        },
-      ],
-    );
+    setShowImportConfirm(true);
+  };
+
+  const confirmImportBackup = async () => {
+    setShowImportConfirm(false);
+    try {
+      const result = await exportService.importBackupJson();
+      if (result) {
+        setPopupConfig({
+          visible: true,
+          title: 'Import Successful',
+          message: `${result.imported} records imported.`,
+          type: 'success',
+        });
+      }
+    } catch {
+      setPopupConfig({
+        visible: true,
+        title: 'Import Failed',
+        message:
+          'Could not import backup. Make sure you selected a valid Hisab Kitab backup file.',
+        type: 'error',
+      });
+    }
   };
 
   const handleEmailReport = async () => {
@@ -454,6 +452,9 @@ export default function SettingsScreen() {
                 <Text style={styles.badgeText}>CSV</Text>
               </View>
               <View style={styles.badge}>
+                <Text style={styles.badgeText}>PDF</Text>
+              </View>
+              <View style={styles.badge}>
                 <Text style={styles.badgeText}>JSON</Text>
               </View>
               <Ionicons
@@ -522,9 +523,29 @@ export default function SettingsScreen() {
         title="Export Format"
         message="Choose data format to export:"
         type="info"
-        actionLabel="CSV (Transactions)"
-        onAction={() => void handleExportCsv()}
+        actions={[
+          { label: 'CSV', onPress: () => void handleExportFormat('csv') },
+          {
+            label: 'PDF Report',
+            onPress: () => void handleExportFormat('pdf'),
+          },
+          {
+            label: 'JSON Backup',
+            onPress: () => void handleExportFormat('json'),
+          },
+        ]}
         onClose={() => setShowExportPicker(false)}
+      />
+
+      {/* Import Confirmation */}
+      <CustomPopup
+        visible={showImportConfirm}
+        title="Import Backup"
+        message="This will merge the backup data into your existing data. Any conflicting records will be overwritten. Continue?"
+        type="info"
+        actionLabel="Choose File"
+        onAction={() => void confirmImportBackup()}
+        onClose={() => setShowImportConfirm(false)}
       />
 
       {/* Logout Confirmation */}
