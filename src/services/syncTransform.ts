@@ -1,5 +1,13 @@
 import type { SyncableTable } from '../utils/constants';
 
+/** Columns that exist locally (added by MigrationRunner v1) but not in Supabase. */
+const LOCAL_ONLY_COLUMNS = new Set([
+  'last_modified',
+  'server_id',
+  'version_hash',
+  'sync_status', // migration v1 duplicate — base schema uses camelCase syncStatus
+]);
+
 const baseLocalToRemote: Record<string, string> = {
   userId: 'user_id',
   syncStatus: 'sync_status',
@@ -112,7 +120,9 @@ export const mapLocalToRemoteRecord = (
   };
 
   return Object.fromEntries(
-    Object.entries(record).map(([key, value]) => [mapping[key] ?? key, value]),
+    Object.entries(record)
+      .filter(([key]) => !LOCAL_ONLY_COLUMNS.has(key))
+      .map(([key, value]) => [mapping[key] ?? key, value]),
   );
 };
 
