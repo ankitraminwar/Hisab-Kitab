@@ -650,13 +650,13 @@ export default function DashboardScreen() {
               {recentTransactions.slice(0, 5).map((tx, idx) => (
                 <Animated.View
                   key={tx.id}
-                  entering={FadeInDown.duration(400).delay(420 + idx * 60)}
+                  entering={FadeInDown.duration(400)?.delay(420 + idx * 60)}
                 >
                   <TransactionItem
                     item={tx}
-                    onPress={() => router.push(`/transactions/${tx.id}`)}
+                    onPress={() => router?.push(`/transactions/${tx?.id}`)}
                   />
-                  {idx < Math.min(recentTransactions.length, 5) - 1 && (
+                  {idx < Math?.min(recentTransactions?.length, 5) - 1 && (
                     <View style={styles.divider} />
                   )}
                 </Animated.View>

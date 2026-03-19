@@ -266,7 +266,7 @@ const SplitCard: React.FC<{
                     },
                   ]}
                 >
-                  {m.name.charAt(0).toUpperCase()}
+                  {m?.name?.charAt(0)?.toUpperCase()}
                 </Text>
               </View>
             ))}

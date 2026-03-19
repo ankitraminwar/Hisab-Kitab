@@ -39,7 +39,7 @@ const TransactionItem: React.FC<TransactionItemProps> = ({
     onLongPress?.(item);
   }, [item, onLongPress]);
 
-  const tapGesture = Gesture.Tap()
+  const tapGesture = Gesture?.Tap()
     .onBegin(() => {
       scale.value = withSpring(0.97, SPRING_CONFIG);
     })
@@ -52,20 +52,20 @@ const TransactionItem: React.FC<TransactionItemProps> = ({
       }
     });
 
-  const longPressGesture = Gesture.LongPress()
-    .minDuration(400)
-    .onStart(() => {
+  const longPressGesture = Gesture?.LongPress()
+    ?.minDuration(400)
+    ?.onStart(() => {
       scale.value = withSpring(0.95, SPRING_CONFIG);
       void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
       if (onLongPress) {
         handleLongPress();
       }
     })
-    .onFinalize(() => {
+    ?.onFinalize(() => {
       scale.value = withSpring(1, SPRING_CONFIG);
     });
 
-  const gesture = Gesture.Exclusive(longPressGesture, tapGesture);
+  const gesture = Gesture?.Exclusive(longPressGesture, tapGesture);
 
   const animatedStyle = useAnimatedStyle(() => ({
     transform: [{ scale: scale.value }],

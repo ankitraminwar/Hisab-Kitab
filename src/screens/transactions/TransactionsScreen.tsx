@@ -667,7 +667,7 @@ export default function TransactionsScreen() {
               ]}
             >
               {filterType
-                ? filterType.charAt(0).toUpperCase() + filterType.slice(1)
+                ? filterType?.charAt(0)?.toUpperCase() + filterType?.slice(1)
                 : 'Type'}
             </Text>
             {filterType ? (

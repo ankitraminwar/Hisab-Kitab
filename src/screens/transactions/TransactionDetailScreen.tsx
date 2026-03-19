@@ -122,7 +122,7 @@ export default function TransactionDetailScreen() {
         : colors.transfer;
 
   const prefix = tx.type === 'income' ? '+' : tx.type === 'expense' ? '-' : '↔';
-  const typeLabel = tx.type.charAt(0).toUpperCase() + tx.type.slice(1);
+  const typeLabel = tx?.type?.charAt(0)?.toUpperCase() + tx?.type?.slice(1);
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>

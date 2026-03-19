@@ -301,7 +301,7 @@ export default function SettingsScreen() {
                         { color: isActive ? colors.primary : colors.textMuted },
                       ]}
                     >
-                      {t.charAt(0).toUpperCase() + t.slice(1)}
+                      {t?.charAt(0)?.toUpperCase() + t.slice(1)}
                     </Text>
                   </TouchableOpacity>
                 );

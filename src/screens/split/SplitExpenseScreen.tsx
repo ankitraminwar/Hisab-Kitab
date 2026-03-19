@@ -161,7 +161,7 @@ export default function SplitExpenseScreen() {
     .filter((m) => m.role === 'member')
     .reduce((sum, m) => sum + m.amount, 0);
 
-  const getInitial = (name: string) => name.charAt(0).toUpperCase();
+  const getInitial = (name: string) => name?.charAt(0)?.toUpperCase();
 
   const METHODS: { key: SplitMethod; label: string }[] = [
     { key: 'equal', label: 'Equal' },
@@ -463,8 +463,8 @@ export default function SplitExpenseScreen() {
                     color="rgba(255,255,255,0.7)"
                   />
                   <Text style={styles.detailHeroMetaText}>
-                    {existingSplit.splitMethod.charAt(0).toUpperCase() +
-                      existingSplit.splitMethod.slice(1)}{' '}
+                    {existingSplit?.splitMethod?.charAt(0)?.toUpperCase() +
+                      existingSplit?.splitMethod?.slice(1)}{' '}
                     split
                   </Text>
                 </View>
@@ -531,7 +531,7 @@ export default function SplitExpenseScreen() {
                       },
                     ]}
                   >
-                    {member.name.charAt(0).toUpperCase()}
+                    {member?.name?.charAt(0)?.toUpperCase()}
                   </Text>
                 </View>
                 <View style={styles.memberInfo}>

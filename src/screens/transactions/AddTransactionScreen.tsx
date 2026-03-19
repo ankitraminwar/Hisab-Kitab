@@ -337,7 +337,7 @@ export default function AddTransactionScreen() {
                     },
                   ]}
                 >
-                  {t.charAt(0).toUpperCase() + t.slice(1)}
+                  {t?.charAt(0)?.toUpperCase() + t?.slice(1)}
                 </Text>
               </TouchableOpacity>
             );
