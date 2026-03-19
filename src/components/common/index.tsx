@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
-import React, { useMemo } from 'react';
+import React, { useEffect, useMemo } from 'react';
 import {
   ActivityIndicator,
   Modal,
@@ -324,6 +324,10 @@ export const Button: React.FC<ButtonProps> = ({
       }}
       disabled={disabled || loading}
       activeOpacity={0.8}
+      accessible
+      accessibilityRole="button"
+      accessibilityLabel={title}
+      accessibilityState={{ disabled: disabled || loading }}
     >
       {loading ? (
         <ActivityIndicator size="small" color={contentColor} />
@@ -355,7 +359,14 @@ export const FAB: React.FC<FABProps> = ({ onPress, icon = 'add' }) => {
   const { colors } = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
   return (
-    <TouchableOpacity style={styles.fab} onPress={onPress} activeOpacity={0.85}>
+    <TouchableOpacity
+      style={styles.fab}
+      onPress={onPress}
+      activeOpacity={0.85}
+      accessible
+      accessibilityRole="button"
+      accessibilityLabel="Add new"
+    >
       <View style={styles.fabInner}>
         <Ionicons name={icon as IoniconsName} size={28} color="#fff" />
       </View>
@@ -454,6 +465,16 @@ export const CustomPopup: React.FC<CustomPopupProps> = ({
 }) => {
   const { colors } = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
+
+  // Auto-dismiss success popups after 3 seconds
+  useEffect(() => {
+    if (visible && type === 'success' && !actions) {
+      const timer = setTimeout(() => {
+        (onAction || onClose)();
+      }, 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [visible, type, actions, onAction, onClose]);
 
   const iconName =
     type === 'success'
@@ -593,6 +614,77 @@ export const CustomSwitch: React.FC<CustomSwitchProps> = ({
     </Pressable>
   );
 };
+
+// ─── Error Boundary ───────────────────────────────────────────────────────────
+interface ErrorBoundaryProps {
+  children: React.ReactNode;
+  fallback?: React.ReactNode;
+}
+interface ErrorBoundaryState {
+  hasError: boolean;
+}
+export class ScreenErrorBoundary extends React.Component<
+  ErrorBoundaryProps,
+  ErrorBoundaryState
+> {
+  state: ErrorBoundaryState = { hasError: false };
+
+  static getDerivedStateFromError(): ErrorBoundaryState {
+    return { hasError: true };
+  }
+
+  componentDidCatch(error: Error, info: React.ErrorInfo) {
+    console.warn('ScreenErrorBoundary caught:', error, info.componentStack);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      if (this.props.fallback) return this.props.fallback;
+      return (
+        <View
+          style={{
+            flex: 1,
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: SPACING.lg,
+          }}
+        >
+          <Text
+            style={{
+              ...TYPOGRAPHY.h3,
+              marginBottom: SPACING.sm,
+              color: '#EF4444',
+            }}
+          >
+            Something went wrong
+          </Text>
+          <Text
+            style={{
+              ...TYPOGRAPHY.body,
+              color: '#64748B',
+              textAlign: 'center',
+            }}
+          >
+            An unexpected error occurred. Please go back and try again.
+          </Text>
+          <TouchableOpacity
+            onPress={() => this.setState({ hasError: false })}
+            style={{
+              marginTop: SPACING.lg,
+              paddingHorizontal: SPACING.lg,
+              paddingVertical: SPACING.sm,
+              backgroundColor: '#7C3AED',
+              borderRadius: RADIUS.md,
+            }}
+          >
+            <Text style={{ color: '#fff', fontWeight: '600' }}>Retry</Text>
+          </TouchableOpacity>
+        </View>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 function createStyles(colors: ThemeColors) {
   return StyleSheet.create({

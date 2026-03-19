@@ -2,7 +2,13 @@ import { Ionicons } from '@expo/vector-icons';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import * as Haptics from 'expo-haptics';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import {
   KeyboardAvoidingView,
   Modal,
@@ -86,6 +92,8 @@ export default function AddTransactionScreen() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [accounts, setAccounts] = useState<Account[]>([]);
 
+  const existingLoadedRef = useRef(false);
+
   const filteredCategories = useMemo(
     () => categories.filter((c) => c.type === type || c.type === 'both'),
     [categories, type],
@@ -124,13 +132,20 @@ export default function AddTransactionScreen() {
   }, [loadData]);
 
   useEffect(() => {
-    if (categories.length > 0 && accounts.length > 0 && isEditing) {
+    if (
+      categories.length > 0 &&
+      accounts.length > 0 &&
+      isEditing &&
+      !existingLoadedRef.current
+    ) {
+      existingLoadedRef.current = true;
       void loadExisting();
     }
   }, [categories, accounts, isEditing, loadExisting]);
 
   // Pre-select category if none matches current type
   useEffect(() => {
+    if (isEditing && existingLoadedRef.current) return;
     if (filteredCategories.length === 0) {
       setSelectedCategory(null);
       return;
@@ -144,7 +159,7 @@ export default function AddTransactionScreen() {
         null
       );
     });
-  }, [filteredCategories]);
+  }, [filteredCategories, isEditing]);
 
   const handleDigit = (digit: string) => {
     setAmountStr((prev) => {

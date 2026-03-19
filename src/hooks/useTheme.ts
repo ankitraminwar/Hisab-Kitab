@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import { useColorScheme } from 'react-native';
 import { useAppStore } from '../store/appStore';
 import { DARK_COLORS, LIGHT_COLORS } from '../utils/constants';
@@ -30,10 +31,15 @@ export const useTheme = () => {
 
   const isDark = effectiveTheme === 'dark';
 
+  const colors = useMemo(
+    () => resolveThemeColors(theme, canonicalSystemTheme),
+    [theme, canonicalSystemTheme],
+  );
+
   return {
     isDark,
     theme: effectiveTheme as ThemePreference,
-    colors: resolveThemeColors(theme, canonicalSystemTheme),
+    colors,
   };
 };
 

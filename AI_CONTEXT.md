@@ -71,7 +71,7 @@ src/
     common/                      # Shared UI components (see component library below)
       index.tsx                  # Card, Button, FAB, EmptyState, CategoryBadge, SearchBar,
                                  # ProgressBar, SectionHeader, StatCard, CustomPopup,
-                                 # CustomSwitch, AmountText
+                                 # CustomSwitch, AmountText, ScreenErrorBoundary
       CategoryGrid.tsx           # Responsive category selector grid
       NumericKeypad.tsx          # Custom number entry keypad (with haptics)
       PeriodTabs.tsx             # Month/year period selector
@@ -160,12 +160,21 @@ stitch_designs/                  # Reference UI mockups (PNG) — light + dark p
 
 ## Key Patterns
 
-- **dataRevision**: Zustand counter bumped after writes. Screens subscribe to it to trigger re-fetches.
+- **dataRevision**: Zustand counter bumped after writes (debounced at 100 ms). Screens subscribe to it to trigger re-fetches.
 - **Screen structure**: `SafeAreaView` → header → `ScrollView` → sections, styled via `useMemo(() => createStyles(colors), [colors])`.
 - **Route params**: `useLocalSearchParams<{ id: string }>()` for dynamic routes.
 - **Modals**: Transaction add/edit and split screens use `presentation: 'modal'` in `_layout.tsx`.
 - **Animations**: `Animated.View` with `FadeInDown` from reanimated for staggered section entry.
 - **useCallback for async effects**: Any `async` function used inside a `useEffect` dependency array must be wrapped in `useCallback` to satisfy the eslint `exhaustive-deps` rule.
+- **Fire-and-forget promises**: Use `.catch(console.warn)` instead of `void`. Example: `triggerBackgroundSync('reason').catch(console.warn)`.
+- **formatCurrency**: Uses a module-level cached `Intl.NumberFormat` instance for performance.
+- **Error boundaries**: `ScreenErrorBoundary` wraps the root layout to catch render crashes with a user-friendly retry UI.
+- **Deep links**: Root layout handles `hisabkitab://transactions` and `hisabkitab://budgets` deep links, mapping them to the correct tab routes.
+- **CustomPopup auto-dismiss**: Success-type popups automatically close after 3 seconds.
+- **SMS editability**: SMS-imported transactions can be edited; the `sms:` origin tag is preserved.
+- **CSV export**: Uses chunked 1000-row streaming to avoid loading the entire dataset into memory.
+- **SMS polling backoff**: Exponential backoff (up to 10 min) when no new messages are detected; resets on app foreground.
+- **Budget query**: Uses a single `LEFT JOIN` on transactions instead of a correlated subquery (N+1 → 1).
 
 ## Navigation Map
 
@@ -230,6 +239,8 @@ Run `supabase/schema.sql` in the Supabase SQL editor. Single file — all tables
 - **`dashboard_monthly_stats`** — Materialized view pre-aggregating monthly income/expenses/net per user. Auto-refreshed via trigger on `transactions`. Access via `get_dashboard_stats(month)` RPC.
 - **GIN index on `tags`** — `idx_transactions_tags_gin` enables fast tag-based analytics on Supabase.
 - **Composite indexes** — `idx_transactions_dashboard` (date DESC, type) and `idx_transactions_filter` (type, category_id, account_id) optimize dashboard and filter queries.
+- **Budget category+month index** — `idx_transactions_cat_type_deleted` (categoryId, type, deletedAt DESC) speeds up budget spending aggregation.
+- **Budget uniqueness** — `idx_budgets_unique_cat_month` partial unique index on `(categoryId, month, year) WHERE deletedAt IS NULL` prevents duplicate budgets for the same category+period.
 
 ## Caveats & Known State
 

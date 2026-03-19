@@ -3,6 +3,7 @@ import NetInfo from '@react-native-community/netinfo';
 import {
   enqueueSync,
   fetchTableRows,
+  getDatabase,
   getLastSyncTimestamp,
   getSyncableTables,
   getSyncState,
@@ -270,8 +271,10 @@ class SyncService {
         const isRls =
           f.reason.includes('row-level security') || f.reason.includes('42501');
         if (isDefault && isRls) {
-          void markRecordSyncStatus('categories', f.item.recordId, 'synced');
-          void removeFromSyncQueue(f.item.id);
+          markRecordSyncStatus('categories', f.item.recordId, 'synced').catch(
+            console.warn,
+          );
+          removeFromSyncQueue(f.item.id).catch(console.warn);
           return false;
         }
         return true;
@@ -374,8 +377,21 @@ class SyncService {
         throw error;
       }
 
-      await markRecordSyncStatus(table as never, recordId, 'synced', syncedAt);
-      await removeFromSyncQueue(item.id);
+      const localDb = getDatabase();
+      await localDb.execAsync('BEGIN');
+      try {
+        await markRecordSyncStatus(
+          table as never,
+          recordId,
+          'synced',
+          syncedAt,
+        );
+        await removeFromSyncQueue(item.id);
+        await localDb.execAsync('COMMIT');
+      } catch (localErr) {
+        await localDb.execAsync('ROLLBACK');
+        throw localErr;
+      }
     } catch (error) {
       await incrementSyncRetry(item.id, errorMessage(error) || 'Push failed');
       throw error;

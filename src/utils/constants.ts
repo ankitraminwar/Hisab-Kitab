@@ -156,13 +156,15 @@ export const SYNCABLE_TABLES = [
 
 export type SyncableTable = (typeof SYNCABLE_TABLES)[number];
 
+const currencyFormatter = new Intl.NumberFormat(CURRENCY.locale, {
+  style: 'currency',
+  currency: CURRENCY.code,
+  minimumFractionDigits: 0,
+  maximumFractionDigits: 2,
+});
+
 export const formatCurrency = (amount: number, showSign = false): string => {
-  const formatted = new Intl.NumberFormat(CURRENCY.locale, {
-    style: 'currency',
-    currency: CURRENCY.code,
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 2,
-  }).format(Math.abs(amount));
+  const formatted = currencyFormatter.format(Math.abs(amount));
 
   if (showSign && amount > 0) {
     return `+${formatted}`;

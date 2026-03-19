@@ -21,8 +21,8 @@
     "production": {
       "autoIncrement": true,
       "android": {
-        "buildType": "apk",
-        "gradleCommand": ":app:assembleRelease",
+        "buildType": "aab",
+        "gradleCommand": ":app:bundleRelease",
         "image": "latest"
       },
       "env": {

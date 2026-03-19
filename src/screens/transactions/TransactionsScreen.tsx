@@ -450,12 +450,15 @@ export default function TransactionsScreen() {
     [buildFilters],
   );
 
+  const loadMoreRef = useRef(false);
   const loadMore = useCallback(async () => {
-    if (loadingMore || !hasMore) return;
+    if (loadingMore || !hasMore || loadMoreRef.current) return;
+    loadMoreRef.current = true;
     setLoadingMore(true);
     const nextOffset = (page + 1) * PAGE_SIZE;
     await loadData(nextOffset, false);
     setLoadingMore(false);
+    loadMoreRef.current = false;
   }, [loadingMore, hasMore, page, loadData]);
 
   useEffect(() => {

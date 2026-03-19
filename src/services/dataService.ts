@@ -45,7 +45,7 @@ const queueEntitySync = async (
 ) => {
   await enqueueSync(table, id, operation, payload);
   useAppStore.getState().bumpDataRevision();
-  void triggerBackgroundSync(`${table}-${operation}`);
+  triggerBackgroundSync(`${table}-${operation}`).catch(console.warn);
 };
 
 export const AccountService = {
@@ -279,19 +279,16 @@ export const BudgetService = {
               c.name as categoryName,
               c.icon as categoryIcon,
               c.color as categoryColor,
-              COALESCE(
-                (SELECT SUM(t.amount)
-                 FROM transactions t
-                 WHERE t.categoryId = b.categoryId
-                   AND t.type = 'expense'
-                   AND t.deletedAt IS NULL
-                   AND strftime('%Y', t.date) = CAST(b.year AS TEXT)
-                   AND strftime('%m', t.date) = b.month),
-                0
-              ) as spent
+              COALESCE(SUM(t.amount), 0) as spent
        FROM budgets b
        LEFT JOIN categories c ON b.categoryId = c.id
+       LEFT JOIN transactions t ON t.categoryId = b.categoryId
+         AND t.type = 'expense'
+         AND t.deletedAt IS NULL
+         AND strftime('%Y', t.date) = CAST(b.year AS TEXT)
+         AND strftime('%m', t.date) = b.month
        WHERE b.year = ? AND b.month = ? AND b.deletedAt IS NULL
+       GROUP BY b.id
        ORDER BY c.name ASC`,
       [year, month],
     );
@@ -761,14 +758,26 @@ export const DataService = {
     let imported = 0;
     const db = getDatabase();
 
+    // Build column whitelist per table from SQLite schema
+    const schemaCache = new Map<string, Set<string>>();
+    for (const table of validTables) {
+      const cols = await db.getAllAsync<{ name: string }>(
+        `PRAGMA table_info(${table})`,
+      );
+      schemaCache.set(table, new Set(cols.map((c) => c.name)));
+    }
+
     for (const table of validTables) {
       const rows = data[table];
       if (!Array.isArray(rows) || rows.length === 0) continue;
 
+      const allowedColumns = schemaCache.get(table)!;
+
       for (const row of rows) {
         if (typeof row !== 'object' || row === null) continue;
         const record = row as Record<string, unknown>;
-        const keys = Object.keys(record);
+        // Only keep keys that exist in the table schema
+        const keys = Object.keys(record).filter((k) => allowedColumns.has(k));
         if (keys.length === 0) continue;
 
         const placeholders = keys.map(() => '?').join(', ');

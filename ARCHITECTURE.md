@@ -273,6 +273,7 @@ Widget task handler: `src/widgets/widgetTaskHandler.ts`
 
 ## Build Optimizations
 
-- **R8/ProGuard**: Enabled via `android.enableMinifyInReleaseBuilds=true` and `android.enableShrinkResourcesInReleaseBuilds=true` in `android/gradle.properties`. Reduces APK size by removing unused code and resources.
+- **R8/ProGuard**: Enabled via `android.enableMinifyInReleaseBuilds=true` and `android.enableShrinkResourcesInReleaseBuilds=true` in `android/gradle.properties`. Reduces bundle size by removing unused code and resources.
+- **AAB production builds**: EAS production profile builds Android App Bundle (`.aab`) for Play Store distribution, enabling Google Play's dynamic delivery.
 - **Hermes**: `jsEngine: "hermes"` set in `app.json`. Bytecode compilation for faster startup.
 - **Dashboard chart**: Donut chart uses SQL-backed `getCategoryBreakdownByDateRange()` for accurate full-month category data instead of aggregating from limited recent transactions.

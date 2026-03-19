@@ -426,7 +426,7 @@ export const importSmsTransactions = async (
     network.isInternetReachable !== false &&
     importedCount > 0
   ) {
-    void triggerBackgroundSync('sms-import');
+    triggerBackgroundSync('sms-import').catch(console.warn);
   }
 
   return {
@@ -441,24 +441,38 @@ export const importSmsTransactions = async (
 };
 
 class SmsImportService {
-  private intervalId?: ReturnType<typeof setInterval>;
+  private timeoutId?: ReturnType<typeof setTimeout>;
+  private consecutiveEmpty = 0;
 
   start() {
-    if (Platform.OS !== 'android' || this.intervalId) {
+    if (Platform.OS !== 'android' || this.timeoutId) {
       return;
     }
 
     void this.run();
-    this.intervalId = setInterval(() => {
-      void this.run();
-    }, SMS_POLL_INTERVAL_MS);
+    this.scheduleNext();
   }
 
   stop() {
-    if (this.intervalId) {
-      clearInterval(this.intervalId);
-      this.intervalId = undefined;
+    if (this.timeoutId) {
+      clearTimeout(this.timeoutId);
+      this.timeoutId = undefined;
     }
+    this.consecutiveEmpty = 0;
+  }
+
+  private scheduleNext() {
+    // Exponential backoff: 60s, 120s, 240s, max 10min when no new SMS
+    const delay =
+      this.consecutiveEmpty === 0
+        ? SMS_POLL_INTERVAL_MS
+        : Math.min(
+            SMS_POLL_INTERVAL_MS * Math.pow(2, this.consecutiveEmpty),
+            600_000,
+          );
+    this.timeoutId = setTimeout(() => {
+      void this.run().then(() => this.scheduleNext());
+    }, delay);
   }
 
   async run() {
@@ -467,9 +481,15 @@ class SmsImportService {
       return;
     }
     try {
-      await importSmsTransactions(false);
+      const result = await importSmsTransactions(false);
+      if (result.importedCount > 0) {
+        this.consecutiveEmpty = 0;
+      } else {
+        this.consecutiveEmpty = Math.min(this.consecutiveEmpty + 1, 6);
+      }
     } catch (error) {
       console.warn('SMS import failed', error);
+      this.consecutiveEmpty = Math.min(this.consecutiveEmpty + 1, 6);
     }
   }
 }

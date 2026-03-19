@@ -4,7 +4,6 @@ import { useLocalSearchParams, useRouter, type Href } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   ScrollView,
   StyleSheet,
   Text,
@@ -13,8 +12,10 @@ import {
 } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { CustomPopup } from '../../components/common';
 import { ScreenHeader } from '../../components/common/ScreenHeader';
 import { useTheme, type ThemeColors } from '../../hooks/useTheme';
+import { AccountService } from '../../services/dataServices';
 import { TransactionService } from '../../services/transactionService';
 import {
   RADIUS,
@@ -47,6 +48,8 @@ export default function TransactionDetailScreen() {
   const styles = useMemo(() => createStyles(colors), [colors]);
   const [tx, setTx] = useState<Transaction | null>(null);
   const [loading, setLoading] = useState(true);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [toAccountName, setToAccountName] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     if (!id) {
@@ -56,6 +59,11 @@ export default function TransactionDetailScreen() {
     try {
       const data = await TransactionService.getById(id);
       setTx(data ?? null);
+      if (data?.toAccountId) {
+        const accounts = await AccountService.getAll();
+        const toAcc = accounts.find((a) => a.id === data.toAccountId);
+        setToAccountName(toAcc?.name ?? data.toAccountId);
+      }
     } catch {
       setTx(null);
     } finally {
@@ -68,26 +76,18 @@ export default function TransactionDetailScreen() {
   }, [load]);
 
   const handleDelete = () => {
-    Alert.alert(
-      'Delete Transaction',
-      'Are you sure you want to delete this transaction?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-            if (!id) return;
-            try {
-              await TransactionService.delete(id);
-            } catch {
-              // ignore delete errors
-            }
-            router.back();
-          },
-        },
-      ],
-    );
+    setShowDeleteConfirm(true);
+  };
+
+  const confirmDelete = async () => {
+    setShowDeleteConfirm(false);
+    if (!id) return;
+    try {
+      await TransactionService.delete(id);
+    } catch {
+      // ignore delete errors
+    }
+    router.back();
   };
 
   if (loading) {
@@ -128,15 +128,10 @@ export default function TransactionDetailScreen() {
     <SafeAreaView style={styles.container} edges={['top']}>
       <ScreenHeader
         title={isSms ? 'SMS Transaction' : 'Transaction Details'}
-        rightAction={
-          isSms
-            ? undefined
-            : {
-                icon: 'create-outline' as IoniconsName,
-                onPress: () =>
-                  router.push(`/transactions/${id}?edit=1` as Href),
-              }
-        }
+        rightAction={{
+          icon: 'create-outline' as IoniconsName,
+          onPress: () => router.push(`/transactions/${id}?edit=1` as Href),
+        }}
       />
       <ScrollView
         contentContainerStyle={styles.scroll}
@@ -189,7 +184,7 @@ export default function TransactionDetailScreen() {
               icon="swap-horizontal"
               iconColor={colors.transfer}
               label="Destination"
-              value={tx.toAccountId}
+              value={toAccountName ?? tx.toAccountId}
               colors={colors}
             />
           )}
@@ -250,26 +245,19 @@ export default function TransactionDetailScreen() {
         {/* Actions */}
         <Animated.View entering={FadeInDown.duration(400).delay(300)}>
           <View style={styles.actionsRow}>
-            {!isSms && (
-              <TouchableOpacity
-                style={[
-                  styles.actionBtn,
-                  { borderColor: colors.primary + '40' },
-                ]}
-                onPress={() =>
-                  router.push(`/transactions/${id}?edit=1` as Href)
-                }
-              >
-                <Ionicons
-                  name="create-outline"
-                  size={20}
-                  color={colors.primary}
-                />
-                <Text style={[styles.actionBtnText, { color: colors.primary }]}>
-                  Edit
-                </Text>
-              </TouchableOpacity>
-            )}
+            <TouchableOpacity
+              style={[styles.actionBtn, { borderColor: colors.primary + '40' }]}
+              onPress={() => router.push(`/transactions/${id}?edit=1` as Href)}
+            >
+              <Ionicons
+                name="create-outline"
+                size={20}
+                color={colors.primary}
+              />
+              <Text style={[styles.actionBtnText, { color: colors.primary }]}>
+                Edit
+              </Text>
+            </TouchableOpacity>
             <TouchableOpacity
               style={[styles.actionBtn, { borderColor: colors.expense + '40' }]}
               onPress={handleDelete}
@@ -282,14 +270,22 @@ export default function TransactionDetailScreen() {
           </View>
           {isSms && (
             <Text style={styles.smsNote}>
-              This transaction was imported from SMS and can only be previewed
-              or deleted.
+              This transaction was imported from SMS. You can edit it to correct
+              any details while the SMS origin tag is preserved.
             </Text>
           )}
         </Animated.View>
 
         <View style={{ height: 80 }} />
       </ScrollView>
+      <CustomPopup
+        visible={showDeleteConfirm}
+        title="Delete Transaction"
+        message="Are you sure you want to delete this transaction?"
+        type="error"
+        onClose={() => setShowDeleteConfirm(false)}
+        actions={[{ label: 'Delete', onPress: confirmDelete }]}
+      />
     </SafeAreaView>
   );
 }

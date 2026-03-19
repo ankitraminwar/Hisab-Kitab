@@ -149,6 +149,8 @@ const initialDataState: Pick<
 
 // ─── Slice Creators ──────────────────────────────────────────────────────────
 
+let revisionTimer: ReturnType<typeof setTimeout> | undefined;
+
 const createAuthSlice: StateCreator<AppState, [], [], AuthSlice> = (set) => ({
   ...initialAuthState,
   setLocked: (locked) => set({ isLocked: locked }),
@@ -179,8 +181,12 @@ const createDataSlice: StateCreator<AppState, [], [], DataSlice> = (set) => ({
   setLiabilities: (liabilities) => set({ liabilities }),
   setDashboardStats: (dashboardStats) => set({ dashboardStats }),
   setSmsEnabled: (smsEnabled) => set({ smsEnabled }),
-  bumpDataRevision: () =>
-    set((state) => ({ dataRevision: state.dataRevision + 1 })),
+  bumpDataRevision: () => {
+    clearTimeout(revisionTimer);
+    revisionTimer = setTimeout(() => {
+      set((state) => ({ dataRevision: state.dataRevision + 1 }));
+    }, 100);
+  },
 });
 
 // ─── Combined Store ──────────────────────────────────────────────────────────

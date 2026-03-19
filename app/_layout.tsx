@@ -1,6 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import type { Session } from '@supabase/supabase-js';
 import { QueryClientProvider } from '@tanstack/react-query';
+import * as Linking from 'expo-linking';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -17,6 +18,7 @@ import {
 import { registerWidgetTaskHandler } from 'react-native-android-widget';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
+import { ScreenErrorBoundary } from '@/components/common';
 import {
   clearLocalData,
   getLastSyncTimestamp,
@@ -232,6 +234,18 @@ export default function RootLayout() {
     return () => sub.remove();
   }, [session, isLocked, biometricsEnabled]);
 
+  // Handle widget deep links that need tab route resolution
+  const deepLinkUrl = Linking.useURL();
+  useEffect(() => {
+    if (!deepLinkUrl || initializing) return;
+    const path = deepLinkUrl.replace(/^hisabkitab:\/\//, '/');
+    if (path === '/transactions') {
+      router.replace('/(tabs)/transactions');
+    } else if (path === '/budgets') {
+      router.replace('/(tabs)/budgets');
+    }
+  }, [deepLinkUrl, initializing, router]);
+
   const handleAuthenticate = async () => {
     try {
       const success = await authenticateBiometric();
@@ -277,49 +291,66 @@ export default function RootLayout() {
   }
 
   return (
-    <GestureHandlerRootView style={styles.root}>
-      <QueryClientProvider client={queryClient}>
-        <StatusBar
-          style={theme === 'dark' ? 'light' : 'dark'}
-          backgroundColor={colors.bg}
-        />
-        <Stack
-          screenOptions={{ headerShown: false, animation: 'slide_from_right' }}
-        >
-          <Stack.Screen name="login" options={{ headerShown: false }} />
-          <Stack.Screen name="auth" options={{ headerShown: false }} />
-          <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-          <Stack.Screen
-            name="transactions/add"
-            options={{ presentation: 'modal', animation: 'slide_from_bottom' }}
+    <ScreenErrorBoundary>
+      <GestureHandlerRootView style={styles.root}>
+        <QueryClientProvider client={queryClient}>
+          <StatusBar
+            style={theme === 'dark' ? 'light' : 'dark'}
+            backgroundColor={colors.bg}
           />
-          <Stack.Screen
-            name="transactions/[id]"
-            options={{ presentation: 'modal', animation: 'slide_from_bottom' }}
-          />
-          <Stack.Screen
-            name="accounts/index"
-            options={{ animation: 'slide_from_right' }}
-          />
-          <Stack.Screen
-            name="settings/index"
-            options={{ animation: 'slide_from_right' }}
-          />
-          <Stack.Screen
-            name="sms-import"
-            options={{ presentation: 'modal', animation: 'slide_from_bottom' }}
-          />
-          <Stack.Screen
-            name="splits/index"
-            options={{ animation: 'slide_from_right' }}
-          />
-          <Stack.Screen
-            name="split-expense/[id]"
-            options={{ presentation: 'modal', animation: 'slide_from_bottom' }}
-          />
-        </Stack>
-      </QueryClientProvider>
-    </GestureHandlerRootView>
+          <Stack
+            screenOptions={{
+              headerShown: false,
+              animation: 'slide_from_right',
+            }}
+          >
+            <Stack.Screen name="login" options={{ headerShown: false }} />
+            <Stack.Screen name="auth" options={{ headerShown: false }} />
+            <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+            <Stack.Screen
+              name="transactions/add"
+              options={{
+                presentation: 'modal',
+                animation: 'slide_from_bottom',
+              }}
+            />
+            <Stack.Screen
+              name="transactions/[id]"
+              options={{
+                presentation: 'modal',
+                animation: 'slide_from_bottom',
+              }}
+            />
+            <Stack.Screen
+              name="accounts/index"
+              options={{ animation: 'slide_from_right' }}
+            />
+            <Stack.Screen
+              name="settings/index"
+              options={{ animation: 'slide_from_right' }}
+            />
+            <Stack.Screen
+              name="sms-import"
+              options={{
+                presentation: 'modal',
+                animation: 'slide_from_bottom',
+              }}
+            />
+            <Stack.Screen
+              name="splits/index"
+              options={{ animation: 'slide_from_right' }}
+            />
+            <Stack.Screen
+              name="split-expense/[id]"
+              options={{
+                presentation: 'modal',
+                animation: 'slide_from_bottom',
+              }}
+            />
+          </Stack>
+        </QueryClientProvider>
+      </GestureHandlerRootView>
+    </ScreenErrorBoundary>
   );
 }
 

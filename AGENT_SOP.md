@@ -21,28 +21,27 @@ Before writing a single line of code:
 
 These rules are absolute. Violating any of them breaks the codebase.
 
-| Rule                                       | What To Do                                                                                                                                                                 |
-| ------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Offline-first**                          | Always write to SQLite first. Call `enqueueSync()` after every write. Never await network before local write.                                                              |
-| **No secrets in app**                      | Only `EXPO_PUBLIC_SUPABASE_URL` and `EXPO_PUBLIC_SUPABASE_ANON_KEY` in `.env`. No service keys.                                                                            |
-| **No `any` types**                         | Every type must be explicit. Use `IoniconsName` for icons, `ThemeColors` for color objects, `DimensionValue` for percentage widths.                                        |
-| **No `Alert.alert`**                       | Use `CustomPopup` for all user-facing alerts. See §1a for known exceptions.                                                                                                |
-| **No hardcoded colors**                    | All colors must come from `useTheme()`. Never import `COLORS` directly in screen files.                                                                                    |
-| **Auth gating**                            | Unauthenticated → `/login`. Every authenticated user must have a `user_profile` row.                                                                                       |
-| **UUIDs only**                             | All entity IDs are `TEXT` using `generateId()` from `src/utils/constants.ts`.                                                                                              |
-| **camelCase locally, snake_case remotely** | SQLite columns = camelCase. **Exception:** `split_expenses` and `split_members` already use snake_case column names in SQLite (`transaction_id`, `paid_by_user_id`, etc.). |
-| **FlashList v2**                           | Never pass `estimatedItemSize` prop — it was removed in v2.0.                                                                                                              |
-| **SMS / Widgets**                          | Both require native Android builds. Never call SMS APIs on iOS.                                                                                                            |
-| **Widget deep link URIs**                  | Use `hisabkitab://path` (double slash). Never `hisabkitab:///path` (triple slash). The `(tabs)` segment is not needed in widget URIs.                                      |
-| **SMS-imported transactions**              | Hide Edit button for SMS-imported transactions. Check `isSmsImported` flag (tags with `sms:` prefix). Only Delete and View are allowed.                                    |
-| **Unbounded queries**                      | Always pass a `LIMIT` to `TransactionService.getAll()`. Default is 50; for picker lists use 100.                                                                           |
+| Rule                                       | What To Do                                                                                                                                                                                     |
+| ------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Offline-first**                          | Always write to SQLite first. Call `enqueueSync()` after every write. Never await network before local write.                                                                                  |
+| **No secrets in app**                      | Only `EXPO_PUBLIC_SUPABASE_URL` and `EXPO_PUBLIC_SUPABASE_ANON_KEY` in `.env`. No service keys.                                                                                                |
+| **No `any` types**                         | Every type must be explicit. Use `IoniconsName` for icons, `ThemeColors` for color objects, `DimensionValue` for percentage widths.                                                            |
+| **No `Alert.alert`**                       | Use `CustomPopup` for all user-facing alerts. See §1a for known exceptions.                                                                                                                    |
+| **No hardcoded colors**                    | All colors must come from `useTheme()`. Never import `COLORS` directly in screen files.                                                                                                        |
+| **Auth gating**                            | Unauthenticated → `/login`. Every authenticated user must have a `user_profile` row.                                                                                                           |
+| **UUIDs only**                             | All entity IDs are `TEXT` using `generateId()` from `src/utils/constants.ts`.                                                                                                                  |
+| **camelCase locally, snake_case remotely** | SQLite columns = camelCase. **Exception:** `split_expenses` and `split_members` already use snake_case column names in SQLite (`transaction_id`, `paid_by_user_id`, etc.).                     |
+| **FlashList v2**                           | Never pass `estimatedItemSize` prop — it was removed in v2.0.                                                                                                                                  |
+| **SMS / Widgets**                          | Both require native Android builds. Never call SMS APIs on iOS.                                                                                                                                |
+| **Widget deep link URIs**                  | Use `hisabkitab://path` (double slash). Never `hisabkitab:///path` (triple slash). The `(tabs)` segment is not needed in widget URIs.                                                          |
+| **SMS-imported transactions**              | SMS transactions are now editable — users can correct amount/category/merchant while the `sms:` origin tag is preserved for audit trail. Check `isSmsImported` flag (tags with `sms:` prefix). |
+| **Unbounded queries**                      | Always pass a `LIMIT` to `TransactionService.getAll()`. Default is 50; for picker lists use 100.                                                                                               |
 
 ### 1a. Known `Alert.alert` Exceptions (Tech Debt)
 
 The following screens still use `Alert.alert`. When editing them, migrate to `CustomPopup`. Do NOT introduce new `Alert.alert` calls anywhere else.
 
 - `src/screens/goals/GoalsScreen.tsx` — delete goal confirmation
-- `src/screens/transactions/TransactionDetailScreen.tsx` — delete transaction confirmation
 - `src/screens/reports/ReportsScreen.tsx` — export format picker and PDF/CSV error alerts
 
 ---
@@ -210,7 +209,7 @@ export async function createItem(data: CreateItemInput): Promise<Item> {
   useAppStore.getState().bumpDataRevision();
 
   // 3. Trigger background sync (fire and forget)
-  void triggerBackgroundSync('your_table-created');
+  triggerBackgroundSync('your_table-created').catch(console.warn);
 
   return item;
 }
@@ -231,7 +230,7 @@ async function deleteItem(id: string) {
     updatedAt: deletedAt,
   });
   useAppStore.getState().bumpDataRevision();
-  void triggerBackgroundSync('your_table-deleted');
+  triggerBackgroundSync('your_table-deleted').catch(console.warn);
 }
 ```
 
@@ -257,7 +256,7 @@ const refreshAllWidgets = async () => {
   return refresh();
 };
 // After the write:
-void refreshAllWidgets();
+refreshAllWidgets().catch(console.warn);
 ```
 
 ---
@@ -395,7 +394,7 @@ Every write to a syncable table follows this exact pattern. Steps 2-4 are all re
 1. Write to SQLite         →  db.runAsync(INSERT/UPDATE/soft-delete)
 2. Queue the sync          →  await enqueueSync(table, recordId, 'upsert'|'delete', payloadObject)
 3. Bump the revision       →  useAppStore.getState().bumpDataRevision()
-4. Trigger background sync →  void triggerBackgroundSync(reason)
+4. Trigger background sync →  triggerBackgroundSync(reason).catch(console.warn)
 ```
 
 The `payload` (4th arg to `enqueueSync`) must be the full record as `Record<string, unknown>`. Convert booleans to 0/1 for SQLite boolean fields.

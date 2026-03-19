@@ -34,7 +34,7 @@ const queueEntitySync = async (
 ) => {
   await enqueueSync(table, id, operation, payload);
   useAppStore.getState().bumpDataRevision();
-  void triggerBackgroundSync(`${table}-${operation}`);
+  triggerBackgroundSync(`${table}-${operation}`).catch(console.warn);
 };
 
 export const SplitService = {
@@ -61,6 +61,7 @@ export const SplitService = {
   ) {
     const now = new Date().toISOString();
     const expenseId = generateId();
+    const db = getDatabase();
 
     const expense: SplitExpense = {
       ...expenseData,
@@ -70,71 +71,83 @@ export const SplitService = {
       ...createSyncMetadata(),
     };
 
-    // 1. Insert SplitExpense
-    await getDatabase().runAsync(
-      `INSERT INTO split_expenses
-        (id, transaction_id, paid_by_user_id, total_amount, split_method, notes, createdAt, updatedAt, userId, syncStatus, lastSyncedAt, deletedAt)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [
-        expense.id,
-        expense.transactionId,
-        expense.paidByUserId,
-        expense.totalAmount,
-        expense.splitMethod,
-        bindValue(expense.notes),
-        expense.createdAt,
-        expense.updatedAt,
-        bindValue(expense.userId),
-        expense.syncStatus,
-        bindValue(expense.lastSyncedAt),
-        bindValue(expense.deletedAt),
-      ],
-    );
+    const members: SplitMember[] = [];
 
+    await db.execAsync('BEGIN IMMEDIATE TRANSACTION');
+    try {
+      // 1. Insert SplitExpense
+      await db.runAsync(
+        `INSERT INTO split_expenses
+          (id, transaction_id, paid_by_user_id, total_amount, split_method, notes, createdAt, updatedAt, userId, syncStatus, lastSyncedAt, deletedAt)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          expense.id,
+          expense.transactionId,
+          expense.paidByUserId,
+          expense.totalAmount,
+          expense.splitMethod,
+          bindValue(expense.notes),
+          expense.createdAt,
+          expense.updatedAt,
+          bindValue(expense.userId),
+          expense.syncStatus,
+          bindValue(expense.lastSyncedAt),
+          bindValue(expense.deletedAt),
+        ],
+      );
+
+      // 2. Insert SplitMembers
+      for (const mData of membersData) {
+        const member: SplitMember = {
+          ...mData,
+          id: generateId(),
+          splitExpenseId: expenseId,
+          createdAt: now,
+          updatedAt: now,
+          ...createSyncMetadata(),
+        };
+
+        await db.runAsync(
+          `INSERT INTO split_members
+            (id, split_expense_id, name, share_amount, share_percent, status, createdAt, updatedAt, userId, syncStatus, lastSyncedAt, deletedAt)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [
+            member.id,
+            member.splitExpenseId,
+            member.name,
+            member.shareAmount,
+            bindValue(member.sharePercent),
+            member.status,
+            member.createdAt,
+            member.updatedAt,
+            bindValue(member.userId),
+            member.syncStatus,
+            bindValue(member.lastSyncedAt),
+            bindValue(member.deletedAt),
+          ],
+        );
+
+        members.push(member);
+      }
+
+      await db.execAsync('COMMIT');
+    } catch (e) {
+      await db.execAsync('ROLLBACK');
+      throw e;
+    }
+
+    // Enqueue sync outside the transaction
     await queueEntitySync(
       'split_expenses',
       expense.id,
       expense as unknown as Record<string, unknown>,
     );
-
-    // 2. Insert SplitMembers
-    const members: SplitMember[] = [];
-    for (const mData of membersData) {
-      const member: SplitMember = {
-        ...mData,
-        id: generateId(),
-        splitExpenseId: expenseId,
-        createdAt: now,
-        updatedAt: now,
-        ...createSyncMetadata(),
-      };
-
-      await getDatabase().runAsync(
-        `INSERT INTO split_members
-          (id, split_expense_id, name, share_amount, share_percent, status, createdAt, updatedAt, userId, syncStatus, lastSyncedAt, deletedAt)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [
-          member.id,
-          member.splitExpenseId,
-          member.name,
-          member.shareAmount,
-          bindValue(member.sharePercent),
-          member.status,
-          member.createdAt,
-          member.updatedAt,
-          bindValue(member.userId),
-          member.syncStatus,
-          bindValue(member.lastSyncedAt),
-          bindValue(member.deletedAt),
-        ],
-      );
-
+    for (const member of members) {
       await queueEntitySync(
         'split_members',
         member.id,
         member as unknown as Record<string, unknown>,
       );
-      members.push(member);
     }
 
     return { expense, members };

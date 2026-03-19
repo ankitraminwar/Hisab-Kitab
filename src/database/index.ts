@@ -233,6 +233,7 @@ const indexes = [
   `CREATE INDEX IF NOT EXISTS idx_transactions_deletedAt ON transactions(deletedAt)`,
   `CREATE INDEX IF NOT EXISTS idx_transactions_search ON transactions(merchant, notes, date)`,
   `CREATE INDEX IF NOT EXISTS idx_budgets_month_year ON budgets(month, year)`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS idx_budgets_unique_cat_month ON budgets(categoryId, month, year) WHERE deletedAt IS NULL`,
   `CREATE INDEX IF NOT EXISTS idx_sync_queue_entity_record ON sync_queue(entity, recordId)`,
   `CREATE INDEX IF NOT EXISTS idx_sync_queue_retryCount ON sync_queue(retryCount, updatedAt)`,
   `CREATE INDEX IF NOT EXISTS idx_split_expenses_transaction ON split_expenses(transaction_id)`,
@@ -241,6 +242,7 @@ const indexes = [
   `CREATE INDEX IF NOT EXISTS idx_transactions_tags ON transactions(tags)`,
   `CREATE INDEX IF NOT EXISTS idx_transactions_dashboard ON transactions(date DESC, type)`,
   `CREATE INDEX IF NOT EXISTS idx_transactions_filter ON transactions(type, categoryId, accountId)`,
+  `CREATE INDEX IF NOT EXISTS idx_transactions_cat_type_deleted ON transactions(categoryId, type, deletedAt DESC)`,
 ];
 
 const defaultCategories = [
