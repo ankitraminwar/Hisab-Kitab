@@ -316,15 +316,17 @@ const TransactionPreviewSheet: React.FC<{
                   }}
                   style={{ flex: 1 }}
                 />
-                <Button
-                  title="Edit"
-                  variant="primary"
-                  onPress={() => {
-                    onEdit(transaction.id);
-                    onClose();
-                  }}
-                  style={{ flex: 1 }}
-                />
+                {!isSmsImported && (
+                  <Button
+                    title="Edit"
+                    variant="primary"
+                    onPress={() => {
+                      onEdit(transaction.id);
+                      onClose();
+                    }}
+                    style={{ flex: 1 }}
+                  />
+                )}
               </View>
             </>
           )}

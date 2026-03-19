@@ -1,5 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { format } from 'date-fns';
+import * as Haptics from 'expo-haptics';
 import React, { memo, useCallback, useMemo } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
@@ -55,6 +56,7 @@ const TransactionItem: React.FC<TransactionItemProps> = ({
     .minDuration(400)
     .onStart(() => {
       scale.value = withSpring(0.95, SPRING_CONFIG);
+      void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
       if (onLongPress) {
         handleLongPress();
       }

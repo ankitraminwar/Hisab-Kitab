@@ -116,7 +116,7 @@ export default function SplitExpenseScreen() {
 
   // ── Load transactions for new split ──────────────────────────────────────
   const loadTransactions = useCallback(async () => {
-    const data = await TransactionService.getAll();
+    const data = await TransactionService.getAll(undefined, 100);
     const expenseList = data.filter((t) => t.type === 'expense');
     setTransactions(expenseList);
     const preselected = txId
@@ -186,7 +186,7 @@ export default function SplitExpenseScreen() {
         (sum, m) => sum + (m.sharePercent ?? 0),
         0,
       );
-      if (Math.abs(totalPercent - 100) > 0.5) {
+      if (Math.abs(totalPercent - 100) > 0.01) {
         setPopupConfig({
           visible: true,
           title: 'Percent Mismatch',

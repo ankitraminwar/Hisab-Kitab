@@ -1,4 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
+import * as Haptics from 'expo-haptics';
 import React, { useMemo } from 'react';
 import {
   ActivityIndicator,
@@ -317,7 +318,10 @@ export const Button: React.FC<ButtonProps> = ({
         style,
         (disabled || loading) && styles.buttonDisabled,
       ]}
-      onPress={onPress}
+      onPress={() => {
+        void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+        onPress();
+      }}
       disabled={disabled || loading}
       activeOpacity={0.8}
     >

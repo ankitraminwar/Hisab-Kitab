@@ -46,7 +46,7 @@ export const LIGHT_COLORS = {
   borderLight: '#D1D5DB',
   textPrimary: '#0F172A',
   textSecondary: '#64748B',
-  textMuted: '#94A3B8',
+  textMuted: '#78839B',
   textInverse: '#F8FAFC',
   chart: [
     '#7C3AED',

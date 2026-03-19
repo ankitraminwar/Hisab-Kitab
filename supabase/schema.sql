@@ -267,6 +267,9 @@ create index if not exists idx_transactions_transaction_date on public.transacti
 create index if not exists idx_transactions_category_id on public.transactions (category_id);
 create index if not exists idx_transactions_account_id on public.transactions (account_id);
 create index if not exists idx_transactions_user_updated_at on public.transactions (user_id, updated_at desc);
+create index if not exists idx_transactions_tags_gin on public.transactions using gin (tags);
+create index if not exists idx_transactions_dashboard on public.transactions (transaction_date desc, type);
+create index if not exists idx_transactions_filter on public.transactions (type, category_id, account_id);
 create index if not exists idx_accounts_user_updated_at on public.accounts (user_id, updated_at desc);
 create index if not exists idx_categories_user_updated_at on public.categories (user_id, updated_at desc);
 create index if not exists idx_budgets_user_updated_at on public.budgets (user_id, updated_at desc);
@@ -394,6 +397,81 @@ create policy "own_split_members" on public.split_members for all using (auth.ui
 create policy "own_payment_methods" on public.payment_methods for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
 
 -- ============================================================
+-- Materialized View — Dashboard Monthly Stats
+-- ============================================================
+
+drop materialized view if exists public.dashboard_monthly_stats;
+
+create materialized view public.dashboard_monthly_stats as
+select
+  user_id,
+  to_char(transaction_date, 'YYYY-MM') as month,
+  sum(case when type = 'income' then amount else 0 end) as total_income,
+  sum(case when type = 'expense' then amount else 0 end) as total_expenses,
+  sum(case when type = 'income' then amount else 0 end) -
+    sum(case when type = 'expense' then amount else 0 end) as net,
+  count(*) as transaction_count
+from public.transactions
+where deleted_at is null
+group by user_id, to_char(transaction_date, 'YYYY-MM');
+
+create unique index idx_dashboard_monthly_stats_pk
+  on public.dashboard_monthly_stats (user_id, month);
+
+create or replace function public.get_dashboard_stats(p_month text default to_char(now(), 'YYYY-MM'))
+returns table(
+  month text,
+  total_income double precision,
+  total_expenses double precision,
+  net double precision,
+  transaction_count bigint
+)
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select
+    dms.month,
+    dms.total_income,
+    dms.total_expenses,
+    dms.net,
+    dms.transaction_count
+  from public.dashboard_monthly_stats dms
+  where dms.user_id = auth.uid()
+    and dms.month = p_month;
+$$;
+
+create or replace function public.refresh_dashboard_stats()
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  refresh materialized view concurrently public.dashboard_monthly_stats;
+end;
+$$;
+
+create or replace function public.trigger_refresh_dashboard_stats()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  perform public.refresh_dashboard_stats();
+  return null;
+end;
+$$;
+
+drop trigger if exists refresh_dashboard_stats_trigger on public.transactions;
+create trigger refresh_dashboard_stats_trigger
+  after insert or update or delete on public.transactions
+  for each statement
+  execute function public.trigger_refresh_dashboard_stats();
+
+-- ============================================================
 -- Schema & Table Grants
 -- ============================================================
 
@@ -407,3 +485,6 @@ alter default privileges in schema public grant select, insert, update, delete o
 
 grant usage on all sequences in schema public to authenticated;
 alter default privileges in schema public grant usage on sequences to authenticated;
+
+grant execute on function public.get_dashboard_stats(text) to authenticated;
+grant execute on function public.refresh_dashboard_stats() to authenticated;

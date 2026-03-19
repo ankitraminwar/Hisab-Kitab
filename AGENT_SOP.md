@@ -33,6 +33,9 @@ These rules are absolute. Violating any of them breaks the codebase.
 | **camelCase locally, snake_case remotely** | SQLite columns = camelCase. **Exception:** `split_expenses` and `split_members` already use snake_case column names in SQLite (`transaction_id`, `paid_by_user_id`, etc.). |
 | **FlashList v2**                           | Never pass `estimatedItemSize` prop — it was removed in v2.0.                                                                                                              |
 | **SMS / Widgets**                          | Both require native Android builds. Never call SMS APIs on iOS.                                                                                                            |
+| **Widget deep link URIs**                  | Use `hisabkitab://path` (double slash). Never `hisabkitab:///path` (triple slash). The `(tabs)` segment is not needed in widget URIs.                                      |
+| **SMS-imported transactions**              | Hide Edit button for SMS-imported transactions. Check `isSmsImported` flag (tags with `sms:` prefix). Only Delete and View are allowed.                                    |
+| **Unbounded queries**                      | Always pass a `LIMIT` to `TransactionService.getAll()`. Default is 50; for picker lists use 100.                                                                           |
 
 ### 1a. Known `Alert.alert` Exceptions (Tech Debt)
 
@@ -269,6 +272,7 @@ void refreshAllWidgets();
 6. **Use `EmptyState`** for empty list placeholders.
 7. **Use `Button`** for all tappable actions (primary/secondary/danger/ghost variants).
 8. **Use `AmountText`** for displaying monetary values.
+9. **Use `expo-haptics`** — add `Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)` for interactive gestures (long press, primary button taps, keypad presses). Already applied to `TransactionItem` long press.
 
 ---
 
@@ -404,6 +408,9 @@ Tables in `SYNCABLE_TABLES` in `src/utils/constants.ts` participate in sync. Oth
 - **`tags` field**: Stored as a JSON string in SQLite (`TEXT DEFAULT '[]'`) but Supabase expects `jsonb`. The sync service auto-parses the string to an array before pushing — do not pre-parse it yourself in the payload.
 - **Supabase FK constraints**: Inter-table FK constraints (e.g. `transactions.category_id → categories.id`) have been intentionally removed from Supabase. SQLite enforces FK integrity locally. Only the `user_id → auth.users(id)` FK remains on all tables.
 - **`payment_method`**: No CHECK constraint on Supabase — accepts any string. This is intentional to allow SMS-imported transactions with varied payment method strings.
+- **Parallel pulls**: `pullRemoteChanges()` and `initialSync()` use `Promise.allSettled()` to pull independent tables in parallel by dependency tier. Do not add inter-table dependencies that would break this tiered approach.
+- **Sync queue compaction**: `enqueueSync()` merges multiple mutations for the same `entity+recordId` into one queue entry — only the latest payload is pushed.
+- **Materialized view**: `dashboard_monthly_stats` on Supabase pre-aggregates monthly stats. Auto-refreshed via trigger on `transactions`. Accessible via `get_dashboard_stats(month)` RPC.
 
 ---
 

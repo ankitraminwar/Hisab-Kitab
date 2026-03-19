@@ -1,4 +1,4 @@
-import { create } from 'zustand';
+import { create, type StateCreator } from 'zustand';
 
 import type {
   Account,
@@ -14,17 +14,38 @@ import type {
   UserProfile,
 } from '../utils/types';
 
+// ─── Slice Interfaces ────────────────────────────────────────────────────────
+
 interface SyncStateUpdate {
   syncInProgress?: boolean;
   lastSyncAt?: string | null;
   lastSyncError?: string | null;
 }
 
-interface AppState {
+interface AuthSlice {
   isLocked: boolean;
   biometricsEnabled: boolean;
   biometricsPrompted: boolean;
   pinEnabled: boolean;
+  userProfile: UserProfile | null;
+  setLocked: (locked: boolean) => void;
+  setBiometrics: (enabled: boolean) => void;
+  setBiometricsPrompted: (prompted: boolean) => void;
+  setUserProfile: (profile: UserProfile | null) => void;
+}
+
+interface UISlice {
+  isLoading: boolean;
+  theme: ThemePreference;
+  notificationPreferences: NotificationPreferences;
+  selectedMonth: string;
+  setLoading: (loading: boolean) => void;
+  setTheme: (theme: ThemePreference) => void;
+  setNotificationPreferences: (preferences: NotificationPreferences) => void;
+  setSelectedMonth: (month: string) => void;
+}
+
+interface DataSlice {
   isOnline: boolean;
   syncInProgress: boolean;
   lastSyncAt: string | null;
@@ -37,16 +58,8 @@ interface AppState {
   assets: Asset[];
   liabilities: Liability[];
   dashboardStats: DashboardStats;
-  isLoading: boolean;
-  theme: ThemePreference;
-  userProfile: UserProfile | null;
-  notificationPreferences: NotificationPreferences;
-  selectedMonth: string;
   dataRevision: number;
   smsEnabled: boolean;
-  setLocked: (locked: boolean) => void;
-  setBiometrics: (enabled: boolean) => void;
-  setBiometricsPrompted: (prompted: boolean) => void;
   setOnline: (online: boolean) => void;
   setSyncState: (state: SyncStateUpdate) => void;
   setAccounts: (accounts: Account[]) => void;
@@ -57,22 +70,46 @@ interface AppState {
   setAssets: (assets: Asset[]) => void;
   setLiabilities: (liabilities: Liability[]) => void;
   setDashboardStats: (stats: DashboardStats) => void;
-  setLoading: (loading: boolean) => void;
-  setTheme: (theme: ThemePreference) => void;
-  setUserProfile: (profile: UserProfile | null) => void;
-  setNotificationPreferences: (preferences: NotificationPreferences) => void;
-  setSelectedMonth: (month: string) => void;
   setSmsEnabled: (enabled: boolean) => void;
   bumpDataRevision: () => void;
-  resetAppState: () => void;
 }
 
-const initialState: Pick<
-  AppState,
+type AppState = AuthSlice & UISlice & DataSlice & { resetAppState: () => void };
+
+// ─── Initial Values ──────────────────────────────────────────────────────────
+
+const initialAuthState: Pick<
+  AuthSlice,
   | 'isLocked'
   | 'biometricsEnabled'
   | 'biometricsPrompted'
   | 'pinEnabled'
+  | 'userProfile'
+> = {
+  isLocked: true,
+  biometricsEnabled: false,
+  biometricsPrompted: false,
+  pinEnabled: false,
+  userProfile: null,
+};
+
+const initialUIState: Pick<
+  UISlice,
+  'isLoading' | 'theme' | 'notificationPreferences' | 'selectedMonth'
+> = {
+  isLoading: false,
+  theme: 'system',
+  notificationPreferences: {
+    enabled: false,
+    dailyReminder: false,
+    budgetAlerts: true,
+    monthlyReportReminder: true,
+  },
+  selectedMonth: new Date().toISOString().slice(0, 7),
+};
+
+const initialDataState: Pick<
+  DataSlice,
   | 'isOnline'
   | 'syncInProgress'
   | 'lastSyncAt'
@@ -85,18 +122,9 @@ const initialState: Pick<
   | 'assets'
   | 'liabilities'
   | 'dashboardStats'
-  | 'isLoading'
-  | 'theme'
-  | 'userProfile'
-  | 'notificationPreferences'
-  | 'selectedMonth'
   | 'dataRevision'
   | 'smsEnabled'
 > = {
-  isLocked: true,
-  biometricsEnabled: false,
-  biometricsPrompted: false,
-  pinEnabled: false,
   isOnline: true,
   syncInProgress: false,
   lastSyncAt: null,
@@ -115,25 +143,31 @@ const initialState: Pick<
     savingsRate: 0,
     netWorth: 0,
   },
-  isLoading: false,
-  theme: 'system',
-  userProfile: null,
-  notificationPreferences: {
-    enabled: false,
-    dailyReminder: false,
-    budgetAlerts: true,
-    monthlyReportReminder: true,
-  },
-  selectedMonth: new Date().toISOString().slice(0, 7),
   dataRevision: 0,
   smsEnabled: false,
 };
 
-export const useAppStore = create<AppState>((set) => ({
-  ...initialState,
+// ─── Slice Creators ──────────────────────────────────────────────────────────
+
+const createAuthSlice: StateCreator<AppState, [], [], AuthSlice> = (set) => ({
+  ...initialAuthState,
   setLocked: (locked) => set({ isLocked: locked }),
   setBiometrics: (enabled) => set({ biometricsEnabled: enabled }),
   setBiometricsPrompted: (prompted) => set({ biometricsPrompted: prompted }),
+  setUserProfile: (userProfile) => set({ userProfile }),
+});
+
+const createUISlice: StateCreator<AppState, [], [], UISlice> = (set) => ({
+  ...initialUIState,
+  setLoading: (isLoading) => set({ isLoading }),
+  setTheme: (theme) => set({ theme }),
+  setNotificationPreferences: (notificationPreferences) =>
+    set({ notificationPreferences }),
+  setSelectedMonth: (selectedMonth) => set({ selectedMonth }),
+});
+
+const createDataSlice: StateCreator<AppState, [], [], DataSlice> = (set) => ({
+  ...initialDataState,
   setOnline: (isOnline) => set({ isOnline }),
   setSyncState: (syncState) => set(syncState),
   setAccounts: (accounts) => set({ accounts }),
@@ -144,14 +178,17 @@ export const useAppStore = create<AppState>((set) => ({
   setAssets: (assets) => set({ assets }),
   setLiabilities: (liabilities) => set({ liabilities }),
   setDashboardStats: (dashboardStats) => set({ dashboardStats }),
-  setLoading: (isLoading) => set({ isLoading }),
-  setTheme: (theme) => set({ theme }),
-  setUserProfile: (userProfile) => set({ userProfile }),
-  setNotificationPreferences: (notificationPreferences) =>
-    set({ notificationPreferences }),
-  setSelectedMonth: (selectedMonth) => set({ selectedMonth }),
   setSmsEnabled: (smsEnabled) => set({ smsEnabled }),
   bumpDataRevision: () =>
     set((state) => ({ dataRevision: state.dataRevision + 1 })),
-  resetAppState: () => set({ ...initialState }),
+});
+
+// ─── Combined Store ──────────────────────────────────────────────────────────
+
+export const useAppStore = create<AppState>((...a) => ({
+  ...createAuthSlice(...a),
+  ...createUISlice(...a),
+  ...createDataSlice(...a),
+  resetAppState: () =>
+    a[0]({ ...initialAuthState, ...initialUIState, ...initialDataState }),
 }));

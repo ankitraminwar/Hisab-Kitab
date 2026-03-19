@@ -22,9 +22,11 @@ Paste the following file into the Supabase SQL editor and run it:
 This single idempotent file creates:
 
 - All tables (accounts, categories, transactions, budgets, goals, assets, liabilities, net_worth_history, user_profile, split_expenses, split_members, payment_methods)
-- All indexes and triggers
+- All indexes and triggers (including GIN index on `tags`, composite indexes for dashboard/filter queries)
 - RLS policies (per-user isolation via `auth.uid()`)
 - `handle_new_user` trigger (auto-creates `user_profile` on new auth user with `theme_preference: 'system'`)
+- `dashboard_monthly_stats` materialized view (pre-aggregated monthly income/expenses/net per user, auto-refreshed via trigger)
+- `get_dashboard_stats(month)` RPC function for accessing dashboard aggregates
 - Backfill for existing auth users missing `user_profile`
 
 **Design decisions**:

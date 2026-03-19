@@ -1,6 +1,7 @@
-import React, { useMemo } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import * as Haptics from 'expo-haptics';
+import React, { useMemo } from 'react';
+import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import Animated, {
   useAnimatedStyle,
   useSharedValue,
@@ -52,7 +53,10 @@ const KeyButton: React.FC<{
       onPressOut={() => {
         scale.value = withSpring(1, { damping: 15 });
       }}
-      onPress={onPress}
+      onPress={() => {
+        void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+        onPress();
+      }}
       activeOpacity={0.8}
       style={[
         animStyle,
@@ -105,7 +109,10 @@ export const NumericKeypad: React.FC<NumericKeypadProps> = ({
         <KeyButton label="2" onPress={() => onDigit('2')} colors={colors} />
         <KeyButton label="3" onPress={() => onDigit('3')} colors={colors} />
         <TouchableOpacity
-          onPress={onBackspace}
+          onPress={() => {
+            void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            onBackspace();
+          }}
           style={[styles.key, { backgroundColor: colors.bgElevated + '60' }]}
           activeOpacity={0.7}
         >

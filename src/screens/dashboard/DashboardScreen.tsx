@@ -323,20 +323,20 @@ export default function DashboardScreen() {
       netWorth: nw.netWorth,
     });
 
-    // Build spending distribution by category
-    const expenseTxs = txs.filter((tx) => tx.type === 'expense');
-    const categoryMap = new Map<string, { name: string; total: number }>();
-    for (const tx of expenseTxs) {
-      const catName = tx.categoryName ?? 'Other';
-      const entry = categoryMap.get(catName) ?? { name: catName, total: 0 };
-      entry.total += tx.amount;
-      categoryMap.set(catName, entry);
-    }
-    const slices: DonutSlice[] = Array.from(categoryMap.values())
-      .sort((a, b) => b.total - a.total)
+    // Build spending distribution using SQL-backed category breakdown
+    const dateFrom = `${year}-${month}-01`;
+    const lastDay = new Date(year, Number(month), 0).getDate();
+    const dateTo = `${year}-${month}-${String(lastDay).padStart(2, '0')}`;
+    const categoryBreakdown =
+      await TransactionService.getCategoryBreakdownByDateRange(
+        dateFrom,
+        dateTo,
+        'expense',
+      );
+    const slices: DonutSlice[] = categoryBreakdown
       .slice(0, 4)
       .map((entry, i) => ({
-        label: entry.name,
+        label: entry.categoryName ?? 'Other',
         value: entry.total,
         color: CHART_COLORS[i % CHART_COLORS.length],
       }));

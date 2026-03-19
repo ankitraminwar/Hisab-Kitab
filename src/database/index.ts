@@ -239,6 +239,8 @@ const indexes = [
   `CREATE INDEX IF NOT EXISTS idx_split_members_split_id ON split_members(split_expense_id)`,
   `CREATE INDEX IF NOT EXISTS idx_transactions_type_date_category ON transactions(type, date DESC, categoryId)`,
   `CREATE INDEX IF NOT EXISTS idx_transactions_tags ON transactions(tags)`,
+  `CREATE INDEX IF NOT EXISTS idx_transactions_dashboard ON transactions(date DESC, type)`,
+  `CREATE INDEX IF NOT EXISTS idx_transactions_filter ON transactions(type, categoryId, accountId)`,
 ];
 
 const defaultCategories = [

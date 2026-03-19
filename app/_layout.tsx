@@ -6,6 +6,7 @@ import { StatusBar } from 'expo-status-bar';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  BackHandler,
   LogBox,
   Platform,
   StyleSheet,
@@ -223,6 +224,13 @@ export default function RootLayout() {
       router.replace('/');
     }
   }, [initializing, router, segments, session]);
+
+  // Block hardware back button while biometric lock screen is shown
+  useEffect(() => {
+    if (!(session && isLocked && biometricsEnabled)) return;
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => true);
+    return () => sub.remove();
+  }, [session, isLocked, biometricsEnabled]);
 
   const handleAuthenticate = async () => {
     try {

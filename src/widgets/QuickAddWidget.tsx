@@ -14,7 +14,7 @@ function buildWidget(isDark: boolean) {
         alignItems: 'center',
       }}
       clickAction="OPEN_URI"
-      clickActionData={{ uri: 'hisabkitab:///transactions/add' }}
+      clickActionData={{ uri: 'hisabkitab://transactions/add' }}
     >
       <TextWidget
         text="+"

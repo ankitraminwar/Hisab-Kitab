@@ -411,6 +411,27 @@ class SyncService {
     await setSyncState('defaultsSynced', 'true');
   }
 
+  /**
+   * Tables grouped by dependency tier for parallel pulling.
+   * Tier 0: independent tables (no FK deps on other synced tables)
+   * Tier 1: depend on tier 0 (transactions → categories/accounts)
+   * Tier 2-3: depend on tier 1 (splits → transactions)
+   */
+  private static readonly PULL_TIERS: SyncableTable[][] = [
+    [
+      'user_profile',
+      'accounts',
+      'categories',
+      'payment_methods',
+      'goals',
+      'assets',
+      'liabilities',
+    ],
+    ['transactions', 'budgets', 'net_worth_history'],
+    ['split_expenses'],
+    ['split_members'],
+  ];
+
   private async pullRemoteChanges() {
     const session = await supabase.auth.getSession();
     const userId = session.data.session?.user?.id;
@@ -420,74 +441,92 @@ class SyncService {
 
     const lastSyncAt = await getLastSyncTimestamp();
     let changed = false;
+    const allSyncable = new Set(getSyncableTables());
 
-    for (const table of getSyncableTables()) {
-      let query = supabase
-        .from(table)
-        .select('*')
-        .eq('user_id', userId)
-        .order('updated_at', { ascending: true });
-      if (lastSyncAt) {
-        query = query.gte('updated_at', lastSyncAt);
-      }
+    for (const tier of SyncService.PULL_TIERS) {
+      const tablesToPull = tier.filter((t) => allSyncable.has(t));
+      if (tablesToPull.length === 0) continue;
 
-      const { data, error } = await query;
-      if (error) {
-        if (this.isRemoteSchemaMissing(error)) {
-          throw error;
-        }
-        console.warn(`Pull failed for table ${table}:`, error.message);
-        continue;
-      }
-
-      for (const record of data ?? []) {
-        const localRecordData = mapRemoteToLocalRecord(
-          table,
-          record as Record<string, unknown>,
-        );
-
-        if (localRecordData.deletedAt) {
-          await softDeleteLocalRecord(
-            table,
-            String(localRecordData.id),
-            String(localRecordData.deletedAt),
-          );
-          changed = true;
-          continue;
-        }
-
-        const localRows = await fetchTableRows<Record<string, unknown>>(
-          table,
-          'id = ?',
-          [String(localRecordData.id)],
-        );
-        const localRecord = localRows[0];
-        const remoteUpdatedAt = new Date(
-          String(localRecordData.updatedAt),
-        ).getTime();
-        const localUpdatedAt = localRecord?.updatedAt
-          ? new Date(String(localRecord.updatedAt)).getTime()
-          : 0;
-
-        if (!localRecord || remoteUpdatedAt >= localUpdatedAt) {
-          // Bug 4 fix: protect custom user profile name from being overwritten by default
-          if (table === 'user_profile') {
-            const remoteIsDefault =
-              String(localRecordData.name) === 'Hisab Kitab User';
-            const localIsCustom =
-              localRecord?.name &&
-              String(localRecord.name) !== 'Hisab Kitab User';
-            if (remoteIsDefault && localIsCustom) {
-              localRecordData.name = localRecord.name;
-            }
+      const results = await Promise.allSettled(
+        tablesToPull.map(async (table) => {
+          let query = supabase
+            .from(table)
+            .select('*')
+            .eq('user_id', userId)
+            .order('updated_at', { ascending: true });
+          if (lastSyncAt) {
+            query = query.gte('updated_at', lastSyncAt);
           }
 
-          await upsertLocalRecord(table, {
-            ...localRecordData,
-            syncStatus: 'synced',
-            lastSyncedAt: new Date().toISOString(),
-          });
-          changed = true;
+          const { data, error } = await query;
+          if (error) {
+            if (this.isRemoteSchemaMissing(error)) {
+              throw error;
+            }
+            console.warn(`Pull failed for table ${table}:`, error.message);
+            return;
+          }
+
+          for (const record of data ?? []) {
+            const localRecordData = mapRemoteToLocalRecord(
+              table,
+              record as Record<string, unknown>,
+            );
+
+            if (localRecordData.deletedAt) {
+              await softDeleteLocalRecord(
+                table,
+                String(localRecordData.id),
+                String(localRecordData.deletedAt),
+              );
+              changed = true;
+              continue;
+            }
+
+            const localRows = await fetchTableRows<Record<string, unknown>>(
+              table,
+              'id = ?',
+              [String(localRecordData.id)],
+            );
+            const localRecord = localRows[0];
+            const remoteUpdatedAt = new Date(
+              String(localRecordData.updatedAt),
+            ).getTime();
+            const localUpdatedAt = localRecord?.updatedAt
+              ? new Date(String(localRecord.updatedAt)).getTime()
+              : 0;
+
+            if (!localRecord || remoteUpdatedAt >= localUpdatedAt) {
+              // Bug 4 fix: protect custom user profile name from being overwritten by default
+              if (table === 'user_profile') {
+                const remoteIsDefault =
+                  String(localRecordData.name) === 'Hisab Kitab User';
+                const localIsCustom =
+                  localRecord?.name &&
+                  String(localRecord.name) !== 'Hisab Kitab User';
+                if (remoteIsDefault && localIsCustom) {
+                  localRecordData.name = localRecord.name;
+                }
+              }
+
+              await upsertLocalRecord(table, {
+                ...localRecordData,
+                syncStatus: 'synced',
+                lastSyncedAt: new Date().toISOString(),
+              });
+              changed = true;
+            }
+          }
+        }),
+      );
+
+      // If a schema-missing error was thrown in any table, re-throw it
+      for (const result of results) {
+        if (result.status === 'rejected') {
+          const err = result.reason as unknown;
+          if (this.isRemoteSchemaMissing(err)) {
+            throw err;
+          }
         }
       }
     }
@@ -532,33 +571,50 @@ class SyncService {
       }
 
       let totalPulled = 0;
+      const allSyncable = new Set(getSyncableTables());
 
-      for (const table of getSyncableTables()) {
-        const { data, error } = await supabase
-          .from(table)
-          .select('*')
-          .eq('user_id', userId)
-          .is('deleted_at', null)
-          .order('updated_at', { ascending: true });
+      for (const tier of SyncService.PULL_TIERS) {
+        const tablesToPull = tier.filter((t) => allSyncable.has(t));
+        if (tablesToPull.length === 0) continue;
 
-        if (error) {
-          console.warn(`Initial pull failed for ${table}:`, error.message);
-          continue;
+        const results = await Promise.allSettled(
+          tablesToPull.map(async (table) => {
+            const { data, error } = await supabase
+              .from(table)
+              .select('*')
+              .eq('user_id', userId)
+              .is('deleted_at', null)
+              .order('updated_at', { ascending: true });
+
+            if (error) {
+              console.warn(`Initial pull failed for ${table}:`, error.message);
+              return 0;
+            }
+
+            for (const record of data ?? []) {
+              const localData = mapRemoteToLocalRecord(
+                table,
+                record as Record<string, unknown>,
+              );
+              await upsertLocalRecord(table, {
+                ...localData,
+                syncStatus: 'synced',
+                lastSyncedAt: new Date().toISOString(),
+              });
+            }
+
+            return data?.length ?? 0;
+          }),
+        );
+
+        for (const result of results) {
+          if (
+            result.status === 'fulfilled' &&
+            typeof result.value === 'number'
+          ) {
+            totalPulled += result.value;
+          }
         }
-
-        for (const record of data ?? []) {
-          const localData = mapRemoteToLocalRecord(
-            table,
-            record as Record<string, unknown>,
-          );
-          await upsertLocalRecord(table, {
-            ...localData,
-            syncStatus: 'synced',
-            lastSyncedAt: new Date().toISOString(),
-          });
-        }
-
-        totalPulled += data?.length ?? 0;
       }
 
       const completedAt = new Date().toISOString();
