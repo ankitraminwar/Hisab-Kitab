@@ -2,11 +2,7 @@ import { enqueueSync, getDatabase } from '@/database';
 import { triggerBackgroundSync } from '@/services/syncService';
 import { useAppStore } from '@/store/appStore';
 import { generateId } from '@/utils/constants';
-import type {
-  Transaction,
-  TransactionFilters,
-  TransactionType,
-} from '@/utils/types';
+import type { Transaction, TransactionFilters, TransactionType } from '@/utils/types';
 import type { SQLiteBindValue } from 'expo-sqlite';
 
 /** Lazy-import to break the require cycle:
@@ -87,11 +83,7 @@ const applyBalanceEffect = async (
 };
 
 export const TransactionService = {
-  async getAll(
-    filters?: TransactionFilters,
-    limit = 50,
-    offset = 0,
-  ): Promise<Transaction[]> {
+  async getAll(filters?: TransactionFilters, limit = 50, offset = 0): Promise<Transaction[]> {
     let query = `
       SELECT t.*,
              c.name as categoryName,
@@ -138,8 +130,7 @@ export const TransactionService = {
       params.push(filters.maxAmount);
     }
     if (filters?.search) {
-      query +=
-        ' AND (t.merchant LIKE ? OR t.notes LIKE ? OR t.tags LIKE ? OR c.name LIKE ?)';
+      query += ' AND (t.merchant LIKE ? OR t.notes LIKE ? OR t.tags LIKE ? OR c.name LIKE ?)';
       const searchTerm = `%${filters.search}%`;
       params.push(searchTerm, searchTerm, searchTerm, searchTerm);
     }
@@ -175,13 +166,7 @@ export const TransactionService = {
   async create(
     data: Omit<
       Transaction,
-      | 'id'
-      | 'createdAt'
-      | 'updatedAt'
-      | 'userId'
-      | 'syncStatus'
-      | 'lastSyncedAt'
-      | 'deletedAt'
+      'id' | 'createdAt' | 'updatedAt' | 'userId' | 'syncStatus' | 'lastSyncedAt' | 'deletedAt'
     >,
   ): Promise<Transaction> {
     const now = new Date().toISOString();
@@ -364,10 +349,7 @@ export const TransactionService = {
     return (row?.count ?? 0) > 0;
   },
 
-  async getMonthlyStats(
-    year: number,
-    month: string,
-  ): Promise<{ income: number; expense: number }> {
+  async getMonthlyStats(year: number, month: string): Promise<{ income: number; expense: number }> {
     const rows = await getDatabase().getAllAsync<{
       type: string;
       total: number;
@@ -393,11 +375,7 @@ export const TransactionService = {
     );
   },
 
-  async getCategoryBreakdown(
-    year: number,
-    month: string,
-    type: TransactionType = 'expense',
-  ) {
+  async getCategoryBreakdown(year: number, month: string, type: TransactionType = 'expense') {
     return getDatabase().getAllAsync<{
       categoryId: string;
       categoryName: string;
@@ -480,8 +458,7 @@ export const TransactionService = {
   },
 
   async exportToCSV(): Promise<string> {
-    const header =
-      'Date,Type,Amount,Category,Account,Payment Method,Merchant,Notes,Tags';
+    const header = 'Date,Type,Amount,Category,Account,Payment Method,Merchant,Notes,Tags';
     const chunks: string[] = [header];
     let offset = 0;
     const CHUNK = 1000;

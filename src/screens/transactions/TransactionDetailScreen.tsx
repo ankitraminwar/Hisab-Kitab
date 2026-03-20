@@ -17,12 +17,7 @@ import { ScreenHeader } from '../../components/common/ScreenHeader';
 import { useTheme, type ThemeColors } from '../../hooks/useTheme';
 import { AccountService } from '../../services/dataServices';
 import { TransactionService } from '../../services/transactionService';
-import {
-  RADIUS,
-  SPACING,
-  TYPOGRAPHY,
-  formatCurrency,
-} from '../../utils/constants';
+import { RADIUS, SPACING, TYPOGRAPHY, formatCurrency } from '../../utils/constants';
 import type { IoniconsName, Transaction } from '../../utils/types';
 
 /** Check if a transaction was imported via SMS */
@@ -115,11 +110,7 @@ export default function TransactionDetailScreen() {
   const isSms = isSmsTransaction(tx);
 
   const amountColor =
-    tx.type === 'income'
-      ? colors.income
-      : tx.type === 'expense'
-        ? colors.expense
-        : colors.transfer;
+    tx.type === 'income' ? colors.income : tx.type === 'expense' ? colors.expense : colors.transfer;
 
   const prefix = tx.type === 'income' ? '+' : tx.type === 'expense' ? '-' : '↔';
   const typeLabel = tx?.type?.charAt(0)?.toUpperCase() + tx?.type?.slice(1);
@@ -133,28 +124,19 @@ export default function TransactionDetailScreen() {
           onPress: () => router.push(`/transactions/${id}?edit=1` as Href),
         }}
       />
-      <ScrollView
-        contentContainerStyle={styles.scroll}
-        showsVerticalScrollIndicator={false}
-      >
+      <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
         {/* Amount Card */}
         <Animated.View entering={FadeInDown.duration(400)}>
           <View style={styles.amountCard}>
-            <View
-              style={[styles.typeChip, { backgroundColor: amountColor + '20' }]}
-            >
-              <Text style={[styles.typeText, { color: amountColor }]}>
-                {typeLabel}
-              </Text>
+            <View style={[styles.typeChip, { backgroundColor: amountColor + '20' }]}>
+              <Text style={[styles.typeText, { color: amountColor }]}>{typeLabel}</Text>
             </View>
             <Text style={[styles.amount, { color: amountColor }]}>
               {prefix}
               {formatCurrency(tx.amount)}
             </Text>
             {tx.date && (
-              <Text style={styles.dateText}>
-                {safeFormatDate(tx.date, 'EEEE, dd MMMM yyyy')}
-              </Text>
+              <Text style={styles.dateText}>{safeFormatDate(tx.date, 'EEEE, dd MMMM yyyy')}</Text>
             )}
           </View>
         </Animated.View>
@@ -249,29 +231,21 @@ export default function TransactionDetailScreen() {
               style={[styles.actionBtn, { borderColor: colors.primary + '40' }]}
               onPress={() => router.push(`/transactions/${id}?edit=1` as Href)}
             >
-              <Ionicons
-                name="create-outline"
-                size={20}
-                color={colors.primary}
-              />
-              <Text style={[styles.actionBtnText, { color: colors.primary }]}>
-                Edit
-              </Text>
+              <Ionicons name="create-outline" size={20} color={colors.primary} />
+              <Text style={[styles.actionBtnText, { color: colors.primary }]}>Edit</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={[styles.actionBtn, { borderColor: colors.expense + '40' }]}
               onPress={handleDelete}
             >
               <Ionicons name="trash-outline" size={20} color={colors.expense} />
-              <Text style={[styles.actionBtnText, { color: colors.expense }]}>
-                Delete
-              </Text>
+              <Text style={[styles.actionBtnText, { color: colors.expense }]}>Delete</Text>
             </TouchableOpacity>
           </View>
           {isSms && (
             <Text style={styles.smsNote}>
-              This transaction was imported from SMS. You can edit it to correct
-              any details while the SMS origin tag is preserved.
+              This transaction was imported from SMS. You can edit it to correct any details while
+              the SMS origin tag is preserved.
             </Text>
           )}
         </Animated.View>
@@ -319,9 +293,7 @@ const DetailRow: React.FC<{
       <Ionicons name={icon} size={20} color={iconColor} />
     </View>
     <View style={{ flex: 1 }}>
-      <Text style={{ ...TYPOGRAPHY.caption, color: colors.textMuted }}>
-        {label}
-      </Text>
+      <Text style={{ ...TYPOGRAPHY.caption, color: colors.textMuted }}>{label}</Text>
       <Text
         style={{
           ...TYPOGRAPHY.body,

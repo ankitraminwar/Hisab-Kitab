@@ -80,11 +80,7 @@ type AppState = AuthSlice & UISlice & DataSlice & { resetAppState: () => void };
 
 const initialAuthState: Pick<
   AuthSlice,
-  | 'isLocked'
-  | 'biometricsEnabled'
-  | 'biometricsPrompted'
-  | 'pinEnabled'
-  | 'userProfile'
+  'isLocked' | 'biometricsEnabled' | 'biometricsPrompted' | 'pinEnabled' | 'userProfile'
 > = {
   isLocked: true,
   biometricsEnabled: false,
@@ -163,8 +159,7 @@ const createUISlice: StateCreator<AppState, [], [], UISlice> = (set) => ({
   ...initialUIState,
   setLoading: (isLoading) => set({ isLoading }),
   setTheme: (theme) => set({ theme }),
-  setNotificationPreferences: (notificationPreferences) =>
-    set({ notificationPreferences }),
+  setNotificationPreferences: (notificationPreferences) => set({ notificationPreferences }),
   setSelectedMonth: (selectedMonth) => set({ selectedMonth }),
 });
 
@@ -195,6 +190,5 @@ export const useAppStore = create<AppState>((...a) => ({
   ...createAuthSlice(...a),
   ...createUISlice(...a),
   ...createDataSlice(...a),
-  resetAppState: () =>
-    a[0]({ ...initialAuthState, ...initialUIState, ...initialDataState }),
+  resetAppState: () => a[0]({ ...initialAuthState, ...initialUIState, ...initialDataState }),
 }));

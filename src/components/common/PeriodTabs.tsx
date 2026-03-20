@@ -9,11 +9,7 @@ interface PeriodTabsProps {
   onTabChange: (tab: string) => void;
 }
 
-export const PeriodTabs: React.FC<PeriodTabsProps> = ({
-  tabs,
-  activeTab,
-  onTabChange,
-}) => {
+export const PeriodTabs: React.FC<PeriodTabsProps> = ({ tabs, activeTab, onTabChange }) => {
   const { colors } = useTheme();
 
   return (

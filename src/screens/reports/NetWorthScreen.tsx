@@ -19,13 +19,7 @@ import { ScreenHeader } from '../../components/common/ScreenHeader';
 import { useTheme, type ThemeColors } from '../../hooks/useTheme';
 import { NetWorthService } from '../../services/dataService';
 import { useAppStore } from '../../store/appStore';
-import {
-  RADIUS,
-  SPACING,
-  TYPOGRAPHY,
-  formatCompact,
-  formatCurrency,
-} from '../../utils/constants';
+import { RADIUS, SPACING, TYPOGRAPHY, formatCompact, formatCurrency } from '../../utils/constants';
 import { Asset, AssetType, Liability, LiabilityType } from '../../utils/types';
 
 const ASSET_TYPES: {
@@ -104,9 +98,7 @@ export default function NetWorthScreen() {
   const assetsByType = ASSET_TYPES.map((t) => ({
     ...t,
     items: assets.filter((a) => a.type === t.key),
-    total: assets
-      .filter((a) => a.type === t.key)
-      .reduce((s, a) => s + a.value, 0),
+    total: assets.filter((a) => a.type === t.key).reduce((s, a) => s + a.value, 0),
   })).filter((t) => t.items.length > 0);
 
   return (
@@ -119,19 +111,14 @@ export default function NetWorthScreen() {
         }}
       />
 
-      <ScrollView
-        contentContainerStyle={styles.scroll}
-        showsVerticalScrollIndicator={false}
-      >
+      <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
         {/* Hero Card */}
         <Animated.View entering={FadeInDown.duration(500)}>
           <View style={styles.heroCard}>
             <View style={styles.heroGlow} />
             <Text style={styles.heroLabel}>TOTAL NET WORTH</Text>
             <View style={styles.heroRow}>
-              <Text style={styles.heroAmount}>
-                {formatCurrency(nw.netWorth)}
-              </Text>
+              <Text style={styles.heroAmount}>{formatCurrency(nw.netWorth)}</Text>
               <View style={styles.heroBadge}>
                 <Text style={styles.heroBadgeText}>+5.2%</Text>
               </View>
@@ -146,24 +133,15 @@ export default function NetWorthScreen() {
             <View style={styles.chartHeader}>
               <View>
                 <Text style={styles.chartLabel}>GROWTH OVER TIME</Text>
-                <Text style={styles.chartValue}>
-                  {formatCompact(nw.netWorth)}
-                </Text>
+                <Text style={styles.chartValue}>{formatCompact(nw.netWorth)}</Text>
               </View>
               <View style={styles.chartBadge}>
-                <Text
-                  style={[styles.chartBadgeText, { color: colors.primary }]}
-                >
+                <Text style={[styles.chartBadgeText, { color: colors.primary }]}>
                   LAST 6 MONTHS
                 </Text>
               </View>
             </View>
-            <Svg
-              width="100%"
-              height={120}
-              viewBox="0 0 472 150"
-              preserveAspectRatio="none"
-            >
+            <Svg width="100%" height={120} viewBox="0 0 472 150" preserveAspectRatio="none">
               <Defs>
                 <LinearGradient
                   id="chartGrad"
@@ -173,11 +151,7 @@ export default function NetWorthScreen() {
                   y2="149"
                   gradientUnits="userSpaceOnUse"
                 >
-                  <Stop
-                    offset="0"
-                    stopColor={colors.primary}
-                    stopOpacity={0.3}
-                  />
+                  <Stop offset="0" stopColor={colors.primary} stopOpacity={0.3} />
                   <Stop offset="1" stopColor={colors.primary} stopOpacity={0} />
                 </LinearGradient>
               </Defs>
@@ -215,18 +189,9 @@ export default function NetWorthScreen() {
           </View>
           {assetsByType.length === 0 ? (
             <View style={styles.card}>
-              <TouchableOpacity
-                onPress={() => setShowAddAsset(true)}
-                style={styles.emptyBtn}
-              >
-                <Ionicons
-                  name="add-circle-outline"
-                  size={20}
-                  color={colors.primary}
-                />
-                <Text style={[styles.emptyText, { color: colors.primary }]}>
-                  Add Asset
-                </Text>
+              <TouchableOpacity onPress={() => setShowAddAsset(true)} style={styles.emptyBtn}>
+                <Ionicons name="add-circle-outline" size={20} color={colors.primary} />
+                <Text style={[styles.emptyText, { color: colors.primary }]}>Add Asset</Text>
               </TouchableOpacity>
             </View>
           ) : (
@@ -268,41 +233,23 @@ export default function NetWorthScreen() {
         <Animated.View entering={FadeInDown.duration(400).delay(300)}>
           <View style={[styles.sectionHeader, { marginTop: SPACING.lg }]}>
             <Text style={styles.sectionTitle}>Liabilities</Text>
-            <View
-              style={[
-                styles.sectionBadge,
-                { backgroundColor: colors.expense + '15' },
-              ]}
-            >
-              <Text
-                style={[styles.sectionBadgeText, { color: colors.expense }]}
-              >
+            <View style={[styles.sectionBadge, { backgroundColor: colors.expense + '15' }]}>
+              <Text style={[styles.sectionBadgeText, { color: colors.expense }]}>
                 {formatCurrency(nw.liabilities)}
               </Text>
             </View>
           </View>
           {liabilities.length === 0 ? (
             <View style={styles.card}>
-              <TouchableOpacity
-                onPress={() => setShowAddLiability(true)}
-                style={styles.emptyBtn}
-              >
-                <Ionicons
-                  name="add-circle-outline"
-                  size={20}
-                  color={colors.primary}
-                />
-                <Text style={[styles.emptyText, { color: colors.primary }]}>
-                  Add Liability
-                </Text>
+              <TouchableOpacity onPress={() => setShowAddLiability(true)} style={styles.emptyBtn}>
+                <Ionicons name="add-circle-outline" size={20} color={colors.primary} />
+                <Text style={[styles.emptyText, { color: colors.primary }]}>Add Liability</Text>
               </TouchableOpacity>
             </View>
           ) : (
             <View style={{ gap: SPACING.sm }}>
               {liabilities.map((liability) => {
-                const typeInfo = LIABILITY_TYPES.find(
-                  (t) => t.key === liability.type,
-                );
+                const typeInfo = LIABILITY_TYPES.find((t) => t.key === liability.type);
                 return (
                   <LiabilityCard
                     key={liability.id}
@@ -390,31 +337,18 @@ const AssetCard: React.FC<{
         justifyContent: 'center',
       }}
     >
-      <Ionicons
-        name={typeInfo.icon as never}
-        size={20}
-        color={typeInfo.color}
-      />
+      <Ionicons name={typeInfo.icon as never} size={20} color={typeInfo.color} />
     </View>
     <View style={{ flex: 1 }}>
-      <Text
-        style={{ fontSize: 13, fontWeight: '700', color: colors.textPrimary }}
-      >
+      <Text style={{ fontSize: 13, fontWeight: '700', color: colors.textPrimary }}>
         {asset.name}
       </Text>
-      <Text style={{ fontSize: 11, color: colors.textMuted, marginTop: 2 }}>
-        {typeInfo.label}
-      </Text>
+      <Text style={{ fontSize: 11, color: colors.textMuted, marginTop: 2 }}>{typeInfo.label}</Text>
     </View>
-    <Text
-      style={{ fontSize: 13, fontWeight: '700', color: colors.textPrimary }}
-    >
+    <Text style={{ fontSize: 13, fontWeight: '700', color: colors.textPrimary }}>
       {formatCurrency(asset.value)}
     </Text>
-    <TouchableOpacity
-      onPress={onDelete}
-      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-    >
+    <TouchableOpacity onPress={onDelete} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
       <Ionicons name="close-circle" size={16} color={colors.textMuted} />
     </TouchableOpacity>
   </View>
@@ -455,24 +389,17 @@ const LiabilityCard: React.FC<{
       />
     </View>
     <View style={{ flex: 1 }}>
-      <Text
-        style={{ fontSize: 13, fontWeight: '700', color: colors.textPrimary }}
-      >
+      <Text style={{ fontSize: 13, fontWeight: '700', color: colors.textPrimary }}>
         {liability.name}
       </Text>
       <Text style={{ fontSize: 11, color: colors.textMuted, marginTop: 2 }}>
         {typeInfo?.label || liability.type}
       </Text>
     </View>
-    <Text
-      style={{ fontSize: 13, fontWeight: '700', color: colors.textPrimary }}
-    >
+    <Text style={{ fontSize: 13, fontWeight: '700', color: colors.textPrimary }}>
       {formatCurrency(liability.amount)}
     </Text>
-    <TouchableOpacity
-      onPress={onDelete}
-      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-    >
+    <TouchableOpacity onPress={onDelete} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
       <Ionicons name="close-circle" size={16} color={colors.textMuted} />
     </TouchableOpacity>
   </View>
@@ -508,12 +435,7 @@ const AddAssetModal: React.FC<{
   };
 
   return (
-    <Modal
-      visible={visible}
-      transparent
-      animationType="slide"
-      onRequestClose={onClose}
-    >
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       <KeyboardAvoidingView
         style={{ flex: 1 }}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -544,12 +466,7 @@ const AddAssetModal: React.FC<{
                     size={14}
                     color={type === t.key ? '#fff' : colors.textMuted}
                   />
-                  <Text
-                    style={[
-                      mStyles.chipText,
-                      type === t.key && { color: '#fff' },
-                    ]}
-                  >
+                  <Text style={[mStyles.chipText, type === t.key && { color: '#fff' }]}>
                     {t.label}
                   </Text>
                 </TouchableOpacity>
@@ -571,12 +488,7 @@ const AddAssetModal: React.FC<{
               style={mStyles.input}
             />
             <View style={mStyles.actions}>
-              <Button
-                title="Cancel"
-                onPress={onClose}
-                variant="ghost"
-                style={{ flex: 1 }}
-              />
+              <Button title="Cancel" onPress={onClose} variant="ghost" style={{ flex: 1 }} />
               <Button
                 title="Add Asset"
                 onPress={() => void handleSave()}
@@ -622,12 +534,7 @@ const AddLiabilityModal: React.FC<{
   };
 
   return (
-    <Modal
-      visible={visible}
-      transparent
-      animationType="slide"
-      onRequestClose={onClose}
-    >
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       <KeyboardAvoidingView
         style={{ flex: 1 }}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -656,12 +563,7 @@ const AddLiabilityModal: React.FC<{
                     },
                   ]}
                 >
-                  <Text
-                    style={[
-                      mStyles.chipText,
-                      type === t.key && { color: '#fff' },
-                    ]}
-                  >
+                  <Text style={[mStyles.chipText, type === t.key && { color: '#fff' }]}>
                     {t.label}
                   </Text>
                 </TouchableOpacity>
@@ -691,12 +593,7 @@ const AddLiabilityModal: React.FC<{
               style={mStyles.input}
             />
             <View style={mStyles.actions}>
-              <Button
-                title="Cancel"
-                onPress={onClose}
-                variant="ghost"
-                style={{ flex: 1 }}
-              />
+              <Button title="Cancel" onPress={onClose} variant="ghost" style={{ flex: 1 }} />
               <Button
                 title="Add Liability"
                 onPress={() => void handleSave()}

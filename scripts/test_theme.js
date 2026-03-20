@@ -31,22 +31,15 @@ if (content.includes('COLORS')) {
           (match) => useThemeImport + match,
         );
       } else {
-        content = content.replace(
-          /import {?[^{]+}?\s+from\s+['"][^'"]+react['"];/,
-          (match) => {
-            if (match.includes('useMemo'))
-              return (
-                match +
-                '\n' +
-                `import { useTheme } from '${basePath}hooks/useTheme';`
-              );
-            return (
-              match.replace('{', '{ useMemo, ') +
-              '\n' +
-              `import { useTheme } from '${basePath}hooks/useTheme';`
-            );
-          },
-        );
+        content = content.replace(/import {?[^{]+}?\s+from\s+['"][^'"]+react['"];/, (match) => {
+          if (match.includes('useMemo'))
+            return match + '\n' + `import { useTheme } from '${basePath}hooks/useTheme';`;
+          return (
+            match.replace('{', '{ useMemo, ') +
+            '\n' +
+            `import { useTheme } from '${basePath}hooks/useTheme';`
+          );
+        });
       }
     }
     changed = true;

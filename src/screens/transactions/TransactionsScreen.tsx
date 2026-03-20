@@ -2,13 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { FlashList } from '@shopify/flash-list';
 import { format } from 'date-fns';
 import { useRouter, type Href } from 'expo-router';
-import React, {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Modal,
   Pressable,
@@ -28,12 +22,7 @@ import { AccountService, CategoryService } from '../../services/dataServices';
 import { triggerBackgroundSync } from '../../services/syncService';
 import { TransactionService } from '../../services/transactionService';
 import { useAppStore } from '../../store/appStore';
-import {
-  RADIUS,
-  SPACING,
-  TYPOGRAPHY,
-  formatCurrency,
-} from '../../utils/constants';
+import { RADIUS, SPACING, TYPOGRAPHY, formatCurrency } from '../../utils/constants';
 import type {
   Account,
   Category,
@@ -56,12 +45,7 @@ const FilterSheet: React.FC<{
   colors: ReturnType<typeof useTheme>['colors'];
   children: React.ReactNode;
 }> = ({ visible, title, onClose, colors, children }) => (
-  <Modal
-    visible={visible}
-    transparent
-    animationType="slide"
-    onRequestClose={onClose}
-  >
+  <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
     <Pressable style={filterSheetStyles.overlay} onPress={onClose}>
       <Pressable
         style={[
@@ -71,30 +55,15 @@ const FilterSheet: React.FC<{
         onPress={(e) => e.stopPropagation()}
       >
         <View style={filterSheetStyles.handle}>
-          <View
-            style={[
-              filterSheetStyles.handleBar,
-              { backgroundColor: colors.textMuted },
-            ]}
-          />
+          <View style={[filterSheetStyles.handleBar, { backgroundColor: colors.textMuted }]} />
         </View>
         <View style={filterSheetStyles.sheetHeader}>
-          <Text
-            style={[
-              filterSheetStyles.sheetTitle,
-              { color: colors.textPrimary },
-            ]}
-          >
-            {title}
-          </Text>
+          <Text style={[filterSheetStyles.sheetTitle, { color: colors.textPrimary }]}>{title}</Text>
           <TouchableOpacity onPress={onClose}>
             <Ionicons name="close" size={22} color={colors.textSecondary} />
           </TouchableOpacity>
         </View>
-        <ScrollView
-          style={filterSheetStyles.sheetContent}
-          showsVerticalScrollIndicator={false}
-        >
+        <ScrollView style={filterSheetStyles.sheetContent} showsVerticalScrollIndicator={false}>
           {children}
           <View style={{ height: 32 }} />
         </ScrollView>
@@ -138,16 +107,10 @@ const TransactionPreviewSheet: React.FC<{
   onDelete: (id: string) => void;
   colors: ReturnType<typeof useTheme>['colors'];
 }> = ({ transaction, visible, onClose, onEdit, onDelete, colors }) => {
-  const isSmsImported =
-    transaction?.tags?.some((t) => t.startsWith('sms:')) ?? false;
+  const isSmsImported = transaction?.tags?.some((t) => t.startsWith('sms:')) ?? false;
 
   return (
-    <Modal
-      visible={visible}
-      transparent
-      animationType="slide"
-      onRequestClose={onClose}
-    >
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       <Pressable style={previewStyles.overlay} onPress={onClose}>
         <Pressable
           style={[
@@ -157,40 +120,19 @@ const TransactionPreviewSheet: React.FC<{
           onPress={(e) => e.stopPropagation()}
         >
           <View style={previewStyles.handle}>
-            <View
-              style={[
-                previewStyles.handleBar,
-                { backgroundColor: colors.textMuted },
-              ]}
-            />
+            <View style={[previewStyles.handleBar, { backgroundColor: colors.textMuted }]} />
           </View>
 
           {transaction && (
             <>
-              <AmountText
-                amount={transaction.amount}
-                type={transaction.type}
-                size="xl"
-              />
+              <AmountText amount={transaction.amount} type={transaction.type} size="xl" />
 
               <View style={previewStyles.detailGrid}>
                 {transaction.categoryName ? (
-                  <View
-                    style={[
-                      previewStyles.chip,
-                      { backgroundColor: colors.bgElevated },
-                    ]}
-                  >
-                    <Ionicons
-                      name="pricetag"
-                      size={14}
-                      color={colors.textSecondary}
-                    />
+                  <View style={[previewStyles.chip, { backgroundColor: colors.bgElevated }]}>
+                    <Ionicons name="pricetag" size={14} color={colors.textSecondary} />
                     <Text
-                      style={[
-                        previewStyles.chipText,
-                        { color: colors.textPrimary },
-                      ]}
+                      style={[previewStyles.chipText, { color: colors.textPrimary }]}
                       numberOfLines={1}
                     >
                       {transaction.categoryName}
@@ -198,22 +140,10 @@ const TransactionPreviewSheet: React.FC<{
                   </View>
                 ) : null}
                 {transaction.accountName ? (
-                  <View
-                    style={[
-                      previewStyles.chip,
-                      { backgroundColor: colors.bgElevated },
-                    ]}
-                  >
-                    <Ionicons
-                      name="wallet"
-                      size={14}
-                      color={colors.textSecondary}
-                    />
+                  <View style={[previewStyles.chip, { backgroundColor: colors.bgElevated }]}>
+                    <Ionicons name="wallet" size={14} color={colors.textSecondary} />
                     <Text
-                      style={[
-                        previewStyles.chipText,
-                        { color: colors.textPrimary },
-                      ]}
+                      style={[previewStyles.chipText, { color: colors.textPrimary }]}
                       numberOfLines={1}
                     >
                       {transaction.accountName}
@@ -221,48 +151,20 @@ const TransactionPreviewSheet: React.FC<{
                   </View>
                 ) : null}
                 {transaction.paymentMethod ? (
-                  <View
-                    style={[
-                      previewStyles.chip,
-                      { backgroundColor: colors.bgElevated },
-                    ]}
-                  >
-                    <Ionicons
-                      name="card"
-                      size={14}
-                      color={colors.textSecondary}
-                    />
+                  <View style={[previewStyles.chip, { backgroundColor: colors.bgElevated }]}>
+                    <Ionicons name="card" size={14} color={colors.textSecondary} />
                     <Text
-                      style={[
-                        previewStyles.chipText,
-                        { color: colors.textPrimary },
-                      ]}
+                      style={[previewStyles.chipText, { color: colors.textPrimary }]}
                       numberOfLines={1}
                     >
                       {transaction.paymentMethod}
                     </Text>
                   </View>
                 ) : null}
-                <View
-                  style={[
-                    previewStyles.chip,
-                    { backgroundColor: colors.bgElevated },
-                  ]}
-                >
-                  <Ionicons
-                    name="calendar"
-                    size={14}
-                    color={colors.textSecondary}
-                  />
-                  <Text
-                    style={[
-                      previewStyles.chipText,
-                      { color: colors.textPrimary },
-                    ]}
-                  >
-                    {transaction.date
-                      ? format(new Date(transaction.date), 'dd MMM yyyy')
-                      : ''}
+                <View style={[previewStyles.chip, { backgroundColor: colors.bgElevated }]}>
+                  <Ionicons name="calendar" size={14} color={colors.textSecondary} />
+                  <Text style={[previewStyles.chipText, { color: colors.textPrimary }]}>
+                    {transaction.date ? format(new Date(transaction.date), 'dd MMM yyyy') : ''}
                   </Text>
                 </View>
               </View>
@@ -281,17 +183,8 @@ const TransactionPreviewSheet: React.FC<{
               ) : null}
 
               {isSmsImported && (
-                <View
-                  style={[
-                    previewStyles.smsBadge,
-                    { backgroundColor: colors.primary + '20' },
-                  ]}
-                >
-                  <Ionicons
-                    name="chatbubble-ellipses"
-                    size={14}
-                    color={colors.primary}
-                  />
+                <View style={[previewStyles.smsBadge, { backgroundColor: colors.primary + '20' }]}>
+                  <Ionicons name="chatbubble-ellipses" size={14} color={colors.primary} />
                   <Text
                     style={{
                       color: colors.primary,
@@ -406,9 +299,7 @@ export default function TransactionsScreen() {
 
   const [categories, setCategories] = useState<Category[]>([]);
   const [accounts, setAccounts] = useState<Account[]>([]);
-  const [activeFilter, setActiveFilter] = useState<
-    'type' | 'category' | 'account' | null
-  >(null);
+  const [activeFilter, setActiveFilter] = useState<'type' | 'category' | 'account' | null>(null);
 
   // Debounce search input
   const handleSearchChange = useCallback((text: string) => {
@@ -438,11 +329,7 @@ export default function TransactionsScreen() {
   const loadData = useCallback(
     async (offset = 0, replace = true) => {
       const filters: TransactionFilters = buildFilters();
-      const results = await TransactionService.getAll(
-        filters,
-        PAGE_SIZE,
-        offset,
-      );
+      const results = await TransactionService.getAll(filters, PAGE_SIZE, offset);
       setTransactions((prev) => (replace ? results : [...prev, ...results]));
       setHasMore(results.length === PAGE_SIZE);
       setPage(offset / PAGE_SIZE);
@@ -463,10 +350,7 @@ export default function TransactionsScreen() {
 
   useEffect(() => {
     void (async () => {
-      const [cats, accs] = await Promise.all([
-        CategoryService.getAll(),
-        AccountService.getAll(),
-      ]);
+      const [cats, accs] = await Promise.all([CategoryService.getAll(), AccountService.getAll()]);
       setCategories(cats);
       setAccounts(accs);
     })();
@@ -494,8 +378,7 @@ export default function TransactionsScreen() {
       const monthKey = format(new Date(tx.date), 'MMMM yyyy');
       if (monthKey !== currentMonth) {
         if (headerIndex >= 0 && items[headerIndex].type === 'header') {
-          (items[headerIndex] as ListItem & { type: 'header' }).total =
-            monthTotal;
+          (items[headerIndex] as ListItem & { type: 'header' }).total = monthTotal;
         }
         currentMonth = monthKey;
         monthTotal = 0;
@@ -507,12 +390,7 @@ export default function TransactionsScreen() {
           total: 0,
         });
       }
-      monthTotal +=
-        tx.type === 'expense'
-          ? -tx.amount
-          : tx.type === 'income'
-            ? tx.amount
-            : 0;
+      monthTotal += tx.type === 'expense' ? -tx.amount : tx.type === 'income' ? tx.amount : 0;
       items.push({ type: 'transaction', data: tx, key: tx.id });
     }
     if (headerIndex >= 0 && items[headerIndex].type === 'header') {
@@ -521,9 +399,7 @@ export default function TransactionsScreen() {
     return items;
   }, [transactions]);
 
-  const activeFilterCount = [filterType, filterCat, filterAcc].filter(
-    Boolean,
-  ).length;
+  const activeFilterCount = [filterType, filterCat, filterAcc].filter(Boolean).length;
 
   const clearAllFilters = () => {
     setFilterType(undefined);
@@ -582,11 +458,7 @@ export default function TransactionsScreen() {
               { backgroundColor: (iconColor ?? colors.primary) + '15' },
             ]}
           >
-            <Ionicons
-              name={icon as never}
-              size={18}
-              color={iconColor ?? colors.primary}
-            />
+            <Ionicons name={icon as never} size={18} color={iconColor ?? colors.primary} />
           </View>
         )}
         <Text
@@ -598,9 +470,7 @@ export default function TransactionsScreen() {
           {label}
         </Text>
       </View>
-      {isSelected && (
-        <Ionicons name="checkmark-circle" size={20} color={colors.primary} />
-      )}
+      {isSelected && <Ionicons name="checkmark-circle" size={20} color={colors.primary} />}
     </TouchableOpacity>
   );
 
@@ -609,23 +479,13 @@ export default function TransactionsScreen() {
       {/* Header */}
       <Animated.View entering={FadeInDown.duration(400)} style={styles.header}>
         <Text style={styles.title}>Transactions</Text>
-        <TouchableOpacity
-          style={styles.menuBtn}
-          onPress={() => router.push('/notifications')}
-        >
-          <Ionicons
-            name="notifications-outline"
-            size={22}
-            color={colors.textSecondary}
-          />
+        <TouchableOpacity style={styles.menuBtn} onPress={() => router.push('/notifications')}>
+          <Ionicons name="notifications-outline" size={22} color={colors.textSecondary} />
         </TouchableOpacity>
       </Animated.View>
 
       {/* Search */}
-      <Animated.View
-        entering={FadeInDown.duration(400).delay(100)}
-        style={styles.searchWrap}
-      >
+      <Animated.View entering={FadeInDown.duration(400).delay(100)} style={styles.searchWrap}>
         <SearchBar
           placeholder="Search transactions..."
           value={search}
@@ -641,14 +501,9 @@ export default function TransactionsScreen() {
           contentContainerStyle={styles.filterRow}
         >
           {activeFilterCount > 0 && (
-            <TouchableOpacity
-              style={styles.clearChip}
-              onPress={clearAllFilters}
-            >
+            <TouchableOpacity style={styles.clearChip} onPress={clearAllFilters}>
               <Ionicons name="close-circle" size={14} color={colors.expense} />
-              <Text style={[styles.filterChipText, { color: colors.expense }]}>
-                Clear
-              </Text>
+              <Text style={[styles.filterChipText, { color: colors.expense }]}>Clear</Text>
             </TouchableOpacity>
           )}
           <TouchableOpacity
@@ -660,33 +515,18 @@ export default function TransactionsScreen() {
               size={13}
               color={filterType ? colors.primary : colors.textMuted}
             />
-            <Text
-              style={[
-                styles.filterChipText,
-                filterType && { color: colors.primary },
-              ]}
-            >
-              {filterType
-                ? filterType?.charAt(0)?.toUpperCase() + filterType?.slice(1)
-                : 'Type'}
+            <Text style={[styles.filterChipText, filterType && { color: colors.primary }]}>
+              {filterType ? filterType?.charAt(0)?.toUpperCase() + filterType?.slice(1) : 'Type'}
             </Text>
             {filterType ? (
               <TouchableOpacity
                 onPress={() => setFilterType(undefined)}
                 hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
               >
-                <Ionicons
-                  name="close-circle"
-                  size={14}
-                  color={colors.primary}
-                />
+                <Ionicons name="close-circle" size={14} color={colors.primary} />
               </TouchableOpacity>
             ) : (
-              <Ionicons
-                name="chevron-down"
-                size={12}
-                color={colors.textMuted}
-              />
+              <Ionicons name="chevron-down" size={12} color={colors.textMuted} />
             )}
           </TouchableOpacity>
 
@@ -699,15 +539,9 @@ export default function TransactionsScreen() {
               size={13}
               color={filterCat ? colors.primary : colors.textMuted}
             />
-            <Text
-              style={[
-                styles.filterChipText,
-                filterCat && { color: colors.primary },
-              ]}
-            >
+            <Text style={[styles.filterChipText, filterCat && { color: colors.primary }]}>
               {filterCat
-                ? (categories.find((c) => c.id === filterCat)?.name ??
-                  'Category')
+                ? (categories.find((c) => c.id === filterCat)?.name ?? 'Category')
                 : 'Category'}
             </Text>
             {filterCat ? (
@@ -715,18 +549,10 @@ export default function TransactionsScreen() {
                 onPress={() => setFilterCat(undefined)}
                 hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
               >
-                <Ionicons
-                  name="close-circle"
-                  size={14}
-                  color={colors.primary}
-                />
+                <Ionicons name="close-circle" size={14} color={colors.primary} />
               </TouchableOpacity>
             ) : (
-              <Ionicons
-                name="chevron-down"
-                size={12}
-                color={colors.textMuted}
-              />
+              <Ionicons name="chevron-down" size={12} color={colors.textMuted} />
             )}
           </TouchableOpacity>
 
@@ -739,12 +565,7 @@ export default function TransactionsScreen() {
               size={13}
               color={filterAcc ? colors.primary : colors.textMuted}
             />
-            <Text
-              style={[
-                styles.filterChipText,
-                filterAcc && { color: colors.primary },
-              ]}
-            >
+            <Text style={[styles.filterChipText, filterAcc && { color: colors.primary }]}>
               {filterAcc
                 ? (accounts.find((a) => a.id === filterAcc)?.name ?? 'Account')
                 : 'Account'}
@@ -754,18 +575,10 @@ export default function TransactionsScreen() {
                 onPress={() => setFilterAcc(undefined)}
                 hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
               >
-                <Ionicons
-                  name="close-circle"
-                  size={14}
-                  color={colors.primary}
-                />
+                <Ionicons name="close-circle" size={14} color={colors.primary} />
               </TouchableOpacity>
             ) : (
-              <Ionicons
-                name="chevron-down"
-                size={12}
-                color={colors.textMuted}
-              />
+              <Ionicons name="chevron-down" size={12} color={colors.textMuted} />
             )}
           </TouchableOpacity>
         </ScrollView>
@@ -917,11 +730,7 @@ export default function TransactionsScreen() {
         ListEmptyComponent={
           <View style={styles.emptyState}>
             <View style={styles.emptyIcon}>
-              <Ionicons
-                name="receipt-outline"
-                size={40}
-                color={colors.primary}
-              />
+              <Ionicons name="receipt-outline" size={40} color={colors.primary} />
             </View>
             <Text style={styles.emptyTitle}>No transactions found</Text>
             <Text style={styles.emptySubtitle}>
@@ -941,9 +750,7 @@ export default function TransactionsScreen() {
                 ]}
                 onPress={clearAllFilters}
               >
-                <Text style={[styles.emptyCtaText, { color: colors.primary }]}>
-                  Clear Filters
-                </Text>
+                <Text style={[styles.emptyCtaText, { color: colors.primary }]}>Clear Filters</Text>
               </TouchableOpacity>
             )}
             <TouchableOpacity

@@ -35,8 +35,5 @@ for (const file of allFiles) {
   }
 }
 
-fs.writeFileSync(
-  path.join(__dirname, '../colors_files.txt'),
-  matches.join('\n'),
-);
+fs.writeFileSync(path.join(__dirname, '../colors_files.txt'), matches.join('\n'));
 console.log('Done');

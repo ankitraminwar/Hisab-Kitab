@@ -21,29 +21,28 @@ import type { IoniconsName } from '../../utils/types';
 
 type Mode = 'login' | 'signup' | 'forgot-password' | 'reset-password';
 
-const copy: Record<Mode, { title: string; subtitle: string; primary: string }> =
-  {
-    login: {
-      title: 'Welcome back',
-      subtitle: 'Log in to manage your finances securely.',
-      primary: 'Login',
-    },
-    signup: {
-      title: 'Create Account',
-      subtitle: 'Join Hisab-Kitab to start managing your finances with ease.',
-      primary: 'Sign Up',
-    },
-    'forgot-password': {
-      title: 'Forgot Password',
-      subtitle: 'Enter your email to receive a password reset link.',
-      primary: 'Send Reset Link',
-    },
-    'reset-password': {
-      title: 'New Password',
-      subtitle: 'Choose a strong password for your account.',
-      primary: 'Update Password',
-    },
-  };
+const copy: Record<Mode, { title: string; subtitle: string; primary: string }> = {
+  login: {
+    title: 'Welcome back',
+    subtitle: 'Log in to manage your finances securely.',
+    primary: 'Login',
+  },
+  signup: {
+    title: 'Create Account',
+    subtitle: 'Join Hisab-Kitab to start managing your finances with ease.',
+    primary: 'Sign Up',
+  },
+  'forgot-password': {
+    title: 'Forgot Password',
+    subtitle: 'Enter your email to receive a password reset link.',
+    primary: 'Send Reset Link',
+  },
+  'reset-password': {
+    title: 'New Password',
+    subtitle: 'Choose a strong password for your account.',
+    primary: 'Update Password',
+  },
+};
 
 // ─── Input with Icon ──────────────────────────────────────────────────────────
 const IconInput: React.FC<{
@@ -93,11 +92,7 @@ const IconInput: React.FC<{
             zIndex: 1,
           }}
         >
-          <Ionicons
-            name={icon as IoniconsName}
-            size={20}
-            color={colors.textMuted}
-          />
+          <Ionicons name={icon as IoniconsName} size={20} color={colors.textMuted} />
         </View>
         <TextInput
           value={value}
@@ -203,11 +198,7 @@ const SocialButton: React.FC<{
       gap: 12,
     }}
   >
-    <Ionicons
-      name={icon as IoniconsName}
-      size={20}
-      color={colors.textPrimary}
-    />
+    <Ionicons name={icon as IoniconsName} size={20} color={colors.textPrimary} />
     <Text
       style={{
         fontSize: 16,
@@ -277,10 +268,7 @@ export default function AuthScreen({ mode }: { mode: Mode }) {
       setPopupConfig({
         visible: true,
         title: 'Auth failed',
-        message:
-          error instanceof Error
-            ? error.message
-            : 'Unable to complete the request.',
+        message: error instanceof Error ? error.message : 'Unable to complete the request.',
         type: 'error',
       });
     } finally {
@@ -297,10 +285,7 @@ export default function AuthScreen({ mode }: { mode: Mode }) {
           style={{ flex: 1 }}
         >
           {/* Back button */}
-          <TouchableOpacity
-            onPress={() => router.back()}
-            style={styles.backBtn}
-          >
+          <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
             <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
           </TouchableOpacity>
 
@@ -309,11 +294,7 @@ export default function AuthScreen({ mode }: { mode: Mode }) {
             <View style={styles.forgotIconWrap}>
               <View style={styles.forgotIconGlow} />
               <View style={styles.forgotIconBox}>
-                <Ionicons
-                  name="lock-open-outline"
-                  size={44}
-                  color={colors.primary}
-                />
+                <Ionicons name="lock-open-outline" size={44} color={colors.primary} />
               </View>
             </View>
 
@@ -373,10 +354,7 @@ export default function AuthScreen({ mode }: { mode: Mode }) {
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
           style={{ flex: 1 }}
         >
-          <TouchableOpacity
-            onPress={() => router.back()}
-            style={styles.backBtn}
-          >
+          <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
             <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
           </TouchableOpacity>
 
@@ -447,15 +425,8 @@ export default function AuthScreen({ mode }: { mode: Mode }) {
           {/* Header bar */}
           <View style={styles.headerBar}>
             {mode === 'signup' ? (
-              <TouchableOpacity
-                onPress={() => router.back()}
-                style={styles.headerBackBtn}
-              >
-                <Ionicons
-                  name="arrow-back"
-                  size={24}
-                  color={colors.textPrimary}
-                />
+              <TouchableOpacity onPress={() => router.back()} style={styles.headerBackBtn}>
+                <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
               </TouchableOpacity>
             ) : (
               <View style={{ width: 48 }} />
@@ -542,25 +513,15 @@ export default function AuthScreen({ mode }: { mode: Mode }) {
 
             <OrDivider colors={colors} />
 
-            <SocialButton
-              icon="logo-google"
-              label="Continue with Google"
-              colors={colors}
-            />
-            <SocialButton
-              icon="logo-apple"
-              label="Continue with Apple"
-              colors={colors}
-            />
+            <SocialButton icon="logo-google" label="Continue with Google" colors={colors} />
+            <SocialButton icon="logo-apple" label="Continue with Apple" colors={colors} />
           </View>
 
           {/* Footer */}
           <View style={[styles.footer, { marginTop: 'auto' }]}>
             {mode === 'login' ? (
               <>
-                <Text style={styles.footerText}>
-                  Don&apos;t have an account?{' '}
-                </Text>
+                <Text style={styles.footerText}>Don&apos;t have an account? </Text>
                 <Link href="/auth/signup" style={styles.footerLink}>
                   Sign Up
                 </Link>

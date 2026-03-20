@@ -2,13 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useLocalSearchParams, useRouter, type Href } from 'expo-router';
-import React, {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   KeyboardAvoidingView,
   Modal,
@@ -28,12 +22,7 @@ import { useTheme, type ThemeColors } from '../../hooks/useTheme';
 import { SplitService } from '../../services/splitService';
 import { TransactionService } from '../../services/transactionService';
 import { useAppStore } from '../../store/appStore';
-import {
-  RADIUS,
-  SPACING,
-  TYPOGRAPHY,
-  formatCurrency,
-} from '../../utils/constants';
+import { RADIUS, SPACING, TYPOGRAPHY, formatCurrency } from '../../utils/constants';
 import type {
   SplitExpense,
   SplitMember as SplitMemberType,
@@ -77,8 +66,7 @@ export default function SplitExpenseScreen() {
   ]);
   const [friendSearch, setFriendSearch] = useState('');
   const [transactions, setTransactions] = useState<Transaction[]>([]);
-  const [selectedTransaction, setSelectedTransaction] =
-    useState<Transaction | null>(null);
+  const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null);
   const [showTransactionModal, setShowTransactionModal] = useState(false);
 
   const [popupConfig, setPopupConfig] = useState<{
@@ -119,9 +107,7 @@ export default function SplitExpenseScreen() {
     const data = await TransactionService.getAll(undefined, 100);
     const expenseList = data.filter((t) => t.type === 'expense');
     setTransactions(expenseList);
-    const preselected = txId
-      ? expenseList.find((t) => t.id === txId)
-      : expenseList[0];
+    const preselected = txId ? expenseList.find((t) => t.id === txId) : expenseList[0];
     if (preselected) setSelectedTransaction(preselected);
   }, [txId]);
 
@@ -136,9 +122,7 @@ export default function SplitExpenseScreen() {
     if (isNewSplit && splitMethod === 'equal' && members.length > 0) {
       const splitAmount = totalExpense / members.length;
       setMembers((current) => {
-        const needsUpdate = current.some(
-          (m) => Math.abs(m.amount - splitAmount) > 0.01,
-        );
+        const needsUpdate = current.some((m) => Math.abs(m.amount - splitAmount) > 0.01);
         if (!needsUpdate) return current;
         return current.map((m) => ({ ...m, amount: splitAmount }));
       });
@@ -182,10 +166,7 @@ export default function SplitExpenseScreen() {
     }
 
     if (splitMethod === 'percent') {
-      const totalPercent = members.reduce(
-        (sum, m) => sum + (m.sharePercent ?? 0),
-        0,
-      );
+      const totalPercent = members.reduce((sum, m) => sum + (m.sharePercent ?? 0), 0);
       if (Math.abs(totalPercent - 100) > 0.01) {
         setPopupConfig({
           visible: true,
@@ -208,9 +189,7 @@ export default function SplitExpenseScreen() {
       return;
     }
 
-    const otherMembers = members.filter(
-      (m) => m.role === 'member' && m.amount > 0,
-    );
+    const otherMembers = members.filter((m) => m.role === 'member' && m.amount > 0);
     if (otherMembers.length === 0) {
       setPopupConfig({
         visible: true,
@@ -261,8 +240,7 @@ export default function SplitExpenseScreen() {
 
   // ── Mark member paid/pending ─────────────────────────────────────────────
   const handleToggleMemberStatus = async (member: SplitMemberType) => {
-    const newStatus: SplitStatus =
-      member.status === 'paid' ? 'pending' : 'paid';
+    const newStatus: SplitStatus = member.status === 'paid' ? 'pending' : 'paid';
     try {
       await SplitService.markSharePaid(member.id, newStatus);
       void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -333,22 +311,13 @@ export default function SplitExpenseScreen() {
       return (
         <SafeAreaView style={styles.container} edges={['top']}>
           <View style={styles.header}>
-            <TouchableOpacity
-              onPress={() => router.back()}
-              style={styles.backBtn}
-            >
-              <Ionicons
-                name="arrow-back"
-                size={22}
-                color={colors.textPrimary}
-              />
+            <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
+              <Ionicons name="arrow-back" size={22} color={colors.textPrimary} />
             </TouchableOpacity>
             <Text style={styles.title}>Split Detail</Text>
             <View style={{ width: 40 }} />
           </View>
-          <View
-            style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}
-          >
+          <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
             <Text style={{ color: colors.textMuted }}>Loading...</Text>
           </View>
         </SafeAreaView>
@@ -359,27 +328,14 @@ export default function SplitExpenseScreen() {
       return (
         <SafeAreaView style={styles.container} edges={['top']}>
           <View style={styles.header}>
-            <TouchableOpacity
-              onPress={() => router.back()}
-              style={styles.backBtn}
-            >
-              <Ionicons
-                name="arrow-back"
-                size={22}
-                color={colors.textPrimary}
-              />
+            <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
+              <Ionicons name="arrow-back" size={22} color={colors.textPrimary} />
             </TouchableOpacity>
             <Text style={styles.title}>Split Detail</Text>
             <View style={{ width: 40 }} />
           </View>
-          <View
-            style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}
-          >
-            <Ionicons
-              name="alert-circle-outline"
-              size={48}
-              color={colors.textMuted}
-            />
+          <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+            <Ionicons name="alert-circle-outline" size={48} color={colors.textMuted} />
             <Text
               style={{
                 color: colors.textMuted,
@@ -394,9 +350,7 @@ export default function SplitExpenseScreen() {
       );
     }
 
-    const pendingMembers = existingMembers.filter(
-      (m) => m.status === 'pending',
-    );
+    const pendingMembers = existingMembers.filter((m) => m.status === 'pending');
     const paidMembers = existingMembers.filter((m) => m.status === 'paid');
     const pendingAmount = pendingMembers.reduce((s, m) => s + m.shareAmount, 0);
     const collectedAmount = paidMembers.reduce((s, m) => s + m.shareAmount, 0);
@@ -406,10 +360,7 @@ export default function SplitExpenseScreen() {
       <SafeAreaView style={styles.container} edges={['top']}>
         {/* Header */}
         <View style={styles.header}>
-          <TouchableOpacity
-            onPress={() => router.back()}
-            style={styles.backBtn}
-          >
+          <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
             <Ionicons name="arrow-back" size={22} color={colors.textPrimary} />
           </TouchableOpacity>
           <Text style={styles.title}>Split Detail</Text>
@@ -418,18 +369,11 @@ export default function SplitExpenseScreen() {
           </TouchableOpacity>
         </View>
 
-        <ScrollView
-          contentContainerStyle={styles.scroll}
-          showsVerticalScrollIndicator={false}
-        >
+        <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
           {/* Hero card */}
           <Animated.View entering={FadeInDown.duration(400)}>
             <LinearGradient
-              colors={
-                isSettled
-                  ? [colors.income, '#047857']
-                  : [colors.primary, '#6D28D9']
-              }
+              colors={isSettled ? [colors.income, '#047857'] : [colors.primary, '#6D28D9']}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
               style={styles.detailHero}
@@ -441,15 +385,9 @@ export default function SplitExpenseScreen() {
               </Text>
               <View style={styles.detailHeroMeta}>
                 <View style={styles.detailHeroMetaItem}>
-                  <Ionicons
-                    name="calendar-outline"
-                    size={14}
-                    color="rgba(255,255,255,0.7)"
-                  />
+                  <Ionicons name="calendar-outline" size={14} color="rgba(255,255,255,0.7)" />
                   <Text style={styles.detailHeroMetaText}>
-                    {new Date(
-                      existingDate || existingSplit.createdAt,
-                    ).toLocaleDateString('en-IN', {
+                    {new Date(existingDate || existingSplit.createdAt).toLocaleDateString('en-IN', {
                       day: 'numeric',
                       month: 'short',
                       year: 'numeric',
@@ -457,11 +395,7 @@ export default function SplitExpenseScreen() {
                   </Text>
                 </View>
                 <View style={styles.detailHeroMetaItem}>
-                  <Ionicons
-                    name="git-branch-outline"
-                    size={14}
-                    color="rgba(255,255,255,0.7)"
-                  />
+                  <Ionicons name="git-branch-outline" size={14} color="rgba(255,255,255,0.7)" />
                   <Text style={styles.detailHeroMetaText}>
                     {existingSplit?.splitMethod?.charAt(0)?.toUpperCase() +
                       existingSplit?.splitMethod?.slice(1)}{' '}
@@ -473,40 +407,20 @@ export default function SplitExpenseScreen() {
           </Animated.View>
 
           {/* Status summary */}
-          <Animated.View
-            entering={FadeInDown.duration(400).delay(80)}
-            style={styles.statusRow}
-          >
-            <View
-              style={[
-                styles.statusCard,
-                { borderColor: colors.warning + '30' },
-              ]}
-            >
-              <Text style={[styles.statusLabel, { color: colors.warning }]}>
-                Pending
-              </Text>
-              <Text style={styles.statusValue}>
-                {formatCurrency(pendingAmount)}
-              </Text>
+          <Animated.View entering={FadeInDown.duration(400).delay(80)} style={styles.statusRow}>
+            <View style={[styles.statusCard, { borderColor: colors.warning + '30' }]}>
+              <Text style={[styles.statusLabel, { color: colors.warning }]}>Pending</Text>
+              <Text style={styles.statusValue}>{formatCurrency(pendingAmount)}</Text>
             </View>
-            <View
-              style={[styles.statusCard, { borderColor: colors.income + '30' }]}
-            >
-              <Text style={[styles.statusLabel, { color: colors.income }]}>
-                Collected
-              </Text>
-              <Text style={styles.statusValue}>
-                {formatCurrency(collectedAmount)}
-              </Text>
+            <View style={[styles.statusCard, { borderColor: colors.income + '30' }]}>
+              <Text style={[styles.statusLabel, { color: colors.income }]}>Collected</Text>
+              <Text style={styles.statusValue}>{formatCurrency(collectedAmount)}</Text>
             </View>
           </Animated.View>
 
           {/* Members */}
           <Animated.View entering={FadeInDown.duration(400).delay(160)}>
-            <Text style={styles.sectionLabel}>
-              MEMBERS ({existingMembers.length})
-            </Text>
+            <Text style={styles.sectionLabel}>MEMBERS ({existingMembers.length})</Text>
             {existingMembers.map((member) => (
               <View key={member.id} style={styles.memberRow}>
                 <View
@@ -514,9 +428,7 @@ export default function SplitExpenseScreen() {
                     styles.memberAvatar,
                     {
                       backgroundColor:
-                        member.status === 'paid'
-                          ? colors.income + '20'
-                          : colors.primary + '20',
+                        member.status === 'paid' ? colors.income + '20' : colors.primary + '20',
                     },
                   ]}
                 >
@@ -524,10 +436,7 @@ export default function SplitExpenseScreen() {
                     style={[
                       styles.memberInitial,
                       {
-                        color:
-                          member.status === 'paid'
-                            ? colors.income
-                            : colors.primary,
+                        color: member.status === 'paid' ? colors.income : colors.primary,
                       },
                     ]}
                   >
@@ -540,47 +449,29 @@ export default function SplitExpenseScreen() {
                     style={[
                       styles.memberRole,
                       {
-                        color:
-                          member.status === 'paid'
-                            ? colors.income
-                            : colors.warning,
+                        color: member.status === 'paid' ? colors.income : colors.warning,
                       },
                     ]}
                   >
                     {member.status === 'paid' ? 'PAID' : 'PENDING'}
                   </Text>
                 </View>
-                <Text style={styles.memberAmountText}>
-                  {formatCurrency(member.shareAmount)}
-                </Text>
+                <Text style={styles.memberAmountText}>{formatCurrency(member.shareAmount)}</Text>
                 <TouchableOpacity
                   onPress={() => void handleToggleMemberStatus(member)}
                   style={[
                     styles.statusToggle,
                     {
                       backgroundColor:
-                        member.status === 'paid'
-                          ? colors.income + '15'
-                          : colors.bgElevated,
-                      borderColor:
-                        member.status === 'paid'
-                          ? colors.income + '30'
-                          : colors.border,
+                        member.status === 'paid' ? colors.income + '15' : colors.bgElevated,
+                      borderColor: member.status === 'paid' ? colors.income + '30' : colors.border,
                     },
                   ]}
                 >
                   <Ionicons
-                    name={
-                      member.status === 'paid'
-                        ? 'checkmark-circle'
-                        : 'ellipse-outline'
-                    }
+                    name={member.status === 'paid' ? 'checkmark-circle' : 'ellipse-outline'}
                     size={20}
-                    color={
-                      member.status === 'paid'
-                        ? colors.income
-                        : colors.textMuted
-                    }
+                    color={member.status === 'paid' ? colors.income : colors.textMuted}
                   />
                 </TouchableOpacity>
               </View>
@@ -620,11 +511,7 @@ export default function SplitExpenseScreen() {
           onPress={() => void handleSave()}
           disabled={saving}
         >
-          <Ionicons
-            name={saving ? 'hourglass' : 'checkmark'}
-            size={22}
-            color="#fff"
-          />
+          <Ionicons name={saving ? 'hourglass' : 'checkmark'} size={22} color="#fff" />
         </TouchableOpacity>
       </View>
 
@@ -632,10 +519,7 @@ export default function SplitExpenseScreen() {
         style={{ flex: 1 }}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
-        <ScrollView
-          contentContainerStyle={styles.scroll}
-          showsVerticalScrollIndicator={false}
-        >
+        <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
           {/* Transaction Selection */}
           <Animated.View entering={FadeInDown.duration(400)}>
             <TouchableOpacity
@@ -647,20 +531,12 @@ export default function SplitExpenseScreen() {
                 <Text style={styles.paidBy}>SELECTED EXPENSE</Text>
                 <Text style={styles.expenseName}>
                   {selectedTransaction
-                    ? selectedTransaction.merchant ||
-                      selectedTransaction.notes ||
-                      'Unnamed Expense'
+                    ? selectedTransaction.merchant || selectedTransaction.notes || 'Unnamed Expense'
                     : 'Tap to select an expense'}
                 </Text>
-                <Text style={styles.expenseAmount}>
-                  {formatCurrency(totalExpense)}
-                </Text>
+                <Text style={styles.expenseAmount}>{formatCurrency(totalExpense)}</Text>
               </View>
-              <Ionicons
-                name="chevron-down"
-                size={24}
-                color={colors.textMuted}
-              />
+              <Ionicons name="chevron-down" size={24} color={colors.textMuted} />
             </TouchableOpacity>
           </Animated.View>
 
@@ -681,11 +557,7 @@ export default function SplitExpenseScreen() {
               />
               {friendSearch.trim() !== '' && (
                 <TouchableOpacity onPress={handleAddFriend}>
-                  <Ionicons
-                    name="add-circle"
-                    size={24}
-                    color={colors.primary}
-                  />
+                  <Ionicons name="add-circle" size={24} color={colors.primary} />
                 </TouchableOpacity>
               )}
             </View>
@@ -702,26 +574,15 @@ export default function SplitExpenseScreen() {
                     },
                   ]}
                 >
-                  <View
-                    style={[
-                      styles.chipAvatar,
-                      { backgroundColor: colors.primary + '30' },
-                    ]}
-                  >
-                    <Text
-                      style={[styles.chipInitial, { color: colors.primary }]}
-                    >
+                  <View style={[styles.chipAvatar, { backgroundColor: colors.primary + '30' }]}>
+                    <Text style={[styles.chipInitial, { color: colors.primary }]}>
                       {getInitial(m.name)}
                     </Text>
                   </View>
                   <Text style={styles.chipName}>{m.name}</Text>
                   {m.id !== 'you' && (
                     <TouchableOpacity onPress={() => handleRemoveFriend(m.id)}>
-                      <Ionicons
-                        name="close"
-                        size={14}
-                        color={colors.textMuted}
-                      />
+                      <Ionicons name="close" size={14} color={colors.textMuted} />
                     </TouchableOpacity>
                   )}
                 </View>
@@ -736,10 +597,7 @@ export default function SplitExpenseScreen() {
               {METHODS.map((m) => (
                 <TouchableOpacity
                   key={m.key}
-                  style={[
-                    styles.methodBtn,
-                    splitMethod === m.key && styles.methodBtnActive,
-                  ]}
+                  style={[styles.methodBtn, splitMethod === m.key && styles.methodBtnActive]}
                   onPress={() => setSplitMethod(m.key)}
                 >
                   <Text
@@ -758,21 +616,12 @@ export default function SplitExpenseScreen() {
           {/* Members List */}
           <Animated.View entering={FadeInDown.duration(400).delay(300)}>
             <View style={styles.membersHeader}>
-              <Text style={styles.sectionLabel}>
-                SPLITTING WITH ({members.length})
-              </Text>
+              <Text style={styles.sectionLabel}>SPLITTING WITH ({members.length})</Text>
             </View>
             {members.map((member) => (
               <View key={member.id} style={styles.memberRow}>
-                <View
-                  style={[
-                    styles.memberAvatar,
-                    { backgroundColor: colors.primary + '30' },
-                  ]}
-                >
-                  <Text
-                    style={[styles.memberInitial, { color: colors.primary }]}
-                  >
+                <View style={[styles.memberAvatar, { backgroundColor: colors.primary + '30' }]}>
+                  <Text style={[styles.memberInitial, { color: colors.primary }]}>
                     {getInitial(member.name)}
                   </Text>
                 </View>
@@ -795,9 +644,7 @@ export default function SplitExpenseScreen() {
                   >
                     <TextInput
                       style={styles.memberAmountInput}
-                      value={
-                        member.sharePercent ? String(member.sharePercent) : ''
-                      }
+                      value={member.sharePercent ? String(member.sharePercent) : ''}
                       keyboardType="numeric"
                       onChangeText={(val) => {
                         const pct = parseFloat(val) || 0;
@@ -830,9 +677,7 @@ export default function SplitExpenseScreen() {
                 >
                   <Text style={styles.memberCurrency}>₹</Text>
                   {splitMethod === 'equal' || splitMethod === 'percent' ? (
-                    <Text style={styles.memberAmount}>
-                      {member.amount.toFixed(2)}
-                    </Text>
+                    <Text style={styles.memberAmount}>{member.amount.toFixed(2)}</Text>
                   ) : (
                     <TextInput
                       style={styles.memberAmountInput}
@@ -841,9 +686,7 @@ export default function SplitExpenseScreen() {
                       onChangeText={(val) => {
                         const num = parseFloat(val) || 0;
                         setMembers(
-                          members.map((m) =>
-                            m.id === member.id ? { ...m, amount: num } : m,
-                          ),
+                          members.map((m) => (m.id === member.id ? { ...m, amount: num } : m)),
                         );
                       }}
                       placeholder="0.00"
@@ -856,11 +699,7 @@ export default function SplitExpenseScreen() {
                     onPress={() => handleRemoveFriend(member.id)}
                     hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                   >
-                    <Ionicons
-                      name="close-circle"
-                      size={20}
-                      color={colors.textMuted}
-                    />
+                    <Ionicons name="close-circle" size={20} color={colors.textMuted} />
                   </TouchableOpacity>
                 )}
               </View>
@@ -888,12 +727,9 @@ export default function SplitExpenseScreen() {
             >
               <View>
                 <Text style={styles.totalLabel}>TOTAL TO RECEIVE</Text>
-                <Text style={styles.totalAmount}>
-                  {formatCurrency(totalToReceive)}
-                </Text>
+                <Text style={styles.totalAmount}>{formatCurrency(totalToReceive)}</Text>
                 <Text style={styles.totalSub}>
-                  from {members.filter((m) => m.role === 'member').length}{' '}
-                  people
+                  from {members.filter((m) => m.role === 'member').length} people
                 </Text>
               </View>
               <View style={styles.totalAvatars}>
@@ -902,9 +738,7 @@ export default function SplitExpenseScreen() {
                   .slice(0, 3)
                   .map((m) => (
                     <View key={m.id} style={styles.totalAvatarCircle}>
-                      <Text style={styles.totalAvatarText}>
-                        {getInitial(m.name)}
-                      </Text>
+                      <Text style={styles.totalAvatarText}>{getInitial(m.name)}</Text>
                     </View>
                   ))}
               </View>
@@ -918,13 +752,9 @@ export default function SplitExpenseScreen() {
       {/* Transaction Selection Modal */}
       <Modal visible={showTransactionModal} transparent animationType="slide">
         <View style={styles.modalOverlay}>
-          <View
-            style={[styles.modalContent, { backgroundColor: colors.bgCard }]}
-          >
+          <View style={[styles.modalContent, { backgroundColor: colors.bgCard }]}>
             <View style={styles.modalHeader}>
-              <Text style={{ ...TYPOGRAPHY.h3, color: colors.textPrimary }}>
-                Select Expense
-              </Text>
+              <Text style={{ ...TYPOGRAPHY.h3, color: colors.textPrimary }}>Select Expense</Text>
               <TouchableOpacity onPress={() => setShowTransactionModal(false)}>
                 <Ionicons name="close" size={24} color={colors.textSecondary} />
               </TouchableOpacity>
@@ -974,11 +804,7 @@ export default function SplitExpenseScreen() {
               ))}
               {transactions.length === 0 && (
                 <View style={{ padding: SPACING.xl, alignItems: 'center' }}>
-                  <Ionicons
-                    name="receipt-outline"
-                    size={40}
-                    color={colors.textMuted}
-                  />
+                  <Ionicons name="receipt-outline" size={40} color={colors.textMuted} />
                   <Text
                     style={{
                       color: colors.textMuted,

@@ -1,12 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import React, { useMemo, useState } from 'react';
-import {
-  ScrollView,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
-} from 'react-native';
+import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ScreenHeader } from '../../components/common/ScreenHeader';
@@ -127,25 +121,17 @@ export default function FaqScreen() {
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <ScreenHeader title="FAQ & Help" />
-      <ScrollView
-        contentContainerStyle={styles.scroll}
-        showsVerticalScrollIndicator={false}
-      >
+      <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
         <Animated.View entering={FadeInDown.duration(400)}>
           <View style={styles.heroCard}>
             <Ionicons name="help-circle" size={40} color={colors.primary} />
             <Text style={styles.heroTitle}>How can we help?</Text>
-            <Text style={styles.heroSubtitle}>
-              Find answers to common questions below
-            </Text>
+            <Text style={styles.heroSubtitle}>Find answers to common questions below</Text>
           </View>
         </Animated.View>
 
         {FAQ_DATA.map((item, idx) => (
-          <Animated.View
-            key={idx}
-            entering={FadeInDown.duration(400).delay(100 + idx * 50)}
-          >
+          <Animated.View key={idx} entering={FadeInDown.duration(400).delay(100 + idx * 50)}>
             <FaqItemCard item={item} colors={colors} />
           </Animated.View>
         ))}

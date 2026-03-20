@@ -2,11 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import React, { useMemo } from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import Animated, {
-  useAnimatedStyle,
-  useSharedValue,
-  withSpring,
-} from 'react-native-reanimated';
+import Animated, { useAnimatedStyle, useSharedValue, withSpring } from 'react-native-reanimated';
 import { useTheme } from '../../hooks/useTheme';
 import { RADIUS, TYPOGRAPHY } from '../../utils/constants';
 
@@ -38,11 +34,7 @@ const KeyButton: React.FC<{
         ? colors.primary
         : colors.bgCard;
   const textColor =
-    variant === 'accent'
-      ? colors.primary
-      : variant === 'action'
-        ? '#FFFFFF'
-        : colors.textPrimary;
+    variant === 'accent' ? colors.primary : variant === 'action' ? '#FFFFFF' : colors.textPrimary;
   const borderColor = variant === 'default' ? colors.border : 'transparent';
 
   return (
@@ -94,10 +86,7 @@ export const NumericKeypad: React.FC<NumericKeypadProps> = ({
 }) => {
   const { colors } = useTheme();
   const containerStyle = useMemo(
-    () => [
-      styles.container,
-      { borderTopColor: colors.border, backgroundColor: colors.bg + 'CC' },
-    ],
+    () => [styles.container, { borderTopColor: colors.border, backgroundColor: colors.bg + 'CC' }],
     [colors],
   );
 
@@ -116,45 +105,25 @@ export const NumericKeypad: React.FC<NumericKeypadProps> = ({
           style={[styles.key, { backgroundColor: colors.bgElevated + '60' }]}
           activeOpacity={0.7}
         >
-          <Ionicons
-            name="backspace-outline"
-            size={22}
-            color={colors.textMuted}
-          />
+          <Ionicons name="backspace-outline" size={22} color={colors.textMuted} />
         </TouchableOpacity>
 
         {/* Row 2 */}
         <KeyButton label="4" onPress={() => onDigit('4')} colors={colors} />
         <KeyButton label="5" onPress={() => onDigit('5')} colors={colors} />
         <KeyButton label="6" onPress={() => onDigit('6')} colors={colors} />
-        <KeyButton
-          label="+"
-          onPress={() => onDigit('+')}
-          variant="accent"
-          colors={colors}
-        />
+        <KeyButton label="+" onPress={() => onDigit('+')} variant="accent" colors={colors} />
 
         {/* Row 3 */}
         <KeyButton label="7" onPress={() => onDigit('7')} colors={colors} />
         <KeyButton label="8" onPress={() => onDigit('8')} colors={colors} />
         <KeyButton label="9" onPress={() => onDigit('9')} colors={colors} />
-        <KeyButton
-          label="-"
-          onPress={() => onDigit('-')}
-          variant="accent"
-          colors={colors}
-        />
+        <KeyButton label="-" onPress={() => onDigit('-')} variant="accent" colors={colors} />
 
         {/* Row 4 */}
         <KeyButton label="." onPress={() => onDigit('.')} colors={colors} />
         <KeyButton label="0" onPress={() => onDigit('0')} colors={colors} />
-        <KeyButton
-          label={doneLabel}
-          onPress={onDone}
-          variant="action"
-          span={2}
-          colors={colors}
-        />
+        <KeyButton label={doneLabel} onPress={onDone} variant="action" span={2} colors={colors} />
       </View>
     </View>
   );

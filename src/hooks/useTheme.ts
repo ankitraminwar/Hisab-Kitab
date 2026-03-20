@@ -9,8 +9,7 @@ export const resolveThemeColors = (
   theme: ThemePreference,
   systemTheme: 'dark' | 'light' | null,
 ) => {
-  const resolvedTheme =
-    theme === 'system' ? (systemTheme === 'dark' ? 'dark' : 'light') : theme;
+  const resolvedTheme = theme === 'system' ? (systemTheme === 'dark' ? 'dark' : 'light') : theme;
 
   return resolvedTheme === 'dark' ? DARK_COLORS : LIGHT_COLORS;
 };
@@ -23,11 +22,7 @@ export const useTheme = () => {
     systemTheme === 'dark' ? 'dark' : systemTheme === 'light' ? 'light' : null;
 
   const effectiveTheme =
-    theme === 'system'
-      ? canonicalSystemTheme === 'dark'
-        ? 'dark'
-        : 'light'
-      : theme;
+    theme === 'system' ? (canonicalSystemTheme === 'dark' ? 'dark' : 'light') : theme;
 
   const isDark = effectiveTheme === 'dark';
 

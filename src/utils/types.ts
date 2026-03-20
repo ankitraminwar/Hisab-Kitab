@@ -4,13 +4,7 @@ import type { ComponentProps } from 'react';
 export type IoniconsName = ComponentProps<typeof Ionicons>['name'];
 
 export type TransactionType = 'expense' | 'income' | 'transfer';
-export type AccountType =
-  | 'cash'
-  | 'bank'
-  | 'upi'
-  | 'credit_card'
-  | 'wallet'
-  | 'investment';
+export type AccountType = 'cash' | 'bank' | 'upi' | 'credit_card' | 'wallet' | 'investment';
 export type AssetType =
   | 'bank'
   | 'cash'

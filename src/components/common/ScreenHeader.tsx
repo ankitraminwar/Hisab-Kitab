@@ -30,16 +30,10 @@ export const ScreenHeader: React.FC<ScreenHeaderProps> = ({
             onPress={() => router.back()}
             style={[styles.backButton, { backgroundColor: colors.bgCard }]}
           >
-            <Ionicons
-              name="chevron-back"
-              size={24}
-              color={colors.textPrimary}
-            />
+            <Ionicons name="chevron-back" size={24} color={colors.textPrimary} />
           </TouchableOpacity>
         )}
-        <Text style={[styles.title, { color: colors.textPrimary }]}>
-          {title}
-        </Text>
+        <Text style={[styles.title, { color: colors.textPrimary }]}>{title}</Text>
       </View>
 
       {rightAction && (

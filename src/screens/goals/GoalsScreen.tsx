@@ -19,23 +19,10 @@ import { Button, Card, EmptyState, ProgressBar } from '../../components/common';
 import { useTheme, type ThemeColors } from '../../hooks/useTheme';
 import { GoalService } from '../../services/dataService';
 import { useAppStore } from '../../store/appStore';
-import {
-  RADIUS,
-  SPACING,
-  TYPOGRAPHY,
-  formatCurrency,
-} from '../../utils/constants';
+import { RADIUS, SPACING, TYPOGRAPHY, formatCurrency } from '../../utils/constants';
 import type { Goal } from '../../utils/types';
 
-const GOAL_COLORS = [
-  '#7C3AED',
-  '#06B6D4',
-  '#22C55E',
-  '#F97316',
-  '#F43F5E',
-  '#EAB308',
-  '#EC4899',
-];
+const GOAL_COLORS = ['#7C3AED', '#06B6D4', '#22C55E', '#F97316', '#F43F5E', '#EAB308', '#EC4899'];
 const GOAL_ICONS = [
   'flag',
   'home',
@@ -89,62 +76,35 @@ export default function GoalsScreen() {
   };
 
   const totalTarget = goals.reduce((s, g) => s + g.targetAmount, 0);
-  const totalSaved = goals.reduce(
-    (s, g) => s + Math.min(g.currentAmount, g.targetAmount),
-    0,
-  );
+  const totalSaved = goals.reduce((s, g) => s + Math.min(g.currentAmount, g.targetAmount), 0);
   const overallProgress = totalTarget > 0 ? totalSaved / totalTarget : 0;
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <Animated.View entering={FadeInDown.duration(400)} style={styles.header}>
         <Text style={styles.title}>Savings Goals</Text>
-        <TouchableOpacity
-          onPress={() => setShowAdd(true)}
-          style={styles.addButton}
-        >
+        <TouchableOpacity onPress={() => setShowAdd(true)} style={styles.addButton}>
           <Ionicons name="add" size={24} color={colors.primary} />
         </TouchableOpacity>
       </Animated.View>
 
-      <ScrollView
-        contentContainerStyle={styles.scroll}
-        showsVerticalScrollIndicator={false}
-      >
+      <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
         {goals.length > 0 && (
           <Animated.View entering={FadeInDown.duration(400).delay(100)}>
             <Card style={styles.summaryCard}>
               <View style={styles.summaryHeader}>
                 <View>
                   <Text style={styles.summaryTitle}>Total Saved</Text>
-                  <Text style={styles.summaryAmount}>
-                    {formatCurrency(totalSaved)}
-                  </Text>
+                  <Text style={styles.summaryAmount}>{formatCurrency(totalSaved)}</Text>
                 </View>
-                <View
-                  style={[
-                    styles.progressBadge,
-                    { backgroundColor: colors.primary + '20' },
-                  ]}
-                >
-                  <Text
-                    style={[
-                      styles.progressBadgeText,
-                      { color: colors.primary },
-                    ]}
-                  >
+                <View style={[styles.progressBadge, { backgroundColor: colors.primary + '20' }]}>
+                  <Text style={[styles.progressBadgeText, { color: colors.primary }]}>
                     {Math.round(overallProgress * 100)}%
                   </Text>
                 </View>
               </View>
-              <ProgressBar
-                progress={overallProgress}
-                color={colors.primary}
-                height={8}
-              />
-              <Text style={styles.summaryFooter}>
-                of {formatCurrency(totalTarget)} target
-              </Text>
+              <ProgressBar progress={overallProgress} color={colors.primary} height={8} />
+              <Text style={styles.summaryFooter}>of {formatCurrency(totalTarget)} target</Text>
             </Card>
           </Animated.View>
         )}
@@ -166,21 +126,17 @@ export default function GoalsScreen() {
                   goal={goal}
                   onFund={() => setSelectedGoal(goal)}
                   onDelete={() => {
-                    Alert.alert(
-                      'Delete Goal',
-                      `Are you sure you want to delete "${goal.name}"?`,
-                      [
-                        { text: 'Cancel', style: 'cancel' },
-                        {
-                          text: 'Delete',
-                          style: 'destructive',
-                          onPress: async () => {
-                            await GoalService.delete(goal.id);
-                            void loadGoals();
-                          },
+                    Alert.alert('Delete Goal', `Are you sure you want to delete "${goal.name}"?`, [
+                      { text: 'Cancel', style: 'cancel' },
+                      {
+                        text: 'Delete',
+                        style: 'destructive',
+                        onPress: async () => {
+                          await GoalService.delete(goal.id);
+                          void loadGoals();
                         },
-                      ],
-                    );
+                      },
+                    ]);
                   }}
                   colors={colors}
                 />
@@ -213,12 +169,7 @@ export default function GoalsScreen() {
               setFundAmount('');
             }}
           >
-            <View
-              style={[
-                StyleSheet.absoluteFillObject,
-                { backgroundColor: 'rgba(0,0,0,0.6)' },
-              ]}
-            />
+            <View style={[StyleSheet.absoluteFillObject, { backgroundColor: 'rgba(0,0,0,0.6)' }]} />
             <TouchableOpacity
               activeOpacity={1}
               onPress={() => {}}
@@ -241,20 +192,14 @@ export default function GoalsScreen() {
                   marginBottom: SPACING.sm,
                 }}
               >
-                <Text style={{ ...TYPOGRAPHY.h3, color: colors.textPrimary }}>
-                  Add Funds
-                </Text>
+                <Text style={{ ...TYPOGRAPHY.h3, color: colors.textPrimary }}>Add Funds</Text>
                 <TouchableOpacity
                   onPress={() => {
                     setSelectedGoal(null);
                     setFundAmount('');
                   }}
                 >
-                  <Ionicons
-                    name="close"
-                    size={24}
-                    color={colors.textSecondary}
-                  />
+                  <Ionicons name="close" size={24} color={colors.textSecondary} />
                 </TouchableOpacity>
               </View>
 
@@ -288,11 +233,7 @@ export default function GoalsScreen() {
                 keyboardAppearance={isDark ? 'dark' : 'light'}
               />
 
-              <Button
-                title="Add Funds"
-                onPress={() => void handleFund()}
-                disabled={!fundAmount}
-              />
+              <Button title="Add Funds" onPress={() => void handleFund()} disabled={!fundAmount} />
             </TouchableOpacity>
           </TouchableOpacity>
         </KeyboardAvoidingView>
@@ -335,10 +276,7 @@ const GoalCard = ({
       <View style={styles.header}>
         <View style={styles.iconInfo}>
           <View
-            style={[
-              styles.iconContainer,
-              { backgroundColor: `${goal.color || colors.primary}15` },
-            ]}
+            style={[styles.iconContainer, { backgroundColor: `${goal.color || colors.primary}15` }]}
           >
             <Ionicons
               name={(goal.icon || 'flag') as never}
@@ -357,9 +295,7 @@ const GoalCard = ({
 
       <View style={styles.progressContainer}>
         <View style={styles.progressLabels}>
-          <Text style={styles.current}>
-            {formatCurrency(goal.currentAmount)}
-          </Text>
+          <Text style={styles.current}>{formatCurrency(goal.currentAmount)}</Text>
           <Text style={styles.target}>
             {Math.round(progress * 100)}% of {formatCurrency(goal.targetAmount)}
           </Text>
@@ -374,20 +310,11 @@ const GoalCard = ({
       {!isCompleted && (
         <View style={{ flexDirection: 'row', gap: SPACING.sm }}>
           <TouchableOpacity
-            style={[
-              styles.fundButton,
-              { backgroundColor: colors.bgElevated, flex: 1 },
-            ]}
+            style={[styles.fundButton, { backgroundColor: colors.bgElevated, flex: 1 }]}
             onPress={onFund}
           >
-            <Ionicons
-              name="add-circle-outline"
-              size={18}
-              color={colors.primary}
-            />
-            <Text style={[styles.fundText, { color: colors.primary }]}>
-              Add Funds
-            </Text>
+            <Ionicons name="add-circle-outline" size={18} color={colors.primary} />
+            <Text style={[styles.fundText, { color: colors.primary }]}>Add Funds</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={[styles.fundButton, { backgroundColor: colors.bgElevated }]}
@@ -403,9 +330,7 @@ const GoalCard = ({
           onPress={onDelete}
         >
           <Ionicons name="trash-outline" size={18} color={colors.expense} />
-          <Text style={[styles.fundText, { color: colors.expense }]}>
-            Delete
-          </Text>
+          <Text style={[styles.fundText, { color: colors.expense }]}>Delete</Text>
         </TouchableOpacity>
       )}
     </Card>
@@ -456,26 +381,13 @@ const AddGoalModal = ({
   };
 
   return (
-    <Modal
-      visible={visible}
-      animationType="slide"
-      transparent
-      onRequestClose={onClose}
-    >
+    <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
       <KeyboardAvoidingView
         style={{ flex: 1 }}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
-        <TouchableOpacity
-          style={styles.overlay}
-          activeOpacity={1}
-          onPress={onClose}
-        >
-          <TouchableOpacity
-            style={styles.sheet}
-            activeOpacity={1}
-            onPress={() => {}}
-          >
+        <TouchableOpacity style={styles.overlay} activeOpacity={1} onPress={onClose}>
+          <TouchableOpacity style={styles.sheet} activeOpacity={1} onPress={() => {}}>
             <View style={styles.handle} />
             <Text style={styles.title}>New Goal</Text>
 
@@ -499,11 +411,7 @@ const AddGoalModal = ({
               />
 
               <Text style={styles.label}>Style</Text>
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                style={styles.selector}
-              >
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.selector}>
                 {GOAL_COLORS.map((c) => (
                   <TouchableOpacity
                     key={c}
@@ -518,11 +426,7 @@ const AddGoalModal = ({
               </ScrollView>
 
               <Text style={styles.label}>Icon</Text>
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                style={styles.selector}
-              >
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.selector}>
                 {GOAL_ICONS.map((i) => (
                   <TouchableOpacity
                     key={i}
@@ -530,10 +434,7 @@ const AddGoalModal = ({
                     style={[
                       styles.iconOption,
                       { backgroundColor: colors.bgElevated },
-                      icon === i && [
-                        styles.selectedOption,
-                        { borderColor: color },
-                      ],
+                      icon === i && [styles.selectedOption, { borderColor: color }],
                     ]}
                   >
                     <Ionicons
@@ -546,12 +447,7 @@ const AddGoalModal = ({
               </ScrollView>
 
               <View style={styles.actions}>
-                <Button
-                  title="Cancel"
-                  variant="secondary"
-                  onPress={onClose}
-                  style={styles.flex1}
-                />
+                <Button title="Cancel" variant="secondary" onPress={onClose} style={styles.flex1} />
                 <Button
                   title="Save Goal"
                   onPress={() => void handleSave()}

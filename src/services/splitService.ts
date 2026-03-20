@@ -41,12 +41,7 @@ export const SplitService = {
   async createSplit(
     expenseData: Omit<
       SplitExpense,
-      | 'id'
-      | 'createdAt'
-      | 'updatedAt'
-      | 'syncStatus'
-      | 'lastSyncedAt'
-      | 'deletedAt'
+      'id' | 'createdAt' | 'updatedAt' | 'syncStatus' | 'lastSyncedAt' | 'deletedAt'
     >,
     membersData: Omit<
       SplitMember,
@@ -228,9 +223,7 @@ export const SplitService = {
         merchant: string | null;
         notes: string | null;
         date: string;
-      }>('SELECT merchant, notes, date FROM transactions WHERE id = ?', [
-        expense.transactionId,
-      ]);
+      }>('SELECT merchant, notes, date FROM transactions WHERE id = ?', [expense.transactionId]);
 
       results.push({
         expense: {
@@ -240,8 +233,7 @@ export const SplitService = {
         members: members.map((m) => ({
           ...m,
           shareAmount: Number(m.shareAmount) || 0,
-          sharePercent:
-            m.sharePercent != null ? Number(m.sharePercent) : undefined,
+          sharePercent: m.sharePercent != null ? Number(m.sharePercent) : undefined,
         })),
         transactionMerchant: tx?.merchant || tx?.notes || undefined,
         transactionDate: tx?.date,
@@ -273,9 +265,7 @@ export const SplitService = {
       merchant: string | null;
       notes: string | null;
       date: string;
-    }>('SELECT merchant, notes, date FROM transactions WHERE id = ?', [
-      expense.transactionId,
-    ]);
+    }>('SELECT merchant, notes, date FROM transactions WHERE id = ?', [expense.transactionId]);
 
     return {
       expense: {
@@ -285,8 +275,7 @@ export const SplitService = {
       members: members.map((m) => ({
         ...m,
         shareAmount: Number(m.shareAmount) || 0,
-        sharePercent:
-          m.sharePercent != null ? Number(m.sharePercent) : undefined,
+        sharePercent: m.sharePercent != null ? Number(m.sharePercent) : undefined,
       })),
       transactionMerchant: tx?.merchant || tx?.notes || undefined,
       transactionDate: tx?.date,

@@ -17,9 +17,7 @@ const baseLocalToRemote: Record<string, string> = {
   updatedAt: 'updated_at',
 };
 
-const tableLocalToRemote: Partial<
-  Record<SyncableTable, Record<string, string>>
-> = {
+const tableLocalToRemote: Partial<Record<SyncableTable, Record<string, string>>> = {
   accounts: {
     isDefault: 'is_default',
   },
@@ -74,23 +72,12 @@ const tableLocalToRemote: Partial<
 };
 
 const invert = (mapping: Record<string, string>) =>
-  Object.fromEntries(
-    Object.entries(mapping).map(([localKey, remoteKey]) => [
-      remoteKey,
-      localKey,
-    ]),
-  );
+  Object.fromEntries(Object.entries(mapping).map(([localKey, remoteKey]) => [remoteKey, localKey]));
 
 const tableRemoteToLocal = Object.fromEntries(
-  (
-    Object.entries(tableLocalToRemote) as [
-      SyncableTable,
-      Record<string, string>,
-    ][]
-  ).map(([table, mapping]) => [
-    table,
-    invert({ ...baseLocalToRemote, ...mapping }),
-  ]),
+  (Object.entries(tableLocalToRemote) as [SyncableTable, Record<string, string>][]).map(
+    ([table, mapping]) => [table, invert({ ...baseLocalToRemote, ...mapping })],
+  ),
 ) as Partial<Record<SyncableTable, Record<string, string>>>;
 
 const toBooleanIfNeeded = (key: string, value: unknown) => {

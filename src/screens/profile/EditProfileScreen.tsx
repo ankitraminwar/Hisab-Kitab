@@ -36,9 +36,7 @@ export default function EditProfileScreen() {
 
   const [name, setName] = useState(userProfile?.name || '');
   const [phone, setPhone] = useState(userProfile?.phone || '');
-  const [avatarUri, setAvatarUri] = useState<string | undefined>(
-    userProfile?.avatar,
-  );
+  const [avatarUri, setAvatarUri] = useState<string | undefined>(userProfile?.avatar);
   const [isSaving, setIsSaving] = useState(false);
   const [popupConfig, setPopupConfig] = useState<{
     visible: boolean;
@@ -126,10 +124,7 @@ export default function EditProfileScreen() {
                 <Ionicons name="person" size={48} color={colors.primary} />
               )}
             </View>
-            <TouchableOpacity
-              style={styles.changePhotoBtn}
-              onPress={() => void handlePickImage()}
-            >
+            <TouchableOpacity style={styles.changePhotoBtn} onPress={() => void handlePickImage()}>
               <Text style={styles.changePhotoText}>Change Photo</Text>
             </TouchableOpacity>
           </View>
@@ -137,11 +132,7 @@ export default function EditProfileScreen() {
           <View style={styles.inputGroup}>
             <Text style={styles.label}>FULL NAME</Text>
             <View style={styles.inputWrap}>
-              <Ionicons
-                name="person-outline"
-                size={20}
-                color={colors.textMuted}
-              />
+              <Ionicons name="person-outline" size={20} color={colors.textMuted} />
               <TextInput
                 value={name}
                 onChangeText={setName}
@@ -156,30 +147,20 @@ export default function EditProfileScreen() {
           <View style={styles.inputGroup}>
             <Text style={styles.label}>EMAIL ADDRESS</Text>
             <View style={[styles.inputWrap, styles.inputWrapDisabled]}>
-              <Ionicons
-                name="mail-outline"
-                size={20}
-                color={colors.textMuted}
-              />
+              <Ionicons name="mail-outline" size={20} color={colors.textMuted} />
               <TextInput
                 value={userProfile?.email || ''}
                 style={[styles.input, { color: colors.textMuted }]}
                 editable={false}
               />
             </View>
-            <Text style={styles.helpText}>
-              Email cannot be changed directly.
-            </Text>
+            <Text style={styles.helpText}>Email cannot be changed directly.</Text>
           </View>
 
           <View style={styles.inputGroup}>
             <Text style={styles.label}>PHONE / MOBILE</Text>
             <View style={styles.inputWrap}>
-              <Ionicons
-                name="call-outline"
-                size={20}
-                color={colors.textMuted}
-              />
+              <Ionicons name="call-outline" size={20} color={colors.textMuted} />
               <Text style={styles.countryCode}>+91</Text>
               <TextInput
                 value={phone}
@@ -200,9 +181,7 @@ export default function EditProfileScreen() {
             onPress={() => void handleSave()}
             disabled={isSaving}
           >
-            <Text style={styles.saveText}>
-              {isSaving ? 'Saving...' : 'Save Changes'}
-            </Text>
+            <Text style={styles.saveText}>{isSaving ? 'Saving...' : 'Save Changes'}</Text>
           </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>

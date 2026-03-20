@@ -43,12 +43,7 @@ export const SkeletonTransactionItem: React.FC = () => {
   const { colors } = useTheme();
 
   return (
-    <View
-      style={[
-        styles.row,
-        { backgroundColor: colors.bgCard, borderColor: colors.border },
-      ]}
-    >
+    <View style={[styles.row, { backgroundColor: colors.bgCard, borderColor: colors.border }]}>
       <Bone width={40} height={40} borderRadius={RADIUS.md} />
       <View style={styles.body}>
         <Bone width={120} height={14} />

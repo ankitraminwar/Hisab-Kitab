@@ -1,10 +1,6 @@
 import * as SQLite from 'expo-sqlite';
 import { runMigrations } from '../services/MigrationRunner';
-import {
-  generateId,
-  SYNCABLE_TABLES,
-  type SyncableTable,
-} from '../utils/constants';
+import { generateId, SYNCABLE_TABLES, type SyncableTable } from '../utils/constants';
 import type { SyncQueueItem, SyncStatus } from '../utils/types';
 
 let db: SQLite.SQLiteDatabase | null = null;
@@ -459,9 +455,7 @@ export const initializeDatabase = async (): Promise<void> => {
 };
 
 const ensureSyncStateSchema = async (database: SQLite.SQLiteDatabase) => {
-  const columns = await database.getAllAsync<{ name: string }>(
-    `PRAGMA table_info(sync_state)`,
-  );
+  const columns = await database.getAllAsync<{ name: string }>(`PRAGMA table_info(sync_state)`);
 
   if (columns.some((column) => column.name === 'key')) {
     return;
@@ -498,16 +492,7 @@ const seedDefaultData = async (database: SQLite.SQLiteDatabase) => {
         `INSERT INTO categories
           (id, name, type, icon, color, isCustom, parentId, createdAt, updatedAt, userId, syncStatus, lastSyncedAt, deletedAt)
          VALUES (?, ?, ?, ?, ?, 0, NULL, ?, ?, NULL, 'synced', ?, NULL)`,
-        [
-          category.id,
-          category.name,
-          category.type,
-          category.icon,
-          category.color,
-          now,
-          now,
-          now,
-        ],
+        [category.id, category.name, category.type, category.icon, category.color, now, now, now],
       );
     }
   }
@@ -581,9 +566,7 @@ export const markRecordSyncStatus = async (
 };
 
 export const removeFromSyncQueue = async (queueId: string) => {
-  await getDatabase().runAsync('DELETE FROM sync_queue WHERE id = ?', [
-    queueId,
-  ]);
+  await getDatabase().runAsync('DELETE FROM sync_queue WHERE id = ?', [queueId]);
 };
 
 export const listPendingSyncItems = async (): Promise<SyncQueueItem[]> =>
@@ -593,10 +576,7 @@ export const listPendingSyncItems = async (): Promise<SyncQueueItem[]> =>
      ORDER BY createdAt ASC`,
   );
 
-export const incrementSyncRetry = async (
-  queueId: string,
-  errorMessage: string,
-) => {
+export const incrementSyncRetry = async (queueId: string, errorMessage: string) => {
   const now = new Date().toISOString();
   await getDatabase().runAsync(
     `UPDATE sync_queue
@@ -628,13 +608,9 @@ export const fetchTableRows = async <T>(
   table: SyncableTable,
   where = 'deletedAt IS NULL',
   params: SQLite.SQLiteBindParams = [],
-) =>
-  getDatabase().getAllAsync<T>(`SELECT * FROM ${table} WHERE ${where}`, params);
+) => getDatabase().getAllAsync<T>(`SELECT * FROM ${table} WHERE ${where}`, params);
 
-export const upsertLocalRecord = async (
-  table: SyncableTable,
-  record: Record<string, unknown>,
-) => {
+export const upsertLocalRecord = async (table: SyncableTable, record: Record<string, unknown>) => {
   const database = getDatabase();
   const columns = Object.keys(record);
   const placeholders = columns.map(() => '?').join(', ');
@@ -664,14 +640,12 @@ export const softDeleteLocalRecord = async (
   );
 };
 
-export const getLastSyncTimestamp = async () =>
-  getSyncState('lastSuccessfulSyncAt');
+export const getLastSyncTimestamp = async () => getSyncState('lastSuccessfulSyncAt');
 
 export const setLastSyncTimestamp = async (timestamp: string) =>
   setSyncState('lastSuccessfulSyncAt', timestamp);
 
-export const getSyncableTables = (): readonly SyncableTable[] =>
-  SYNCABLE_TABLES;
+export const getSyncableTables = (): readonly SyncableTable[] => SYNCABLE_TABLES;
 
 export const clearLocalData = async (): Promise<void> => {
   const database = getDatabase();

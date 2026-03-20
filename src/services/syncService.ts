@@ -20,10 +20,7 @@ import { supabase } from '../lib/supabase';
 import { useAppStore } from '../store/appStore';
 import type { SyncableTable } from '../utils/constants';
 import type { SyncQueueItem } from '../utils/types';
-import {
-  mapLocalToRemoteRecord,
-  mapRemoteToLocalRecord,
-} from './syncTransform';
+import { mapLocalToRemoteRecord, mapRemoteToLocalRecord } from './syncTransform';
 
 /** Extract a readable message from any thrown value (including Supabase PostgrestError). */
 const errorMessage = (error: unknown): string => {
@@ -43,16 +40,12 @@ const MAX_RETRY_DELAY_MS = 60_000;
 const BASE_DELAY_MS = 1_000;
 
 const backoffDelay = (retryCount: number): number => {
-  const exponential = Math.min(
-    BASE_DELAY_MS * Math.pow(2, retryCount),
-    MAX_RETRY_DELAY_MS,
-  );
+  const exponential = Math.min(BASE_DELAY_MS * Math.pow(2, retryCount), MAX_RETRY_DELAY_MS);
   const jitter = Math.random() * exponential * 0.3;
   return exponential + jitter;
 };
 
-const sleep = (ms: number) =>
-  new Promise<void>((resolve) => setTimeout(resolve, ms));
+const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
 class SyncService {
   private syncing = false;
@@ -69,9 +62,7 @@ class SyncService {
     }
 
     this.unsubscribe = NetInfo.addEventListener((state) => {
-      const isOnline = Boolean(
-        state.isConnected && state.isInternetReachable !== false,
-      );
+      const isOnline = Boolean(state.isConnected && state.isInternetReachable !== false);
       useAppStore.getState().setOnline(isOnline);
 
       if (isOnline) {
@@ -95,9 +86,7 @@ class SyncService {
     }
 
     const state = await NetInfo.fetch();
-    const isOnline = Boolean(
-      state.isConnected && state.isInternetReachable !== false,
-    );
+    const isOnline = Boolean(state.isConnected && state.isInternetReachable !== false);
     if (!isOnline) {
       return { success: false, error: 'Device is offline' };
     }
@@ -109,16 +98,13 @@ class SyncService {
     if (!this.remoteSchemaAvailable) {
       return {
         success: false,
-        error:
-          'Supabase schema is not deployed yet. Apply supabase/schema.sql and retry.',
+        error: 'Supabase schema is not deployed yet. Apply supabase/schema.sql and retry.',
       };
     }
 
     this.syncing = true;
     this.syncStartedAt = Date.now();
-    useAppStore
-      .getState()
-      .setSyncState({ syncInProgress: true, lastSyncError: null });
+    useAppStore.getState().setSyncState({ syncInProgress: true, lastSyncError: null });
 
     try {
       await this.pushPendingChanges();
@@ -157,11 +143,7 @@ class SyncService {
 
   async requestSync(reason = 'manual') {
     // Sync watchdog: if syncing stuck for >60s, force reset
-    if (
-      this.syncing &&
-      this.syncStartedAt &&
-      Date.now() - this.syncStartedAt > 60000
-    ) {
+    if (this.syncing && this.syncStartedAt && Date.now() - this.syncStartedAt > 60000) {
       console.warn('Sync watchdog: forcing reset after 60s');
       this.syncing = false;
     }
@@ -251,10 +233,7 @@ class SyncService {
       } catch (error) {
         const reason = errorMessage(error);
         failures.push({ item, reason });
-        console.warn(
-          `Sync push failed for ${item.entity}/${item.recordId}:`,
-          reason,
-        );
+        console.warn(`Sync push failed for ${item.entity}/${item.recordId}:`, reason);
 
         if (item.retryCount >= 2) {
           await sleep(backoffDelay(item.retryCount));
@@ -266,14 +245,10 @@ class SyncService {
       // RLS violations on default categories (shared PK across users) are expected
       // on shared devices — skip them so the rest of sync can succeed.
       const critical = failures.filter((f) => {
-        const isDefault =
-          f.item.entity === 'categories' && f.item.recordId.startsWith('cat_');
-        const isRls =
-          f.reason.includes('row-level security') || f.reason.includes('42501');
+        const isDefault = f.item.entity === 'categories' && f.item.recordId.startsWith('cat_');
+        const isRls = f.reason.includes('row-level security') || f.reason.includes('42501');
         if (isDefault && isRls) {
-          markRecordSyncStatus('categories', f.item.recordId, 'synced').catch(
-            console.warn,
-          );
+          markRecordSyncStatus('categories', f.item.recordId, 'synced').catch(console.warn);
           removeFromSyncQueue(f.item.id).catch(console.warn);
           return false;
         }
@@ -295,10 +270,7 @@ class SyncService {
     try {
       const payload = JSON.parse(item.payload) as Record<string, unknown>;
       const table = item.entity as SyncableTable;
-      const remoteData = mapLocalToRemoteRecord(
-        item.entity as SyncableTable,
-        payload,
-      );
+      const remoteData = mapLocalToRemoteRecord(item.entity as SyncableTable, payload);
       const recordId = String(payload.id ?? item.recordId);
 
       // tags is stored as a JSON string in SQLite; Supabase expects jsonb (object/array)
@@ -324,8 +296,7 @@ class SyncService {
         const deletedAt = String(payload.deletedAt ?? new Date().toISOString());
         if (
           !remoteRecord ||
-          new Date(String(remoteRecord.updated_at ?? 0)).getTime() <=
-            new Date(deletedAt).getTime()
+          new Date(String(remoteRecord.updated_at ?? 0)).getTime() <= new Date(deletedAt).getTime()
         ) {
           const { error } = await supabase.from(table).upsert(
             {
@@ -352,10 +323,7 @@ class SyncService {
         : 0;
       if (remoteRecord && remoteUpdatedAt > localUpdatedAt) {
         await upsertLocalRecord(table, {
-          ...mapRemoteToLocalRecord(
-            table,
-            remoteRecord as Record<string, unknown>,
-          ),
+          ...mapRemoteToLocalRecord(table, remoteRecord as Record<string, unknown>),
           syncStatus: 'synced',
           lastSyncedAt: new Date().toISOString(),
         });
@@ -380,12 +348,7 @@ class SyncService {
       const localDb = getDatabase();
       await localDb.execAsync('BEGIN');
       try {
-        await markRecordSyncStatus(
-          table as never,
-          recordId,
-          'synced',
-          syncedAt,
-        );
+        await markRecordSyncStatus(table as never, recordId, 'synced', syncedAt);
         await removeFromSyncQueue(item.id);
         await localDb.execAsync('COMMIT');
       } catch (localErr) {
@@ -434,15 +397,7 @@ class SyncService {
    * Tier 2-3: depend on tier 1 (splits → transactions)
    */
   private static readonly PULL_TIERS: SyncableTable[][] = [
-    [
-      'user_profile',
-      'accounts',
-      'categories',
-      'payment_methods',
-      'goals',
-      'assets',
-      'liabilities',
-    ],
+    ['user_profile', 'accounts', 'categories', 'payment_methods', 'goals', 'assets', 'liabilities'],
     ['transactions', 'budgets', 'net_worth_history'],
     ['split_expenses'],
     ['split_members'],
@@ -499,15 +454,11 @@ class SyncService {
               continue;
             }
 
-            const localRows = await fetchTableRows<Record<string, unknown>>(
-              table,
-              'id = ?',
-              [String(localRecordData.id)],
-            );
+            const localRows = await fetchTableRows<Record<string, unknown>>(table, 'id = ?', [
+              String(localRecordData.id),
+            ]);
             const localRecord = localRows[0];
-            const remoteUpdatedAt = new Date(
-              String(localRecordData.updatedAt),
-            ).getTime();
+            const remoteUpdatedAt = new Date(String(localRecordData.updatedAt)).getTime();
             const localUpdatedAt = localRecord?.updatedAt
               ? new Date(String(localRecord.updatedAt)).getTime()
               : 0;
@@ -515,11 +466,9 @@ class SyncService {
             if (!localRecord || remoteUpdatedAt >= localUpdatedAt) {
               // Bug 4 fix: protect custom user profile name from being overwritten by default
               if (table === 'user_profile') {
-                const remoteIsDefault =
-                  String(localRecordData.name) === 'Hisab Kitab User';
+                const remoteIsDefault = String(localRecordData.name) === 'Hisab Kitab User';
                 const localIsCustom =
-                  localRecord?.name &&
-                  String(localRecord.name) !== 'Hisab Kitab User';
+                  localRecord?.name && String(localRecord.name) !== 'Hisab Kitab User';
                 if (remoteIsDefault && localIsCustom) {
                   localRecordData.name = localRecord.name;
                 }
@@ -575,9 +524,7 @@ class SyncService {
 
     this.syncing = true;
     this.syncStartedAt = Date.now();
-    useAppStore
-      .getState()
-      .setSyncState({ syncInProgress: true, lastSyncError: null });
+    useAppStore.getState().setSyncState({ syncInProgress: true, lastSyncError: null });
 
     try {
       const session = await supabase.auth.getSession();
@@ -608,10 +555,7 @@ class SyncService {
             }
 
             for (const record of data ?? []) {
-              const localData = mapRemoteToLocalRecord(
-                table,
-                record as Record<string, unknown>,
-              );
+              const localData = mapRemoteToLocalRecord(table, record as Record<string, unknown>);
               await upsertLocalRecord(table, {
                 ...localData,
                 syncStatus: 'synced',
@@ -624,10 +568,7 @@ class SyncService {
         );
 
         for (const result of results) {
-          if (
-            result.status === 'fulfilled' &&
-            typeof result.value === 'number'
-          ) {
+          if (result.status === 'fulfilled' && typeof result.value === 'number') {
             totalPulled += result.value;
           }
         }
@@ -645,9 +586,7 @@ class SyncService {
       return { success: true, recordsPulled: totalPulled };
     } catch (error) {
       const msg = errorMessage(error);
-      useAppStore
-        .getState()
-        .setSyncState({ syncInProgress: false, lastSyncError: msg });
+      useAppStore.getState().setSyncState({ syncInProgress: false, lastSyncError: msg });
       return { success: false, recordsPulled: 0, error: msg };
     } finally {
       this.syncing = false;

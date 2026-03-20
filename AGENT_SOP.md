@@ -185,25 +185,11 @@ export async function createItem(data: CreateItemInput): Promise<Item> {
   await db.runAsync(
     `INSERT INTO your_table (id, name, createdAt, updatedAt, userId, syncStatus, lastSyncedAt, deletedAt)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-    [
-      item.id,
-      item.name,
-      item.createdAt,
-      item.updatedAt,
-      null,
-      'pending',
-      null,
-      null,
-    ],
+    [item.id, item.name, item.createdAt, item.updatedAt, null, 'pending', null, null],
   );
 
   // 1. Queue sync — always pass full record as 4th arg
-  await enqueueSync(
-    'your_table',
-    id,
-    'upsert',
-    item as unknown as Record<string, unknown>,
-  );
+  await enqueueSync('your_table', id, 'upsert', item as unknown as Record<string, unknown>);
 
   // 2. Bump revision so subscribed screens re-fetch
   useAppStore.getState().bumpDataRevision();
@@ -251,8 +237,7 @@ await enqueueSync('accounts', account.id, 'upsert', {
 
 ```ts
 const refreshAllWidgets = async () => {
-  const { refreshAllWidgets: refresh } =
-    await import('@/widgets/refreshWidgets');
+  const { refreshAllWidgets: refresh } = await import('@/widgets/refreshWidgets');
   return refresh();
 };
 // After the write:

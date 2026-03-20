@@ -59,13 +59,7 @@ export const AccountService = {
   async create(
     data: Omit<
       Account,
-      | 'id'
-      | 'createdAt'
-      | 'updatedAt'
-      | 'userId'
-      | 'syncStatus'
-      | 'lastSyncedAt'
-      | 'deletedAt'
+      'id' | 'createdAt' | 'updatedAt' | 'userId' | 'syncStatus' | 'lastSyncedAt' | 'deletedAt'
     >,
   ): Promise<Account> {
     const now = new Date().toISOString();
@@ -152,12 +146,7 @@ export const AccountService = {
       `UPDATE accounts SET deletedAt = ?, updatedAt = ?, syncStatus = 'pending' WHERE id = ?`,
       [deletedAt, deletedAt, id],
     );
-    await queueEntitySync(
-      'accounts',
-      id,
-      { id, deletedAt, updatedAt: deletedAt },
-      'delete',
-    );
+    await queueEntitySync('accounts', id, { id, deletedAt, updatedAt: deletedAt }, 'delete');
   },
 
   async getTotalBalance(): Promise<number> {
@@ -170,9 +159,7 @@ export const AccountService = {
 
 export const CategoryService = {
   async getAll(): Promise<Category[]> {
-    const rows = await getDatabase().getAllAsync<
-      Omit<Category, 'isCustom'> & { isCustom: number }
-    >(
+    const rows = await getDatabase().getAllAsync<Omit<Category, 'isCustom'> & { isCustom: number }>(
       'SELECT * FROM categories WHERE deletedAt IS NULL ORDER BY isCustom ASC, name ASC',
     );
     return rows.map((row) => ({ ...row, isCustom: Boolean(row.isCustom) }));
@@ -216,10 +203,7 @@ export const CategoryService = {
     return category.id;
   },
 
-  async update(
-    id: string,
-    data: Partial<Pick<Category, 'name' | 'type' | 'icon' | 'color'>>,
-  ) {
+  async update(id: string, data: Partial<Pick<Category, 'name' | 'type' | 'icon' | 'color'>>) {
     const existing = await getDatabase().getFirstAsync<Category>(
       'SELECT * FROM categories WHERE id = ?',
       [id],
@@ -240,21 +224,10 @@ export const CategoryService = {
       `UPDATE categories
        SET name = ?, type = ?, icon = ?, color = ?, updatedAt = ?, syncStatus = 'pending'
        WHERE id = ?`,
-      [
-        category.name,
-        category.type,
-        category.icon,
-        category.color,
-        updatedAt,
-        id,
-      ],
+      [category.name, category.type, category.icon, category.color, updatedAt, id],
     );
 
-    await queueEntitySync(
-      'categories',
-      id,
-      category as unknown as Record<string, unknown>,
-    );
+    await queueEntitySync('categories', id, category as unknown as Record<string, unknown>);
   },
 
   async delete(id: string) {
@@ -263,12 +236,7 @@ export const CategoryService = {
       `UPDATE categories SET deletedAt = ?, updatedAt = ?, syncStatus = 'pending' WHERE id = ?`,
       [deletedAt, deletedAt, id],
     );
-    await queueEntitySync(
-      'categories',
-      id,
-      { id, deletedAt, updatedAt: deletedAt },
-      'delete',
-    );
+    await queueEntitySync('categories', id, { id, deletedAt, updatedAt: deletedAt }, 'delete');
   },
 };
 
@@ -338,18 +306,11 @@ export const BudgetService = {
       ],
     );
 
-    await queueEntitySync(
-      'budgets',
-      budget.id,
-      budget as unknown as Record<string, unknown>,
-    );
+    await queueEntitySync('budgets', budget.id, budget as unknown as Record<string, unknown>);
     return budget.id;
   },
 
-  async update(
-    id: string,
-    data: Partial<Pick<Budget, 'limit_amount' | 'alertAt'>>,
-  ) {
+  async update(id: string, data: Partial<Pick<Budget, 'limit_amount' | 'alertAt'>>) {
     const existing = await getDatabase().getFirstAsync<Budget>(
       'SELECT * FROM budgets WHERE id = ?',
       [id],
@@ -373,11 +334,7 @@ export const BudgetService = {
       [data.limit_amount ?? null, data.alertAt ?? null, updatedAt, id],
     );
 
-    await queueEntitySync(
-      'budgets',
-      id,
-      budget as unknown as Record<string, unknown>,
-    );
+    await queueEntitySync('budgets', id, budget as unknown as Record<string, unknown>);
   },
 
   async delete(id: string) {
@@ -386,12 +343,7 @@ export const BudgetService = {
       `UPDATE budgets SET deletedAt = ?, updatedAt = ?, syncStatus = 'pending' WHERE id = ?`,
       [deletedAt, deletedAt, id],
     );
-    await queueEntitySync(
-      'budgets',
-      id,
-      { id, deletedAt, updatedAt: deletedAt },
-      'delete',
-    );
+    await queueEntitySync('budgets', id, { id, deletedAt, updatedAt: deletedAt }, 'delete');
   },
 };
 
@@ -409,13 +361,7 @@ export const GoalService = {
   async create(
     data: Omit<
       Goal,
-      | 'id'
-      | 'createdAt'
-      | 'updatedAt'
-      | 'userId'
-      | 'syncStatus'
-      | 'lastSyncedAt'
-      | 'deletedAt'
+      'id' | 'createdAt' | 'updatedAt' | 'userId' | 'syncStatus' | 'lastSyncedAt' | 'deletedAt'
     >,
   ) {
     const now = new Date().toISOString();
@@ -458,19 +404,15 @@ export const GoalService = {
   },
 
   async addFunds(id: string, amount: number) {
-    const existing = await getDatabase().getFirstAsync<Goal>(
-      'SELECT * FROM goals WHERE id = ?',
-      [id],
-    );
+    const existing = await getDatabase().getFirstAsync<Goal>('SELECT * FROM goals WHERE id = ?', [
+      id,
+    ]);
     if (!existing) {
       throw new Error('Goal not found');
     }
 
     const updatedAt = new Date().toISOString();
-    const currentAmount = Math.min(
-      existing.currentAmount + amount,
-      existing.targetAmount,
-    );
+    const currentAmount = Math.min(existing.currentAmount + amount, existing.targetAmount);
     const isCompleted = currentAmount >= existing.targetAmount;
 
     await getDatabase().runAsync(
@@ -495,12 +437,7 @@ export const GoalService = {
       `UPDATE goals SET deletedAt = ?, updatedAt = ?, syncStatus = 'pending' WHERE id = ?`,
       [deletedAt, deletedAt, id],
     );
-    await queueEntitySync(
-      'goals',
-      id,
-      { id, deletedAt, updatedAt: deletedAt },
-      'delete',
-    );
+    await queueEntitySync('goals', id, { id, deletedAt, updatedAt: deletedAt }, 'delete');
   },
 };
 
@@ -590,13 +527,7 @@ export const NetWorthService = {
   async createAsset(
     data: Omit<
       Asset,
-      | 'id'
-      | 'createdAt'
-      | 'updatedAt'
-      | 'userId'
-      | 'syncStatus'
-      | 'lastSyncedAt'
-      | 'deletedAt'
+      'id' | 'createdAt' | 'updatedAt' | 'userId' | 'syncStatus' | 'lastSyncedAt' | 'deletedAt'
     >,
   ) {
     const now = new Date().toISOString();
@@ -628,24 +559,14 @@ export const NetWorthService = {
       ],
     );
 
-    await queueEntitySync(
-      'assets',
-      asset.id,
-      asset as unknown as Record<string, unknown>,
-    );
+    await queueEntitySync('assets', asset.id, asset as unknown as Record<string, unknown>);
     return asset.id;
   },
 
   async createLiability(
     data: Omit<
       Liability,
-      | 'id'
-      | 'createdAt'
-      | 'updatedAt'
-      | 'userId'
-      | 'syncStatus'
-      | 'lastSyncedAt'
-      | 'deletedAt'
+      'id' | 'createdAt' | 'updatedAt' | 'userId' | 'syncStatus' | 'lastSyncedAt' | 'deletedAt'
     >,
   ) {
     const now = new Date().toISOString();
@@ -693,12 +614,7 @@ export const NetWorthService = {
       `UPDATE assets SET deletedAt = ?, updatedAt = ?, syncStatus = 'pending' WHERE id = ?`,
       [deletedAt, deletedAt, id],
     );
-    await queueEntitySync(
-      'assets',
-      id,
-      { id, deletedAt, updatedAt: deletedAt },
-      'delete',
-    );
+    await queueEntitySync('assets', id, { id, deletedAt, updatedAt: deletedAt }, 'delete');
   },
 
   async deleteLiability(id: string) {
@@ -707,12 +623,7 @@ export const NetWorthService = {
       `UPDATE liabilities SET deletedAt = ?, updatedAt = ?, syncStatus = 'pending' WHERE id = ?`,
       [deletedAt, deletedAt, id],
     );
-    await queueEntitySync(
-      'liabilities',
-      id,
-      { id, deletedAt, updatedAt: deletedAt },
-      'delete',
-    );
+    await queueEntitySync('liabilities', id, { id, deletedAt, updatedAt: deletedAt }, 'delete');
   },
 };
 
@@ -741,9 +652,7 @@ export const DataService = {
   },
 
   /** Import a full backup JSON (exported via exportAllData). Inserts rows using INSERT OR REPLACE. */
-  async importAllData(
-    data: Record<string, unknown[]>,
-  ): Promise<{ imported: number }> {
+  async importAllData(data: Record<string, unknown[]>): Promise<{ imported: number }> {
     const validTables = [
       'accounts',
       'categories',
@@ -761,9 +670,7 @@ export const DataService = {
     // Build column whitelist per table from SQLite schema
     const schemaCache = new Map<string, Set<string>>();
     for (const table of validTables) {
-      const cols = await db.getAllAsync<{ name: string }>(
-        `PRAGMA table_info(${table})`,
-      );
+      const cols = await db.getAllAsync<{ name: string }>(`PRAGMA table_info(${table})`);
       schemaCache.set(table, new Set(cols.map((c) => c.name)));
     }
 
@@ -830,25 +737,17 @@ export const UserProfileService = {
   },
 
   async upsertProfile(
-    data: Partial<
-      Omit<UserProfile, 'id' | 'createdAt' | 'updatedAt' | 'syncStatus'>
-    >,
+    data: Partial<Omit<UserProfile, 'id' | 'createdAt' | 'updatedAt' | 'syncStatus'>>,
   ): Promise<UserProfile> {
     const session = await supabase.auth.getSession();
     const sessionUserId = session.data.session?.user?.id ?? null;
     const sessionEmail = session.data.session?.user?.email ?? '';
     const existing = await this.getProfile();
-    const sessionName = session.data.session?.user?.user_metadata?.name as
-      | string
-      | undefined;
+    const sessionName = session.data.session?.user?.user_metadata?.name as string | undefined;
     const now = new Date().toISOString();
 
     // Resolve name: only fall back to default for INSERT, not UPDATE
-    const resolvedName =
-      data.name?.trim() ||
-      existing?.name?.trim() ||
-      sessionName?.trim() ||
-      null;
+    const resolvedName = data.name?.trim() || existing?.name?.trim() || sessionName?.trim() || null;
 
     const profile: UserProfile = {
       id: existing?.id ?? sessionUserId ?? 'profile_local',
@@ -858,12 +757,9 @@ export const UserProfileService = {
       currency: data.currency ?? existing?.currency ?? 'INR',
       monthlyBudget: data.monthlyBudget ?? existing?.monthlyBudget ?? 0,
       avatar: data.avatar ?? existing?.avatar ?? undefined,
-      themePreference:
-        data.themePreference ?? existing?.themePreference ?? 'system',
-      notificationsEnabled:
-        data.notificationsEnabled ?? existing?.notificationsEnabled ?? false,
-      biometricEnabled:
-        data.biometricEnabled ?? existing?.biometricEnabled ?? false,
+      themePreference: data.themePreference ?? existing?.themePreference ?? 'system',
+      notificationsEnabled: data.notificationsEnabled ?? existing?.notificationsEnabled ?? false,
+      biometricEnabled: data.biometricEnabled ?? existing?.biometricEnabled ?? false,
       createdAt: existing?.createdAt ?? now,
       updatedAt: now,
       userId: data.userId ?? existing?.userId ?? sessionUserId,
@@ -921,17 +817,13 @@ export const UserProfileService = {
 };
 
 export const PaymentMethodService = {
-  async getAll(): Promise<
-    { id: string; name: string; icon: string; isCustom: boolean }[]
-  > {
+  async getAll(): Promise<{ id: string; name: string; icon: string; isCustom: boolean }[]> {
     const rows = await getDatabase().getAllAsync<{
       id: string;
       name: string;
       icon: string;
       isCustom: number;
-    }>(
-      'SELECT * FROM payment_methods WHERE deletedAt IS NULL ORDER BY isCustom ASC, name ASC',
-    );
+    }>('SELECT * FROM payment_methods WHERE deletedAt IS NULL ORDER BY isCustom ASC, name ASC');
     return rows.map((row) => ({ ...row, isCustom: Boolean(row.isCustom) }));
   },
 

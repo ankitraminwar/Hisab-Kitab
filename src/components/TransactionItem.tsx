@@ -4,11 +4,7 @@ import * as Haptics from 'expo-haptics';
 import React, { memo, useCallback, useMemo } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
-import Animated, {
-  useAnimatedStyle,
-  useSharedValue,
-  withSpring,
-} from 'react-native-reanimated';
+import Animated, { useAnimatedStyle, useSharedValue, withSpring } from 'react-native-reanimated';
 import { useTheme, type ThemeColors } from '../hooks/useTheme';
 import { SPACING, TYPOGRAPHY, formatCurrency } from '../utils/constants';
 import type { Transaction } from '../utils/types';
@@ -21,11 +17,7 @@ interface TransactionItemProps {
 
 const SPRING_CONFIG = { damping: 15, stiffness: 200 };
 
-const TransactionItem: React.FC<TransactionItemProps> = ({
-  item,
-  onPress,
-  onLongPress,
-}) => {
+const TransactionItem: React.FC<TransactionItemProps> = ({ item, onPress, onLongPress }) => {
   const { colors } = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
 
@@ -78,8 +70,7 @@ const TransactionItem: React.FC<TransactionItemProps> = ({
         ? colors.expense
         : colors.transfer;
 
-  const prefix =
-    item.type === 'income' ? '+' : item.type === 'expense' ? '-' : '↔';
+  const prefix = item.type === 'income' ? '+' : item.type === 'expense' ? '-' : '↔';
 
   return (
     <GestureDetector gesture={gesture}>
@@ -106,9 +97,7 @@ const TransactionItem: React.FC<TransactionItemProps> = ({
             {item.date ? (
               <>
                 <View style={styles.dot} />
-                <Text style={styles.category}>
-                  {format(new Date(item.date), 'hh:mm a')}
-                </Text>
+                <Text style={styles.category}>{format(new Date(item.date), 'hh:mm a')}</Text>
               </>
             ) : null}
             {Array.isArray(item.tags) && item.tags.length > 0 && (
@@ -125,9 +114,7 @@ const TransactionItem: React.FC<TransactionItemProps> = ({
             {prefix}
             {formatCurrency(item.amount)}
           </Text>
-          <Text style={styles.date}>
-            {item.date ? format(new Date(item.date), 'dd MMM') : ''}
-          </Text>
+          <Text style={styles.date}>{item.date ? format(new Date(item.date), 'dd MMM') : ''}</Text>
         </View>
       </Animated.View>
     </GestureDetector>

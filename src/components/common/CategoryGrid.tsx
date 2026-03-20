@@ -1,12 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import React from 'react';
-import {
-  type DimensionValue,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
-} from 'react-native';
+import { type DimensionValue, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useTheme } from '../../hooks/useTheme';
 import { RADIUS, SPACING, TYPOGRAPHY } from '../../utils/constants';
 import type { Category } from '../../utils/types';
@@ -28,9 +22,7 @@ export const CategoryGrid: React.FC<CategoryGridProps> = ({
 
   return (
     <View style={styles.container}>
-      <Text style={[styles.label, { color: colors.textMuted }]}>
-        CATEGORIES
-      </Text>
+      <Text style={[styles.label, { color: colors.textMuted }]}>CATEGORIES</Text>
       <View style={styles.grid}>
         {categories.map((cat) => {
           const isSelected = cat.id === selectedId;
@@ -46,9 +38,7 @@ export const CategoryGrid: React.FC<CategoryGridProps> = ({
                 style={[
                   styles.item,
                   {
-                    backgroundColor: isSelected
-                      ? catColor + '15'
-                      : 'transparent',
+                    backgroundColor: isSelected ? catColor + '15' : 'transparent',
                     borderColor: isSelected ? catColor + '80' : colors.border,
                     borderWidth: isSelected ? 2 : 1,
                   },
@@ -67,10 +57,7 @@ export const CategoryGrid: React.FC<CategoryGridProps> = ({
                   color={isSelected ? catColor : colors.textMuted}
                 />
                 <Text
-                  style={[
-                    styles.itemLabel,
-                    { color: isSelected ? catColor : colors.textMuted },
-                  ]}
+                  style={[styles.itemLabel, { color: isSelected ? catColor : colors.textMuted }]}
                   numberOfLines={2}
                   adjustsFontSizeToFit
                   minimumFontScale={0.7}

@@ -91,10 +91,7 @@ function buildWidget(data: WidgetExpenseSummary, colors: C) {
       >
         {/* Expense */}
         <FlexWidget style={{ flexDirection: 'column' }}>
-          <TextWidget
-            text="Spent"
-            style={{ fontSize: 11, color: colors.muted }}
-          />
+          <TextWidget text="Spent" style={{ fontSize: 11, color: colors.muted }} />
           <TextWidget
             text={formatAmount(data.totalExpense)}
             style={{
@@ -107,10 +104,7 @@ function buildWidget(data: WidgetExpenseSummary, colors: C) {
 
         {/* Income */}
         <FlexWidget style={{ flexDirection: 'column', alignItems: 'flex-end' }}>
-          <TextWidget
-            text="Earned"
-            style={{ fontSize: 11, color: colors.muted }}
-          />
+          <TextWidget text="Earned" style={{ fontSize: 11, color: colors.muted }} />
           <TextWidget
             text={formatAmount(data.totalIncome)}
             style={{
@@ -133,10 +127,7 @@ function buildWidget(data: WidgetExpenseSummary, colors: C) {
           }}
         >
           {data.topCategories.map((cat, i) => (
-            <FlexWidget
-              key={i}
-              style={{ flexDirection: 'column', alignItems: 'center' }}
-            >
+            <FlexWidget key={i} style={{ flexDirection: 'column', alignItems: 'center' }}>
               <FlexWidget
                 style={{
                   width: 8,

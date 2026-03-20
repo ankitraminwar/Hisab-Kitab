@@ -10,11 +10,7 @@ import * as Sharing from 'expo-sharing';
 import { DataService } from '../services/dataServices';
 import { TransactionService } from '../services/transactionService';
 
-const shareFile = async (
-  filename: string,
-  content: string,
-  mimeType: string,
-) => {
+const shareFile = async (filename: string, content: string, mimeType: string) => {
   if (!documentDirectory) {
     throw new Error('Local file storage is unavailable');
   }

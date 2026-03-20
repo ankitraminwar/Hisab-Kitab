@@ -72,8 +72,7 @@ export const WidgetDataService = {
         limit: b.limit_amount,
         color: b.categoryColor ?? '#8B5CF6',
       })),
-      overallPercent:
-        totalLimit > 0 ? Math.round((totalSpent / totalLimit) * 100) : 0,
+      overallPercent: totalLimit > 0 ? Math.round((totalSpent / totalLimit) * 100) : 0,
     };
   },
 
@@ -94,10 +93,7 @@ export const WidgetDataService = {
       name: g.name,
       current: g.currentAmount,
       target: g.targetAmount,
-      percent:
-        g.targetAmount > 0
-          ? Math.round((g.currentAmount / g.targetAmount) * 100)
-          : 0,
+      percent: g.targetAmount > 0 ? Math.round((g.currentAmount / g.targetAmount) * 100) : 0,
       color: g.color ?? '#7C3AED',
       icon: g.icon ?? 'flag',
     };

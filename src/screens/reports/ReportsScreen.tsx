@@ -15,14 +15,7 @@ import {
   subYears,
 } from 'date-fns';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import {
-  Alert,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
-} from 'react-native';
+import { Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -32,13 +25,7 @@ import { useTheme, type ThemeColors } from '../../hooks/useTheme';
 import { exportService } from '../../services/exportService';
 import { TransactionService } from '../../services/transactionService';
 import { useAppStore } from '../../store/appStore';
-import {
-  RADIUS,
-  SPACING,
-  TYPOGRAPHY,
-  formatCompact,
-  formatCurrency,
-} from '../../utils/constants';
+import { RADIUS, SPACING, TYPOGRAPHY, formatCompact, formatCurrency } from '../../utils/constants';
 
 type CategoryDatum = {
   categoryId: string;
@@ -52,10 +39,7 @@ const PERIOD_TABS = ['Weekly', 'Monthly', 'Yearly'];
 
 type Period = 'Weekly' | 'Monthly' | 'Yearly';
 
-function getDateRange(
-  period: Period,
-  anchor: Date,
-): { from: string; to: string; label: string } {
+function getDateRange(period: Period, anchor: Date): { from: string; to: string; label: string } {
   const fmt = (d: Date) => format(d, 'yyyy-MM-dd');
   switch (period) {
     case 'Weekly': {
@@ -118,11 +102,7 @@ export default function ReportsScreen() {
 
   const loadData = useCallback(async () => {
     const [breakdown, currentStats, previousStats] = await Promise.all([
-      TransactionService.getCategoryBreakdownByDateRange(
-        range.from,
-        range.to,
-        'expense',
-      ),
+      TransactionService.getCategoryBreakdownByDateRange(range.from, range.to, 'expense'),
       TransactionService.getStatsByDateRange(range.from, range.to),
       TransactionService.getStatsByDateRange(prevRange.from, prevRange.to),
     ]);
@@ -139,13 +119,9 @@ export default function ReportsScreen() {
   const savingsRate = stats.income > 0 ? (savings / stats.income) * 100 : 0;
 
   const incomeTrend =
-    prevStats.income > 0
-      ? ((stats.income - prevStats.income) / prevStats.income) * 100
-      : 0;
+    prevStats.income > 0 ? ((stats.income - prevStats.income) / prevStats.income) * 100 : 0;
   const expenseTrend =
-    prevStats.expense > 0
-      ? ((stats.expense - prevStats.expense) / prevStats.expense) * 100
-      : 0;
+    prevStats.expense > 0 ? ((stats.expense - prevStats.expense) / prevStats.expense) * 100 : 0;
 
   const handlePeriodChange = (tab: string) => {
     setPeriod(tab as Period);
@@ -183,11 +159,7 @@ export default function ReportsScreen() {
       />
 
       {/* Period Tabs */}
-      <PeriodTabs
-        tabs={PERIOD_TABS}
-        activeTab={period}
-        onTabChange={handlePeriodChange}
-      />
+      <PeriodTabs tabs={PERIOD_TABS} activeTab={period} onTabChange={handlePeriodChange} />
 
       {/* Period Navigation */}
       <View style={styles.periodNav}>
@@ -202,23 +174,13 @@ export default function ReportsScreen() {
           onPress={() => setAnchor(shiftAnchor(period, anchor, 1))}
           hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
         >
-          <Ionicons
-            name="chevron-forward"
-            size={22}
-            color={colors.textPrimary}
-          />
+          <Ionicons name="chevron-forward" size={22} color={colors.textPrimary} />
         </TouchableOpacity>
       </View>
 
-      <ScrollView
-        contentContainerStyle={styles.scroll}
-        showsVerticalScrollIndicator={false}
-      >
+      <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
         {/* Summary Cards */}
-        <Animated.View
-          entering={FadeInDown.duration(400)}
-          style={styles.summaryRow}
-        >
+        <Animated.View entering={FadeInDown.duration(400)} style={styles.summaryRow}>
           <SummaryCard
             label="Income"
             value={formatCompact(stats.income)}
@@ -255,8 +217,7 @@ export default function ReportsScreen() {
                 amount={formatCurrency(stats.income)}
                 percent={
                   Math.max(stats.income, stats.expense) > 0
-                    ? (stats.income / Math.max(stats.income, stats.expense)) *
-                      100
+                    ? (stats.income / Math.max(stats.income, stats.expense)) * 100
                     : 0
                 }
                 color={colors.income}
@@ -269,8 +230,7 @@ export default function ReportsScreen() {
                 amount={formatCurrency(stats.expense)}
                 percent={
                   Math.max(stats.income, stats.expense) > 0
-                    ? (stats.expense / Math.max(stats.income, stats.expense)) *
-                      100
+                    ? (stats.expense / Math.max(stats.income, stats.expense)) * 100
                     : 0
                 }
                 color={colors.expense}
@@ -288,15 +248,12 @@ export default function ReportsScreen() {
             <View style={styles.sectionHeader}>
               <Text style={styles.sectionTitle}>Top Spending Categories</Text>
               <TouchableOpacity>
-                <Text style={[styles.viewAll, { color: colors.primary }]}>
-                  View All
-                </Text>
+                <Text style={[styles.viewAll, { color: colors.primary }]}>View All</Text>
               </TouchableOpacity>
             </View>
             <View style={{ gap: SPACING.sm }}>
               {expenseBreakdown.slice(0, 5).map((item, index) => {
-                const percentage =
-                  stats.expense > 0 ? (item.total / stats.expense) * 100 : 0;
+                const percentage = stats.expense > 0 ? (item.total / stats.expense) * 100 : 0;
                 const catColor = item.categoryColor || colors.primary;
                 return (
                   <Animated.View
@@ -321,12 +278,8 @@ export default function ReportsScreen() {
                       </View>
                       <View style={styles.catContent}>
                         <View style={styles.catTopRow}>
-                          <Text style={styles.catName}>
-                            {item.categoryName}
-                          </Text>
-                          <Text style={styles.catAmount}>
-                            {formatCurrency(item.total)}
-                          </Text>
+                          <Text style={styles.catName}>{item.categoryName}</Text>
+                          <Text style={styles.catAmount}>{formatCurrency(item.total)}</Text>
                         </View>
                         <View style={styles.catBarBg}>
                           <View
@@ -373,9 +326,7 @@ const SummaryCard: React.FC<{
       },
     ]}
   >
-    <Text style={[summaryStyles.label, { color: colors.textMuted }]}>
-      {label}
-    </Text>
+    <Text style={[summaryStyles.label, { color: colors.textMuted }]}>{label}</Text>
     <Text style={[summaryStyles.value, { color: tintColor }]}>{value}</Text>
     <View style={summaryStyles.trend}>
       <Ionicons
@@ -383,12 +334,7 @@ const SummaryCard: React.FC<{
         size={12}
         color={trendUp ? colors.income : colors.expense}
       />
-      <Text
-        style={[
-          summaryStyles.trendText,
-          { color: trendUp ? colors.income : colors.expense },
-        ]}
-      >
+      <Text style={[summaryStyles.trendText, { color: trendUp ? colors.income : colors.expense }]}>
         {trendLabel}
       </Text>
     </View>
@@ -411,10 +357,7 @@ const BarRow: React.FC<{
     </View>
     <View style={[barStyles.barBg, { backgroundColor: barBg }]}>
       <View
-        style={[
-          barStyles.barFill,
-          { width: `${Math.min(percent, 100)}%`, backgroundColor: color },
-        ]}
+        style={[barStyles.barFill, { width: `${Math.min(percent, 100)}%`, backgroundColor: color }]}
       />
     </View>
   </View>

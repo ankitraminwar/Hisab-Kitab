@@ -1,12 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import {
-  FlatList,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
-} from 'react-native';
+import { FlatList, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -15,12 +9,7 @@ import { ScreenHeader } from '../../components/common/ScreenHeader';
 import { useTheme, type ThemeColors } from '../../hooks/useTheme';
 import { BudgetService, GoalService } from '../../services/dataService';
 import { useAppStore } from '../../store/appStore';
-import {
-  RADIUS,
-  SPACING,
-  TYPOGRAPHY,
-  formatCurrency,
-} from '../../utils/constants';
+import { RADIUS, SPACING, TYPOGRAPHY, formatCurrency } from '../../utils/constants';
 
 interface NotificationItem {
   id: string;
@@ -81,10 +70,7 @@ export default function NotificationsScreen() {
           time: 'Recently',
           isRead: true,
         });
-      } else if (
-        g.targetAmount > 0 &&
-        g.currentAmount / g.targetAmount >= 0.75
-      ) {
+      } else if (g.targetAmount > 0 && g.currentAmount / g.targetAmount >= 0.75) {
         items.push({
           id: `goal-near-${g.id}`,
           title: 'Almost There!',
@@ -140,36 +126,17 @@ export default function NotificationsScreen() {
     }
   };
 
-  const renderItem = ({
-    item,
-    index,
-  }: {
-    item: NotificationItem;
-    index: number;
-  }) => {
+  const renderItem = ({ item, index }: { item: NotificationItem; index: number }) => {
     const iconColor = getColorForType(item.type);
 
     return (
       <Animated.View entering={FadeInDown.duration(400).delay(index * 100)}>
-        <TouchableOpacity
-          style={[styles.notificationCard, !item.isRead && styles.unreadCard]}
-        >
-          <View
-            style={[
-              styles.iconContainer,
-              { backgroundColor: iconColor + '20' },
-            ]}
-          >
-            <Ionicons
-              name={getIconForType(item.type)}
-              size={24}
-              color={iconColor}
-            />
+        <TouchableOpacity style={[styles.notificationCard, !item.isRead && styles.unreadCard]}>
+          <View style={[styles.iconContainer, { backgroundColor: iconColor + '20' }]}>
+            <Ionicons name={getIconForType(item.type)} size={24} color={iconColor} />
           </View>
           <View style={styles.contentContainer}>
-            <Text style={[styles.title, !item.isRead && styles.unreadText]}>
-              {item.title}
-            </Text>
+            <Text style={[styles.title, !item.isRead && styles.unreadText]}>{item.title}</Text>
             <Text style={styles.message}>{item.message}</Text>
             <Text style={styles.time}>{item.time}</Text>
           </View>

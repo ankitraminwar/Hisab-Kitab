@@ -12,9 +12,7 @@ const CHUNK_COUNT_SUFFIX = '__chunk_count';
  */
 const secureStoreAdapter = {
   async getItem(key: string): Promise<string | null> {
-    const countStr = await SecureStore.getItemAsync(
-      `${key}${CHUNK_COUNT_SUFFIX}`,
-    );
+    const countStr = await SecureStore.getItemAsync(`${key}${CHUNK_COUNT_SUFFIX}`);
     if (countStr) {
       const count = parseInt(countStr, 10);
       const chunks: string[] = [];
@@ -40,11 +38,9 @@ const secureStoreAdapter = {
     }
 
     const count = Math.ceil(value.length / CHUNK_SIZE);
-    await SecureStore.setItemAsync(
-      `${key}${CHUNK_COUNT_SUFFIX}`,
-      String(count),
-      { keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY },
-    );
+    await SecureStore.setItemAsync(`${key}${CHUNK_COUNT_SUFFIX}`, String(count), {
+      keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY,
+    });
     for (let i = 0; i < count; i++) {
       await SecureStore.setItemAsync(
         `${key}__chunk_${i}`,
@@ -55,9 +51,7 @@ const secureStoreAdapter = {
   },
 
   async removeItem(key: string): Promise<void> {
-    const countStr = await SecureStore.getItemAsync(
-      `${key}${CHUNK_COUNT_SUFFIX}`,
-    );
+    const countStr = await SecureStore.getItemAsync(`${key}${CHUNK_COUNT_SUFFIX}`);
     if (countStr) {
       const count = parseInt(countStr, 10);
       for (let i = 0; i < count; i++) {

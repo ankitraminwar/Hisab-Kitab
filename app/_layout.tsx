@@ -19,11 +19,7 @@ import { registerWidgetTaskHandler } from 'react-native-android-widget';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 import { ScreenErrorBoundary } from '@/components/common';
-import {
-  clearLocalData,
-  getLastSyncTimestamp,
-  initializeDatabase,
-} from '@/database';
+import { clearLocalData, getLastSyncTimestamp, initializeDatabase } from '@/database';
 import { useTheme, type ThemeColors } from '@/hooks/useTheme';
 import { queryClient } from '@/lib/queryClient';
 import {
@@ -85,24 +81,16 @@ export default function RootLayout() {
   }, [initializing]);
 
   useEffect(() => {
-    const withTimeout = <T,>(
-      promise: Promise<T>,
-      ms: number,
-      fallback: T,
-    ): Promise<T> =>
-      Promise.race([
-        promise,
-        new Promise<T>((resolve) => setTimeout(() => resolve(fallback), ms)),
-      ]);
+    const withTimeout = <T,>(promise: Promise<T>, ms: number, fallback: T): Promise<T> =>
+      Promise.race([promise, new Promise<T>((resolve) => setTimeout(() => resolve(fallback), ms))]);
 
     const bootstrap = async () => {
       try {
         await withTimeout(initializeDatabase(), 5000, undefined);
-        const currentSession = await withTimeout(
-          authService.getSession(),
-          5000,
-          { data: { session: null }, error: null },
-        );
+        const currentSession = await withTimeout(authService.getSession(), 5000, {
+          data: { session: null },
+          error: null,
+        });
         const nextSession = currentSession.data.session ?? null;
         setSession(nextSession);
         previousSessionRef.current = nextSession;
@@ -160,40 +148,38 @@ export default function RootLayout() {
 
     void bootstrap();
 
-    const subscription = authService.onAuthStateChange(
-      async (_event, nextSession) => {
-        const previousSession = previousSessionRef.current;
-        previousSessionRef.current = nextSession;
-        setSession(nextSession);
+    const subscription = authService.onAuthStateChange(async (_event, nextSession) => {
+      const previousSession = previousSessionRef.current;
+      previousSessionRef.current = nextSession;
+      setSession(nextSession);
 
-        if (!nextSession && previousSession) {
-          smsImportService.stop();
-          await clearLocalData();
-          queryClient.clear();
-          resetAppState();
-          setLocked(false);
-          router.replace('/login');
-          return;
-        }
+      if (!nextSession && previousSession) {
+        smsImportService.stop();
+        await clearLocalData();
+        queryClient.clear();
+        resetAppState();
+        setLocked(false);
+        router.replace('/login');
+        return;
+      }
 
-        if (nextSession) {
-          if (!previousSession) {
-            // Fresh login: check if this is first time
-            const lastSync = await getLastSyncTimestamp();
-            if (!lastSync || lastSync === '1970-01-01T00:00:00.000Z') {
-              void syncService.initialSync();
-            } else {
-              void syncService.requestSync('auth-state-change');
-            }
+      if (nextSession) {
+        if (!previousSession) {
+          // Fresh login: check if this is first time
+          const lastSync = await getLastSyncTimestamp();
+          if (!lastSync || lastSync === '1970-01-01T00:00:00.000Z') {
+            void syncService.initialSync();
           } else {
             void syncService.requestSync('auth-state-change');
           }
-          setLocked(useAppStore.getState().biometricsEnabled);
-          smsImportService.start();
-          void smsImportService.run();
+        } else {
+          void syncService.requestSync('auth-state-change');
         }
-      },
-    );
+        setLocked(useAppStore.getState().biometricsEnabled);
+        smsImportService.start();
+        void smsImportService.run();
+      }
+    });
 
     return () => {
       subscription.data.subscription.unsubscribe();
@@ -263,9 +249,7 @@ export default function RootLayout() {
         <ActivityIndicator size="large" color={colors.primary} />
         <Text style={styles.loadingText}>Loading Hisab Kitab...</Text>
         {slowLoad && (
-          <Text style={styles.loadingSubtext}>
-            Taking longer than usual. Please wait...
-          </Text>
+          <Text style={styles.loadingSubtext}>Taking longer than usual. Please wait...</Text>
         )}
       </View>
     );
@@ -279,10 +263,7 @@ export default function RootLayout() {
         </View>
         <Text style={styles.title}>Hisab Kitab</Text>
         <Text style={styles.subtitle}>Your finances are locked</Text>
-        <TouchableOpacity
-          style={styles.unlockButton}
-          onPress={handleAuthenticate}
-        >
+        <TouchableOpacity style={styles.unlockButton} onPress={handleAuthenticate}>
           <Ionicons name="finger-print" size={24} color="#ffffff" />
           <Text style={styles.unlockText}>Unlock</Text>
         </TouchableOpacity>
@@ -294,10 +275,7 @@ export default function RootLayout() {
     <ScreenErrorBoundary>
       <GestureHandlerRootView style={styles.root}>
         <QueryClientProvider client={queryClient}>
-          <StatusBar
-            style={theme === 'dark' ? 'light' : 'dark'}
-            backgroundColor={colors.bg}
-          />
+          <StatusBar style={theme === 'dark' ? 'light' : 'dark'} backgroundColor={colors.bg} />
           <Stack
             screenOptions={{
               headerShown: false,
@@ -321,14 +299,8 @@ export default function RootLayout() {
                 animation: 'slide_from_bottom',
               }}
             />
-            <Stack.Screen
-              name="accounts/index"
-              options={{ animation: 'slide_from_right' }}
-            />
-            <Stack.Screen
-              name="settings/index"
-              options={{ animation: 'slide_from_right' }}
-            />
+            <Stack.Screen name="accounts/index" options={{ animation: 'slide_from_right' }} />
+            <Stack.Screen name="settings/index" options={{ animation: 'slide_from_right' }} />
             <Stack.Screen
               name="sms-import"
               options={{
@@ -336,10 +308,7 @@ export default function RootLayout() {
                 animation: 'slide_from_bottom',
               }}
             />
-            <Stack.Screen
-              name="splits/index"
-              options={{ animation: 'slide_from_right' }}
-            />
+            <Stack.Screen name="splits/index" options={{ animation: 'slide_from_right' }} />
             <Stack.Screen
               name="split-expense/[id]"
               options={{
