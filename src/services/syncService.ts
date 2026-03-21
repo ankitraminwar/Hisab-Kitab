@@ -5,6 +5,7 @@ import {
   fetchTableRows,
   getDatabase,
   getLastSyncTimestamp,
+  hasLocalUserData,
   getSyncableTables,
   getSyncState,
   incrementSyncRetry,
@@ -19,7 +20,7 @@ import {
 import { supabase } from '../lib/supabase';
 import { useAppStore } from '../store/appStore';
 import type { SyncableTable } from '../utils/constants';
-import type { SyncQueueItem } from '../utils/types';
+import type { SyncQueueItem, UserProfile } from '../utils/types';
 import { mapLocalToRemoteRecord, mapRemoteToLocalRecord } from './syncTransform';
 
 /** Extract a readable message from any thrown value (including Supabase PostgrestError). */
@@ -99,6 +100,16 @@ class SyncService {
       return {
         success: false,
         error: 'Supabase schema is not deployed yet. Apply supabase/schema.sql and retry.',
+      };
+    }
+
+    const session = await supabase.auth.getSession();
+    const userId = session.data.session?.user?.id ?? null;
+    if (userId && !(await hasLocalUserData(userId))) {
+      const result = await this.initialSync();
+      return {
+        success: result.success,
+        error: result.error,
       };
     }
 
@@ -187,6 +198,78 @@ class SyncService {
     return false;
   }
 
+  private isExpectedDefaultCategoryRlsFailure(item: SyncQueueItem, reason: string) {
+    const isDefaultCategory = item.entity === 'categories' && item.recordId.startsWith('cat_');
+    const isRls = reason.includes('row-level security') || reason.includes('42501');
+    return isDefaultCategory && isRls;
+  }
+
+  private hydrateUserProfileStore(record: Record<string, unknown>) {
+    const profile = record as unknown as UserProfile;
+    const store = useAppStore.getState();
+    store.setUserProfile(profile);
+    store.setTheme(profile.themePreference);
+  }
+
+  private async mergeRemoteRecords(
+    table: SyncableTable,
+    records: Record<string, unknown>[],
+    existingLocalById?: Map<string, Record<string, unknown>>,
+    compareWithLocal = true,
+  ) {
+    let changed = false;
+    let processedCount = 0;
+    const syncedAt = new Date().toISOString();
+
+    for (const record of records) {
+      const localRecordData = mapRemoteToLocalRecord(table, record);
+      const recordId = String(localRecordData.id);
+
+      if (localRecordData.deletedAt) {
+        await softDeleteLocalRecord(table, recordId, String(localRecordData.deletedAt));
+        existingLocalById?.delete(recordId);
+        changed = true;
+        processedCount += 1;
+        continue;
+      }
+
+      const localRecord = compareWithLocal ? existingLocalById?.get(recordId) : undefined;
+      const remoteUpdatedAt = new Date(String(localRecordData.updatedAt)).getTime();
+      const localUpdatedAt = localRecord?.updatedAt
+        ? new Date(String(localRecord.updatedAt)).getTime()
+        : 0;
+
+      if (!compareWithLocal || !localRecord || remoteUpdatedAt >= localUpdatedAt) {
+        if (table === 'user_profile') {
+          const remoteIsDefault = String(localRecordData.name) === 'Hisab Kitab User';
+          const localIsCustom =
+            localRecord?.name && String(localRecord.name) !== 'Hisab Kitab User';
+          if (remoteIsDefault && localIsCustom) {
+            localRecordData.name = localRecord.name;
+          }
+        }
+
+        const syncedRecord = {
+          ...localRecordData,
+          syncStatus: 'synced',
+          lastSyncedAt: syncedAt,
+        };
+
+        await upsertLocalRecord(table, syncedRecord);
+        existingLocalById?.set(recordId, syncedRecord);
+
+        if (table === 'user_profile') {
+          this.hydrateUserProfileStore(syncedRecord);
+        }
+
+        changed = true;
+        processedCount += 1;
+      }
+    }
+
+    return { changed, processedCount };
+  }
+
   /**
    * Tables ordered by FK dependency: parents before children.
    * Categories & accounts must exist before transactions reference them, etc.
@@ -233,7 +316,9 @@ class SyncService {
       } catch (error) {
         const reason = errorMessage(error);
         failures.push({ item, reason });
-        console.warn(`Sync push failed for ${item.entity}/${item.recordId}:`, reason);
+        if (!this.isExpectedDefaultCategoryRlsFailure(item, reason)) {
+          console.warn(`Sync push failed for ${item.entity}/${item.recordId}:`, reason);
+        }
 
         if (item.retryCount >= 2) {
           await sleep(backoffDelay(item.retryCount));
@@ -356,7 +441,14 @@ class SyncService {
         throw localErr;
       }
     } catch (error) {
-      await incrementSyncRetry(item.id, errorMessage(error) || 'Push failed');
+      const reason = errorMessage(error) || 'Push failed';
+      if (this.isExpectedDefaultCategoryRlsFailure(item, reason)) {
+        await markRecordSyncStatus('categories', item.recordId, 'synced');
+        await removeFromSyncQueue(item.id);
+        return;
+      }
+
+      await incrementSyncRetry(item.id, reason);
       throw error;
     }
   }
@@ -411,13 +503,13 @@ class SyncService {
     }
 
     const lastSyncAt = await getLastSyncTimestamp();
-    let changed = false;
     const allSyncable = new Set(getSyncableTables());
 
     for (const tier of SyncService.PULL_TIERS) {
       const tablesToPull = tier.filter((t) => allSyncable.has(t));
       if (tablesToPull.length === 0) continue;
 
+      let tierChanged = false;
       const results = await Promise.allSettled(
         tablesToPull.map(async (table) => {
           let query = supabase
@@ -435,53 +527,17 @@ class SyncService {
               throw error;
             }
             console.warn(`Pull failed for table ${table}:`, error.message);
-            return;
+            return false;
           }
 
-          for (const record of data ?? []) {
-            const localRecordData = mapRemoteToLocalRecord(
-              table,
-              record as Record<string, unknown>,
-            );
-
-            if (localRecordData.deletedAt) {
-              await softDeleteLocalRecord(
-                table,
-                String(localRecordData.id),
-                String(localRecordData.deletedAt),
-              );
-              changed = true;
-              continue;
-            }
-
-            const localRows = await fetchTableRows<Record<string, unknown>>(table, 'id = ?', [
-              String(localRecordData.id),
-            ]);
-            const localRecord = localRows[0];
-            const remoteUpdatedAt = new Date(String(localRecordData.updatedAt)).getTime();
-            const localUpdatedAt = localRecord?.updatedAt
-              ? new Date(String(localRecord.updatedAt)).getTime()
-              : 0;
-
-            if (!localRecord || remoteUpdatedAt >= localUpdatedAt) {
-              // Bug 4 fix: protect custom user profile name from being overwritten by default
-              if (table === 'user_profile') {
-                const remoteIsDefault = String(localRecordData.name) === 'Hisab Kitab User';
-                const localIsCustom =
-                  localRecord?.name && String(localRecord.name) !== 'Hisab Kitab User';
-                if (remoteIsDefault && localIsCustom) {
-                  localRecordData.name = localRecord.name;
-                }
-              }
-
-              await upsertLocalRecord(table, {
-                ...localRecordData,
-                syncStatus: 'synced',
-                lastSyncedAt: new Date().toISOString(),
-              });
-              changed = true;
-            }
-          }
+          const localRows = await fetchTableRows<Record<string, unknown>>(table);
+          const localById = new Map(localRows.map((row) => [String(row.id), row]));
+          const mergeResult = await this.mergeRemoteRecords(
+            table,
+            (data ?? []) as Record<string, unknown>[],
+            localById,
+          );
+          return mergeResult.changed;
         }),
       );
 
@@ -492,12 +548,14 @@ class SyncService {
           if (this.isRemoteSchemaMissing(err)) {
             throw err;
           }
+        } else if (result.value) {
+          tierChanged = true;
         }
       }
-    }
 
-    if (changed) {
-      useAppStore.getState().bumpDataRevision();
+      if (tierChanged) {
+        useAppStore.getState().bumpDataRevision();
+      }
     }
   }
 
@@ -540,6 +598,7 @@ class SyncService {
         const tablesToPull = tier.filter((t) => allSyncable.has(t));
         if (tablesToPull.length === 0) continue;
 
+        let tierChanged = false;
         const results = await Promise.allSettled(
           tablesToPull.map(async (table) => {
             const { data, error } = await supabase
@@ -554,23 +613,27 @@ class SyncService {
               return 0;
             }
 
-            for (const record of data ?? []) {
-              const localData = mapRemoteToLocalRecord(table, record as Record<string, unknown>);
-              await upsertLocalRecord(table, {
-                ...localData,
-                syncStatus: 'synced',
-                lastSyncedAt: new Date().toISOString(),
-              });
-            }
-
-            return data?.length ?? 0;
+            const mergeResult = await this.mergeRemoteRecords(
+              table,
+              (data ?? []) as Record<string, unknown>[],
+              undefined,
+              false,
+            );
+            return mergeResult.processedCount;
           }),
         );
 
         for (const result of results) {
           if (result.status === 'fulfilled' && typeof result.value === 'number') {
             totalPulled += result.value;
+            if (result.value > 0) {
+              tierChanged = true;
+            }
           }
+        }
+
+        if (tierChanged) {
+          useAppStore.getState().bumpDataRevision();
         }
       }
 

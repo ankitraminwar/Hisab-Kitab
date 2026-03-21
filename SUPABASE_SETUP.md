@@ -84,7 +84,7 @@ Current auth behavior in the app:
 - Authenticated users → redirected away from auth screens
 - Logout → clears local SQLite data, resets app store, returns to `/login`
 - Biometric lock preference stored locally and mirrored to `user_profile`
-- If a signed-in user is missing `user_profile`, the app creates it locally and syncs on next connection
+- If local user data is missing after sign-in, the app forces a full pull from Supabase before showing finance data
 
 ## 5. Sync Behavior
 
@@ -103,7 +103,7 @@ The app is fully offline-first:
 SMS import requires a **native Android build** (not Expo Go):
 
 ```bash
-npm run android   # npx expo run:android
+yarn android   # expo run:android
 ```
 
 - Uses `react-native-get-sms-android ^2.1.0`
@@ -118,7 +118,7 @@ npm run android   # npx expo run:android
 Widgets also require a native Android build:
 
 ```bash
-npm run android
+yarn android
 ```
 
 Three widgets available:

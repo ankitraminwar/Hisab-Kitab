@@ -19,7 +19,7 @@ import { registerWidgetTaskHandler } from 'react-native-android-widget';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 import { ScreenErrorBoundary } from '@/components/common';
-import { clearLocalData, getLastSyncTimestamp, initializeDatabase } from '@/database';
+import { clearLocalData, hasLocalUserData, initializeDatabase } from '@/database';
 import { useTheme, type ThemeColors } from '@/hooks/useTheme';
 import { queryClient } from '@/lib/queryClient';
 import {
@@ -101,6 +101,25 @@ export default function RootLayout() {
     const withTimeout = <T,>(promise: Promise<T>, ms: number, fallback: T): Promise<T> =>
       Promise.race([promise, new Promise<T>((resolve) => setTimeout(() => resolve(fallback), ms))]);
 
+    const hydrateAuthenticatedSession = async (nextSession: Session, reason: string) => {
+      try {
+        const shouldRunInitialSync = !(await hasLocalUserData(nextSession.user.id));
+        if (shouldRunInitialSync) {
+          await syncService.initialSync();
+        } else {
+          await syncService.sync(reason);
+        }
+
+        const syncedProfile = await UserProfileService.getProfile();
+        if (syncedProfile) {
+          setTheme(syncedProfile.themePreference);
+          setUserProfile(syncedProfile);
+        }
+      } catch (error) {
+        console.warn('Session hydration failed', error);
+      }
+    };
+
     const bootstrap = async () => {
       try {
         await withTimeout(initializeDatabase(), 5000, undefined);
@@ -134,14 +153,7 @@ export default function RootLayout() {
             monthlyReportReminder: true,
           });
         } else {
-          if (nextSession) {
-            const createdProfile = await UserProfileService.upsertProfile({
-              userId: nextSession.user.id,
-              email: nextSession.user.email ?? '',
-              themePreference: 'system',
-            });
-            setUserProfile(createdProfile);
-          }
+          setUserProfile(null);
           setTheme('system');
         }
 
@@ -152,7 +164,7 @@ export default function RootLayout() {
         smsImportService.start();
 
         if (nextSession) {
-          void syncService.requestSync('app-start');
+          void hydrateAuthenticatedSession(nextSession, 'app-start');
           void smsImportService.run();
         }
       } catch (error) {
@@ -181,20 +193,13 @@ export default function RootLayout() {
       }
 
       if (nextSession) {
-        if (!previousSession) {
-          // Fresh login: check if this is first time
-          const lastSync = await getLastSyncTimestamp();
-          if (!lastSync || lastSync === '1970-01-01T00:00:00.000Z') {
-            void syncService.initialSync();
-          } else {
-            void syncService.requestSync('auth-state-change');
-          }
-        } else {
-          void syncService.requestSync('auth-state-change');
-        }
         setLocked(useAppStore.getState().biometricsEnabled);
         smsImportService.start();
         void smsImportService.run();
+        void hydrateAuthenticatedSession(
+          nextSession,
+          previousSession ? 'auth-state-change' : 'login-hydration',
+        );
       }
     });
 

@@ -260,10 +260,10 @@ Run `supabase/schema.sql` in the Supabase SQL editor. Single file — all tables
 
 ## Code Quality Status
 
-| Check          | Command             | Status        |
-| -------------- | ------------------- | ------------- |
-| TypeScript     | `npm run typecheck` | ✅ 0 errors   |
-| ESLint         | `npm run lint`      | ✅ 0 warnings |
-| `as any` casts | —                   | ✅ 0          |
-| `: any` types  | —                   | ✅ 0          |
-| Formatting     | `npm run format`    | ✅ Prettier   |
+| Check          | Command          | Status        |
+| -------------- | ---------------- | ------------- |
+| TypeScript     | `yarn typecheck` | ✅ 0 errors   |
+| ESLint         | `yarn lint`      | ✅ 0 warnings |
+| `as any` casts | —                | ✅ 0          |
+| `: any` types  | —                | ✅ 0          |
+| Formatting     | `yarn format`    | ✅ Prettier   |

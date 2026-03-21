@@ -54,14 +54,14 @@ EXPO_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
 2. Install and start:
 
 ```bash
-npm install
-npm run start
+yarn install
+yarn start
 ```
 
 3. For SMS import or Android widgets, use a native build:
 
 ```bash
-npm run android   # npx expo run:android
+yarn android   # expo run:android
 ```
 
 ## Backend Setup
@@ -87,13 +87,13 @@ Without backend setup the app runs in full local-only mode.
 ## Commands
 
 ```bash
-npm run start        # Start Expo dev server
-npm run android      # Native Android build & run
-npm run typecheck    # tsc --noEmit (must stay at 0 errors)
-npm run lint         # ESLint --max-warnings 0 (must stay at 0)
-npm run format       # Prettier
-npm run doctor       # Expo doctor
-npm test             # Alias for typecheck
+yarn start        # Start Expo dev server
+yarn android      # Native Android build & run
+yarn typecheck    # tsc --noEmit (must stay at 0 errors)
+yarn lint         # ESLint --max-warnings 0 (must stay at 0)
+yarn format       # Prettier
+yarn doctor       # Expo doctor
+yarn test         # Alias for typecheck
 ```
 
 ## Docs

@@ -342,7 +342,7 @@ const { id, txId } = useLocalSearchParams<{ id: string; txId?: string }>();
 - **Percentage widths** → use `DimensionValue` (from `react-native`).
 - **`PaymentMethod`** is typed as `string` in `types.ts` — not a union — because SMS import creates transactions with varied payment method strings. Do not change it to a union.
 - **New interfaces** → add to `src/utils/types.ts`.
-- **Run before committing:** `npm run typecheck` must be 0 errors.
+- **Run before committing:** `yarn typecheck` must be 0 errors.
 
 **Import alias:** `tsconfig.json` maps `@/*` → `./src/*`:
 
@@ -363,7 +363,7 @@ Do NOT write `@/src/...` — the `src/` is already included in the alias resolut
 
 ## 10. ESLint Rules
 
-- Run `npm run lint` — must output 0 warnings.
+- Run `yarn lint` — must output 0 warnings.
 - Wrap async functions in `useCallback` when used as `useEffect` deps.
 - All `useEffect` dependencies must be exhaustive.
 - No unused variables or imports.
@@ -578,9 +578,9 @@ Migrations run on every app start, are tracked in the `_migrations` table, and a
 Before considering any task done:
 
 ```bash
-npm run typecheck   # Must output: Found 0 errors
-npm run lint        # Must output: 0 warnings
-npm run format      # Run Prettier (auto-fixes formatting)
+yarn typecheck   # Must output: Found 0 errors
+yarn lint        # Must output: 0 warnings
+yarn format      # Run Prettier (auto-fixes formatting)
 ```
 
 If either of the first two commands fails, the task is **not complete**.

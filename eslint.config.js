@@ -9,10 +9,9 @@ module.exports = defineConfig([
   },
   {
     settings: {
-      'import/ignore': ['react-native', '@react-native-community', '@env'],
+      'import/ignore': ['react-native', '@react-native-community'],
     },
     rules: {
-      'import/no-unresolved': ['error', { ignore: ['^@env$'] }],
       'import/namespace': 'off',
       'import/no-named-as-default': 'off',
       'import/no-named-as-default-member': 'off',

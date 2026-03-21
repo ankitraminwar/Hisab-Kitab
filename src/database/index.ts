@@ -418,6 +418,10 @@ const localTablesToClear = [
   'accounts',
   'categories',
   'user_profile',
+  'recurring_templates',
+  'split_expenses',
+  'split_members',
+  'payment_methods',
   'sync_queue',
   'sync_state',
 ] as const;
@@ -646,6 +650,48 @@ export const setLastSyncTimestamp = async (timestamp: string) =>
   setSyncState('lastSuccessfulSyncAt', timestamp);
 
 export const getSyncableTables = (): readonly SyncableTable[] => SYNCABLE_TABLES;
+
+export const hasLocalUserData = async (userId: string | null): Promise<boolean> => {
+  const database = getDatabase();
+
+  const userScopedTables = [
+    'user_profile',
+    'accounts',
+    'transactions',
+    'budgets',
+    'goals',
+    'assets',
+    'liabilities',
+    'net_worth_history',
+    'recurring_templates',
+    'split_expenses',
+    'split_members',
+  ] as const;
+
+  for (const table of userScopedTables) {
+    const row = await database.getFirstAsync<{ count: number }>(
+      `SELECT COUNT(*) as count FROM ${table} WHERE deletedAt IS NULL AND userId = ?`,
+      [userId],
+    );
+    if ((row?.count ?? 0) > 0) {
+      return true;
+    }
+  }
+
+  const customCategoryCount = await database.getFirstAsync<{ count: number }>(
+    'SELECT COUNT(*) as count FROM categories WHERE deletedAt IS NULL AND isCustom = 1 AND userId = ?',
+    [userId],
+  );
+  if ((customCategoryCount?.count ?? 0) > 0) {
+    return true;
+  }
+
+  const customPaymentMethodCount = await database.getFirstAsync<{ count: number }>(
+    'SELECT COUNT(*) as count FROM payment_methods WHERE deletedAt IS NULL AND isCustom = 1 AND userId = ?',
+    [userId],
+  );
+  return (customPaymentMethodCount?.count ?? 0) > 0;
+};
 
 export const clearLocalData = async (): Promise<void> => {
   const database = getDatabase();

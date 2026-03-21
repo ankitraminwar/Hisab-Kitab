@@ -269,7 +269,7 @@ Widget task handler: `src/widgets/widgetTaskHandler.ts`
 - **TypeScript**: strict mode, `tsc --noEmit` = 0 errors
 - **ESLint**: `eslint . --max-warnings 0` = 0 warnings
 - **No `any`**: all `as any` and `: any` eliminated; replaced with `IoniconsName`, `ThemeColors`, `SmsMessage`, `DimensionValue`, `SyncableTable` proper types
-- **Formatting**: Prettier enforced via `npm run format`; pre-commit hook via husky + lint-staged
+- **Formatting**: Prettier enforced via `yarn format`; pre-commit hook via husky + lint-staged
 
 ## Build Optimizations
 
