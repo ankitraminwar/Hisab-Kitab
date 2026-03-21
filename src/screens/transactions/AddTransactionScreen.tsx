@@ -2,7 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import * as Haptics from 'expo-haptics';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   KeyboardAvoidingView,
   Modal,
@@ -843,7 +843,7 @@ const createStyles = (colors: ThemeColors) =>
     },
     notesInput: {
       flex: 1,
-      minHeight: 48,
+      minHeight: 24,
       fontSize: 14,
       fontWeight: '600',
       color: colors.textPrimary,
