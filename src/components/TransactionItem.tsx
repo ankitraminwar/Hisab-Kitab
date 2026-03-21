@@ -4,7 +4,12 @@ import * as Haptics from 'expo-haptics';
 import React, { memo, useCallback, useMemo } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
-import Animated, { useAnimatedStyle, useSharedValue, withSpring } from 'react-native-reanimated';
+import Animated, {
+  runOnJS,
+  useAnimatedStyle,
+  useSharedValue,
+  withSpring,
+} from 'react-native-reanimated';
 import { useTheme, type ThemeColors } from '../hooks/useTheme';
 import { SPACING, TYPOGRAPHY, formatCurrency } from '../utils/constants';
 import type { Transaction } from '../utils/types';
@@ -33,27 +38,32 @@ const TransactionItem: React.FC<TransactionItemProps> = ({ item, onPress, onLong
 
   const tapGesture = Gesture?.Tap()
     .onBegin(() => {
+      'worklet';
       scale.value = withSpring(0.97, SPRING_CONFIG);
     })
     .onFinalize(() => {
+      'worklet';
       scale.value = withSpring(1, SPRING_CONFIG);
     })
     .onEnd(() => {
+      'worklet';
       if (onPress) {
-        handlePress();
+        runOnJS(handlePress)();
       }
     });
 
   const longPressGesture = Gesture?.LongPress()
     ?.minDuration(400)
     ?.onStart(() => {
+      'worklet';
       scale.value = withSpring(0.95, SPRING_CONFIG);
-      void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      runOnJS(Haptics.impactAsync)(Haptics.ImpactFeedbackStyle.Light);
       if (onLongPress) {
-        handleLongPress();
+        runOnJS(handleLongPress)();
       }
     })
     ?.onFinalize(() => {
+      'worklet';
       scale.value = withSpring(1, SPRING_CONFIG);
     });
 

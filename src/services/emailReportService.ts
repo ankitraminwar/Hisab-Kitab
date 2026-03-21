@@ -55,7 +55,7 @@ export async function sendMonthlyReport(): Promise<{
       ctaUrl: 'hisabkitab:///',
     },
   });
-
+  console.log('Email report sent:', { email, error });
   if (error) return { ok: false, error: error.message };
   return { ok: true };
 }

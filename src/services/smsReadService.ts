@@ -37,7 +37,7 @@ export const SmsReadService = {
     try {
       const granted = await PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.READ_SMS, {
         title: 'SMS Permission',
-        message: 'Hisab-Kitab needs access to your SMS to import transactions.',
+        message: 'Hisab Kitab needs access to your SMS to import transactions.',
         buttonNeutral: 'Ask Me Later',
         buttonNegative: 'Cancel',
         buttonPositive: 'OK',

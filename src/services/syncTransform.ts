@@ -64,8 +64,17 @@ const tableLocalToRemote: Partial<Record<SyncableTable, Record<string, string>>>
     notificationsEnabled: 'notifications_enabled',
     biometricEnabled: 'biometric_enabled',
   },
-  split_expenses: {},
-  split_members: {},
+  split_expenses: {
+    transactionId: 'transaction_id',
+    paidByUserId: 'paid_by_user_id',
+    totalAmount: 'total_amount',
+    splitMethod: 'split_method',
+  },
+  split_members: {
+    splitExpenseId: 'split_expense_id',
+    shareAmount: 'share_amount',
+    sharePercent: 'share_percent',
+  },
   payment_methods: {
     isCustom: 'is_custom',
   },

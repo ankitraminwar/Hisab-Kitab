@@ -55,7 +55,7 @@ export default function BudgetsScreen() {
     setRefreshing(false);
   };
 
-  const totalBudget = budgets.reduce((s, b) => s + b.limit_amount, 0);
+  const totalBudget = budgets.reduce((s, b) => s + b.limitAmount, 0);
   const totalSpent = budgets.reduce((s, b) => s + b.spent, 0);
 
   const prevMonth = () => {
@@ -187,7 +187,7 @@ const BudgetCard = ({
   reload: () => void;
 }) => {
   const [showEdit, setShowEdit] = useState(false);
-  const progress = budget.spent / budget.limit_amount;
+  const progress = budget.spent / budget.limitAmount;
   const isOver = progress >= 1;
   const isWarning = progress >= 0.8 && !isOver;
   const color = isOver
@@ -210,7 +210,7 @@ const BudgetCard = ({
               </Text>
             </View>
             <Text style={[cardStyles.amount, { color: colors.textPrimary }]}>
-              {formatCurrency(budget.limit_amount)}
+              {formatCurrency(budget.limitAmount)}
             </Text>
           </View>
 
@@ -227,8 +227,8 @@ const BudgetCard = ({
               ]}
             >
               {isOver
-                ? `${formatCurrency(budget.spent - budget.limit_amount)} over`
-                : `${formatCurrency(budget.limit_amount - budget.spent)} left`}
+                ? `${formatCurrency(budget.spent - budget.limitAmount)} over`
+                : `${formatCurrency(budget.limitAmount - budget.spent)} left`}
             </Text>
           </View>
         </Card>
@@ -280,7 +280,7 @@ const AddBudgetModal = ({
       month,
       year: Number(year),
       categoryId,
-      limit_amount: Number(amount),
+      limitAmount: Number(amount),
       alertAt: Number(amount) * 0.8,
     });
     setLoading(false);
@@ -371,14 +371,14 @@ const EditBudgetModal = ({
   onSave: () => void;
   colors: ThemeColors;
 }) => {
-  const [amount, setAmount] = useState(String(budget.limit_amount));
+  const [amount, setAmount] = useState(String(budget.limitAmount));
   const [loading, setLoading] = useState(false);
   const styles = useMemo(() => modalStyles(colors), [colors]);
 
   const handleSave = async () => {
     if (!amount || Number(amount) <= 0) return;
     setLoading(true);
-    await BudgetService.update(budget.id, { limit_amount: Number(amount) });
+    await BudgetService.update(budget.id, { limitAmount: Number(amount) });
     setLoading(false);
     onSave();
   };

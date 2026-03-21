@@ -37,6 +37,16 @@ const createSyncMetadata = () => ({
   deletedAt: null,
 });
 
+type BudgetRow = Budget & {
+  limit_amount?: number | string;
+};
+
+const parseBudget = (row: BudgetRow): Budget => ({
+  ...row,
+  limitAmount: Number(row.limitAmount ?? row.limit_amount) || 0,
+  spent: Number(row.spent) || 0,
+});
+
 const queueEntitySync = async (
   table: string,
   id: string,
@@ -242,7 +252,7 @@ export const CategoryService = {
 
 export const BudgetService = {
   async getForMonth(year: number, month: string): Promise<Budget[]> {
-    return getDatabase().getAllAsync<Budget>(
+    const rows = await getDatabase().getAllAsync<BudgetRow>(
       `SELECT b.*,
               c.name as categoryName,
               c.icon as categoryIcon,
@@ -260,6 +270,7 @@ export const BudgetService = {
        ORDER BY c.name ASC`,
       [year, month],
     );
+    return rows.map(parseBudget);
   },
 
   async create(
@@ -292,7 +303,7 @@ export const BudgetService = {
       [
         budget.id,
         budget.categoryId,
-        budget.limit_amount,
+        budget.limitAmount,
         budget.spent,
         budget.month,
         budget.year,
@@ -310,14 +321,16 @@ export const BudgetService = {
     return budget.id;
   },
 
-  async update(id: string, data: Partial<Pick<Budget, 'limit_amount' | 'alertAt'>>) {
-    const existing = await getDatabase().getFirstAsync<Budget>(
+  async update(id: string, data: Partial<Pick<Budget, 'limitAmount' | 'alertAt'>>) {
+    const existingRow = await getDatabase().getFirstAsync<BudgetRow>(
       'SELECT * FROM budgets WHERE id = ?',
       [id],
     );
-    if (!existing) {
+    if (!existingRow) {
       throw new Error('Budget not found');
     }
+
+    const existing = parseBudget(existingRow);
 
     const updatedAt = new Date().toISOString();
     const budget = {
@@ -331,7 +344,7 @@ export const BudgetService = {
       `UPDATE budgets
        SET limit_amount = COALESCE(?, limit_amount), alertAt = COALESCE(?, alertAt), updatedAt = ?, syncStatus = 'pending'
        WHERE id = ?`,
-      [data.limit_amount ?? null, data.alertAt ?? null, updatedAt, id],
+      [data.limitAmount ?? null, data.alertAt ?? null, updatedAt, id],
     );
 
     await queueEntitySync('budgets', id, budget as unknown as Record<string, unknown>);

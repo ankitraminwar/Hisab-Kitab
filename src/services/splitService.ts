@@ -26,6 +26,37 @@ const createSyncMetadata = () => ({
   deletedAt: null,
 });
 
+type SplitExpenseRow = SplitExpense & {
+  transaction_id?: string;
+  paid_by_user_id?: string;
+  total_amount?: number | string;
+  split_method?: SplitExpense['splitMethod'];
+};
+
+type SplitMemberRow = SplitMember & {
+  split_expense_id?: string;
+  share_amount?: number | string;
+  share_percent?: number | string | null;
+};
+
+const parseSplitExpense = (row: SplitExpenseRow): SplitExpense => ({
+  ...row,
+  transactionId: row.transactionId ?? row.transaction_id ?? '',
+  paidByUserId: row.paidByUserId ?? row.paid_by_user_id ?? '',
+  totalAmount: Number(row.totalAmount ?? row.total_amount) || 0,
+  splitMethod: row.splitMethod ?? row.split_method ?? 'equal',
+});
+
+const parseSplitMember = (row: SplitMemberRow): SplitMember => ({
+  ...row,
+  splitExpenseId: row.splitExpenseId ?? row.split_expense_id ?? '',
+  shareAmount: Number(row.shareAmount ?? row.share_amount) || 0,
+  sharePercent:
+    row.sharePercent != null || row.share_percent != null
+      ? Number(row.sharePercent ?? row.share_percent) || 0
+      : undefined,
+});
+
 const queueEntitySync = async (
   table: string,
   id: string,
@@ -151,27 +182,32 @@ export const SplitService = {
   async getSplitsForTransaction(
     transactionId: string,
   ): Promise<{ expense: SplitExpense; members: SplitMember[] } | null> {
-    const expense = await getDatabase().getFirstAsync<SplitExpense>(
+    const expenseRow = await getDatabase().getFirstAsync<SplitExpenseRow>(
       'SELECT * FROM split_expenses WHERE transaction_id = ? AND deletedAt IS NULL',
       [transactionId],
     );
 
-    if (!expense) return null;
+    if (!expenseRow) return null;
 
-    const members = await getDatabase().getAllAsync<SplitMember>(
+    const expense = parseSplitExpense(expenseRow);
+
+    const memberRows = await getDatabase().getAllAsync<SplitMemberRow>(
       'SELECT * FROM split_members WHERE split_expense_id = ? AND deletedAt IS NULL',
       [expense.id],
     );
+    const members = memberRows.map(parseSplitMember);
 
     return { expense, members };
   },
 
   async markSharePaid(memberId: string, status: SplitStatus) {
-    const existing = await getDatabase().getFirstAsync<SplitMember>(
+    const existingRow = await getDatabase().getFirstAsync<SplitMemberRow>(
       'SELECT * FROM split_members WHERE id = ?',
       [memberId],
     );
-    if (!existing) throw new Error('Split member not found');
+    if (!existingRow) throw new Error('Split member not found');
+
+    const existing = parseSplitMember(existingRow);
 
     const updatedAt = new Date().toISOString();
 
@@ -213,11 +249,14 @@ export const SplitService = {
       transactionDate?: string;
     }[] = [];
 
-    for (const expense of expenses) {
-      const members = await getDatabase().getAllAsync<SplitMember>(
+    for (const expenseRow of expenses) {
+      const expense = parseSplitExpense(expenseRow);
+
+      const memberRows = await getDatabase().getAllAsync<SplitMemberRow>(
         'SELECT * FROM split_members WHERE split_expense_id = ? AND deletedAt IS NULL',
         [expense.id],
       );
+      const members = memberRows.map(parseSplitMember);
 
       const tx = await getDatabase().getFirstAsync<{
         merchant: string | null;
@@ -226,15 +265,8 @@ export const SplitService = {
       }>('SELECT merchant, notes, date FROM transactions WHERE id = ?', [expense.transactionId]);
 
       results.push({
-        expense: {
-          ...expense,
-          totalAmount: Number(expense.totalAmount) || 0,
-        },
-        members: members.map((m) => ({
-          ...m,
-          shareAmount: Number(m.shareAmount) || 0,
-          sharePercent: m.sharePercent != null ? Number(m.sharePercent) : undefined,
-        })),
+        expense,
+        members,
         transactionMerchant: tx?.merchant || tx?.notes || undefined,
         transactionDate: tx?.date,
       });
@@ -250,16 +282,19 @@ export const SplitService = {
     transactionMerchant?: string;
     transactionDate?: string;
   } | null> {
-    const expense = await getDatabase().getFirstAsync<SplitExpense>(
+    const expenseRow = await getDatabase().getFirstAsync<SplitExpenseRow>(
       'SELECT * FROM split_expenses WHERE id = ? AND deletedAt IS NULL',
       [splitId],
     );
-    if (!expense) return null;
+    if (!expenseRow) return null;
 
-    const members = await getDatabase().getAllAsync<SplitMember>(
+    const expense = parseSplitExpense(expenseRow);
+
+    const memberRows = await getDatabase().getAllAsync<SplitMemberRow>(
       'SELECT * FROM split_members WHERE split_expense_id = ? AND deletedAt IS NULL',
       [expense.id],
     );
+    const members = memberRows.map(parseSplitMember);
 
     const tx = await getDatabase().getFirstAsync<{
       merchant: string | null;
@@ -268,15 +303,8 @@ export const SplitService = {
     }>('SELECT merchant, notes, date FROM transactions WHERE id = ?', [expense.transactionId]);
 
     return {
-      expense: {
-        ...expense,
-        totalAmount: Number(expense.totalAmount) || 0,
-      },
-      members: members.map((m) => ({
-        ...m,
-        shareAmount: Number(m.shareAmount) || 0,
-        sharePercent: m.sharePercent != null ? Number(m.sharePercent) : undefined,
-      })),
+      expense,
+      members,
       transactionMerchant: tx?.merchant || tx?.notes || undefined,
       transactionDate: tx?.date,
     };
@@ -284,11 +312,13 @@ export const SplitService = {
 
   /** Record a payment from a split member */
   async recordPayment(memberId: string, amountPaid: number) {
-    const member = await getDatabase().getFirstAsync<SplitMember>(
+    const memberRow = await getDatabase().getFirstAsync<SplitMemberRow>(
       'SELECT * FROM split_members WHERE id = ?',
       [memberId],
     );
-    if (!member) throw new Error('Member not found');
+    if (!memberRow) throw new Error('Member not found');
+
+    const member = parseSplitMember(memberRow);
 
     const remaining = (Number(member.shareAmount) || 0) - amountPaid;
     const newStatus: SplitStatus = remaining <= 0 ? 'paid' : 'pending';
@@ -320,10 +350,11 @@ export const SplitService = {
     const now = new Date().toISOString();
 
     // Soft-delete members first
-    const members = await getDatabase().getAllAsync<SplitMember>(
+    const memberRows = await getDatabase().getAllAsync<SplitMemberRow>(
       'SELECT * FROM split_members WHERE split_expense_id = ? AND deletedAt IS NULL',
       [splitId],
     );
+    const members = memberRows.map(parseSplitMember);
 
     for (const member of members) {
       await getDatabase().runAsync(
@@ -349,11 +380,12 @@ export const SplitService = {
       [now, now, splitId],
     );
 
-    const expense = await getDatabase().getFirstAsync<SplitExpense>(
+    const expenseRow = await getDatabase().getFirstAsync<SplitExpenseRow>(
       'SELECT * FROM split_expenses WHERE id = ?',
       [splitId],
     );
-    if (expense) {
+    if (expenseRow) {
+      const expense = parseSplitExpense(expenseRow);
       await queueEntitySync(
         'split_expenses',
         splitId,

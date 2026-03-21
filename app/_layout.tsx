@@ -39,6 +39,23 @@ import { widgetTaskHandler } from '@/widgets/widgetTaskHandler';
 // Suppress the expo-keep-awake warning that fires in dev mode
 LogBox.ignoreLogs(['Unable to activate keep awake']);
 
+type GlobalErrorHandler = (error: Error, isFatal?: boolean) => void;
+type ErrorUtilsShape = {
+  getGlobalHandler?: () => GlobalErrorHandler;
+  setGlobalHandler?: (handler: GlobalErrorHandler) => void;
+};
+
+const errorUtils = (globalThis as typeof globalThis & { ErrorUtils?: ErrorUtilsShape }).ErrorUtils;
+const previousGlobalHandler = errorUtils?.getGlobalHandler?.();
+
+errorUtils?.setGlobalHandler?.((error, isFatal) => {
+  if (error.message.includes('Unable to activate keep awake')) {
+    return;
+  }
+
+  previousGlobalHandler?.(error, isFatal);
+});
+
 // Register Android widget task handler at module level
 if (Platform.OS === 'android') {
   registerWidgetTaskHandler(widgetTaskHandler);

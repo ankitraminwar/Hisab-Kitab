@@ -35,13 +35,13 @@ export default function NotificationsScreen() {
     // Budget-based notifications
     const budgets = await BudgetService.getForMonth(year, month);
     for (const b of budgets) {
-      if (b.limit_amount <= 0) continue;
-      const pct = b.spent / b.limit_amount;
+      if (b.limitAmount <= 0) continue;
+      const pct = b.spent / b.limitAmount;
       if (pct >= 1) {
         items.push({
           id: `budget-over-${b.id}`,
           title: 'Budget Exceeded',
-          message: `You have exceeded your ${b.categoryName ?? 'budget'} limit by ${formatCurrency(b.spent - b.limit_amount)}.`,
+          message: `You have exceeded your ${b.categoryName ?? 'budget'} limit by ${formatCurrency(b.spent - b.limitAmount)}.`,
           type: 'alert',
           time: 'This month',
           isRead: false,
@@ -50,7 +50,7 @@ export default function NotificationsScreen() {
         items.push({
           id: `budget-warn-${b.id}`,
           title: 'Budget Warning',
-          message: `${b.categoryName ?? 'Budget'} is ${Math.round(pct * 100)}% used. ${formatCurrency(b.limit_amount - b.spent)} remaining.`,
+          message: `${b.categoryName ?? 'Budget'} is ${Math.round(pct * 100)}% used. ${formatCurrency(b.limitAmount - b.spent)} remaining.`,
           type: 'alert',
           time: 'This month',
           isRead: false,

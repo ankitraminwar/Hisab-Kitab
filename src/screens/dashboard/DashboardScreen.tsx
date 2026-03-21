@@ -166,8 +166,8 @@ const BudgetAlertCard: React.FC<{
   budget: Budget;
   colors: ReturnType<typeof useTheme>['colors'];
 }> = ({ budget, colors }) => {
-  const progress = budget.limit_amount > 0 ? budget.spent / budget.limit_amount : 0;
-  const remaining = Math.max(0, budget.limit_amount - budget.spent);
+  const progress = budget.limitAmount > 0 ? budget.spent / budget.limitAmount : 0;
+  const remaining = Math.max(0, budget.limitAmount - budget.spent);
   const pct = Math.round(progress * 100);
   const isOver = pct >= 100;
 
@@ -311,7 +311,7 @@ export default function DashboardScreen() {
   };
 
   // All over-70% budget alerts
-  const alertBudgets = budgets.filter((b) => b.limit_amount > 0 && b.spent / b.limit_amount >= 0.7);
+  const alertBudgets = budgets.filter((b) => b.limitAmount > 0 && b.spent / b.limitAmount >= 0.7);
 
   const savingsAmount = dashboardStats.totalIncome - dashboardStats.totalExpenses;
   const savingsProgress =
@@ -340,7 +340,7 @@ export default function DashboardScreen() {
               <Ionicons name="wallet" size={20} color={colors.primary} />
             </View>
             <View>
-              <Text style={styles.appName}>Hisab-Kitab</Text>
+              <Text style={styles.appName}>Hisab Kitab</Text>
               <Text style={styles.welcomeText}>Welcome, {displayName}</Text>
             </View>
           </View>

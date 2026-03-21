@@ -337,6 +337,24 @@ export default function AddTransactionScreen() {
             </Text>
           </View>
 
+          <View style={styles.notesCard}>
+            <View style={styles.notesInputWrap}>
+              <Ionicons name="document-text-outline" size={18} color={colors.textMuted} />
+              <TextInput
+                value={notes}
+                onChangeText={(text) => {
+                  if (text.length <= 120) setNotes(text);
+                }}
+                placeholder="Add a note for this transaction"
+                placeholderTextColor={colors.textMuted}
+                style={styles.notesInput}
+                multiline
+                textAlignVertical="top"
+              />
+            </View>
+            <Text style={styles.notesCounter}>{notes.length}/120</Text>
+          </View>
+
           {/* Categories Grid */}
           <CategoryGrid
             categories={filteredCategories}
@@ -392,43 +410,20 @@ export default function AddTransactionScreen() {
               <Ionicons name="chevron-forward" size={20} color={colors.textMuted} />
             </TouchableOpacity>
 
-            <View style={styles.halfRows}>
-              <TouchableOpacity style={styles.halfRow} onPress={() => setShowDatePicker(true)}>
-                <Ionicons name="calendar" size={20} color={colors.textMuted} />
-                <View style={styles.detailContent}>
-                  <Text style={styles.detailLabel}>DATE</Text>
-                  <Text style={styles.detailText}>
-                    {toDateString(selectedDate) === toDateString(new Date())
-                      ? 'Today'
-                      : toDateString(selectedDate)}
-                  </Text>
-                </View>
-              </TouchableOpacity>
-              <View style={styles.halfRow}>
-                <Ionicons name="document-text" size={20} color={colors.textMuted} />
-                <View style={styles.detailContent}>
-                  <Text style={styles.detailLabel}>NOTES</Text>
-                  <TextInput
-                    value={notes}
-                    onChangeText={(text) => {
-                      if (text.length <= 120) setNotes(text);
-                    }}
-                    placeholder="Add notes..."
-                    placeholderTextColor={colors.textMuted}
-                    style={[styles.detailText, { padding: 0 }]}
-                  />
-                  <Text
-                    style={{
-                      fontSize: 10,
-                      color: colors.textMuted,
-                      marginTop: 4,
-                    }}
-                  >
-                    {notes.length}/120
-                  </Text>
-                </View>
+            <TouchableOpacity style={styles.detailRow} onPress={() => setShowDatePicker(true)}>
+              <View style={[styles.detailIcon, { backgroundColor: colors.primary + '20' }]}>
+                <Ionicons name="calendar" size={20} color={colors.primary} />
               </View>
-            </View>
+              <View style={styles.detailContent}>
+                <Text style={styles.detailLabel}>DATE</Text>
+                <Text style={styles.detailText}>
+                  {toDateString(selectedDate) === toDateString(new Date())
+                    ? 'Today'
+                    : toDateString(selectedDate)}
+                </Text>
+              </View>
+              <Ionicons name="chevron-forward" size={20} color={colors.textMuted} />
+            </TouchableOpacity>
 
             {/* Split This Expense */}
             {isEditing && type === 'expense' && (
@@ -830,6 +825,35 @@ const createStyles = (colors: ThemeColors) =>
       fontWeight: '800',
       color: colors.textPrimary,
       letterSpacing: -1.5,
+    },
+    notesCard: {
+      marginHorizontal: SPACING.lg,
+      marginBottom: SPACING.lg,
+      backgroundColor: colors.bgCard,
+      borderRadius: RADIUS.lg,
+      borderWidth: 1,
+      borderColor: colors.border,
+      padding: SPACING.md,
+      gap: SPACING.sm,
+    },
+    notesInputWrap: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      gap: SPACING.sm,
+    },
+    notesInput: {
+      flex: 1,
+      minHeight: 48,
+      fontSize: 14,
+      fontWeight: '600',
+      color: colors.textPrimary,
+      paddingTop: 0,
+      paddingBottom: 0,
+    },
+    notesCounter: {
+      fontSize: 10,
+      color: colors.textMuted,
+      alignSelf: 'flex-end',
     },
     detailsWrap: {
       paddingHorizontal: SPACING.lg,

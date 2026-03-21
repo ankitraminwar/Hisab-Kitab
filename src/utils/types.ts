@@ -82,7 +82,7 @@ export interface Transaction extends SyncMetadata {
 export interface Budget extends SyncMetadata {
   id: string;
   categoryId: string;
-  limit_amount: number;
+  limitAmount: number;
   spent: number;
   month: string;
   year: number;

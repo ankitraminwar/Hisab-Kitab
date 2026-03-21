@@ -5,7 +5,6 @@ import { useLocalSearchParams, useRouter, type Href } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   KeyboardAvoidingView,
-  Modal,
   Platform,
   ScrollView,
   StyleSheet,
@@ -79,26 +78,33 @@ export default function SplitExpenseScreen() {
 
   const [saving, setSaving] = useState(false);
   const friendSearchRef = useRef<TextInput>(null);
+  const hasLoadedDetailRef = useRef(false);
 
   const totalExpense = selectedTransaction?.amount || 0;
 
   // ── Load existing split ──────────────────────────────────────────────────
-  const loadExistingSplit = useCallback(async () => {
-    if (isNewSplit || !id) return;
-    setViewLoading(true);
-    const data = await SplitService.getById(id);
-    if (data) {
-      setExistingSplit(data.expense);
-      setExistingMembers(data.members);
-      setExistingMerchant(data.transactionMerchant || 'Untitled');
-      setExistingDate(data.transactionDate || data.expense.createdAt);
-    }
-    setViewLoading(false);
-  }, [id, isNewSplit]);
+  const loadExistingSplit = useCallback(
+    async (showLoader = false) => {
+      if (isNewSplit || !id) return;
+      if (showLoader) {
+        setViewLoading(true);
+      }
+      const data = await SplitService.getById(id);
+      if (data) {
+        setExistingSplit(data.expense);
+        setExistingMembers(data.members);
+        setExistingMerchant(data.transactionMerchant || 'Untitled');
+        setExistingDate(data.transactionDate || data.expense.createdAt);
+      }
+      hasLoadedDetailRef.current = true;
+      setViewLoading(false);
+    },
+    [id, isNewSplit],
+  );
 
   useEffect(() => {
     if (!isNewSplit) {
-      void loadExistingSplit();
+      void loadExistingSplit(!hasLoadedDetailRef.current);
     }
   }, [loadExistingSplit, dataRevision, isNewSplit]);
 
@@ -116,6 +122,11 @@ export default function SplitExpenseScreen() {
       void loadTransactions();
     }
   }, [isNewSplit, loadTransactions]);
+
+  const handleOpenTransactionModal = useCallback(async () => {
+    await loadTransactions();
+    setShowTransactionModal(true);
+  }, [loadTransactions]);
 
   // ── Recalculate equal split ──────────────────────────────────────────────
   useEffect(() => {
@@ -241,11 +252,15 @@ export default function SplitExpenseScreen() {
   // ── Mark member paid/pending ─────────────────────────────────────────────
   const handleToggleMemberStatus = async (member: SplitMemberType) => {
     const newStatus: SplitStatus = member.status === 'paid' ? 'pending' : 'paid';
+    const previousMembers = existingMembers;
+    setExistingMembers((current) =>
+      current.map((item) => (item.id === member.id ? { ...item, status: newStatus } : item)),
+    );
     try {
       await SplitService.markSharePaid(member.id, newStatus);
       void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-      void loadExistingSplit();
     } catch {
+      setExistingMembers(previousMembers);
       setPopupConfig({
         visible: true,
         title: 'Error',
@@ -524,7 +539,7 @@ export default function SplitExpenseScreen() {
           <Animated.View entering={FadeInDown.duration(400)}>
             <TouchableOpacity
               style={styles.expenseCard}
-              onPress={() => setShowTransactionModal(true)}
+              onPress={() => void handleOpenTransactionModal()}
               activeOpacity={0.8}
             >
               <View style={{ flex: 1 }}>
@@ -749,10 +764,17 @@ export default function SplitExpenseScreen() {
         </ScrollView>
       </KeyboardAvoidingView>
 
-      {/* Transaction Selection Modal */}
-      <Modal visible={showTransactionModal} transparent animationType="slide">
+      {showTransactionModal ? (
         <View style={styles.modalOverlay}>
-          <View style={[styles.modalContent, { backgroundColor: colors.bgCard }]}>
+          <TouchableOpacity
+            style={StyleSheet.absoluteFill}
+            activeOpacity={1}
+            onPress={() => setShowTransactionModal(false)}
+          />
+          <Animated.View
+            entering={FadeInDown.duration(250)}
+            style={[styles.modalContent, { backgroundColor: colors.bgCard }]}
+          >
             <View style={styles.modalHeader}>
               <Text style={{ ...TYPOGRAPHY.h3, color: colors.textPrimary }}>Select Expense</Text>
               <TouchableOpacity onPress={() => setShowTransactionModal(false)}>
@@ -802,7 +824,7 @@ export default function SplitExpenseScreen() {
                   </Text>
                 </TouchableOpacity>
               ))}
-              {transactions.length === 0 && (
+              {transactions.length === 0 ? (
                 <View style={{ padding: SPACING.xl, alignItems: 'center' }}>
                   <Ionicons name="receipt-outline" size={40} color={colors.textMuted} />
                   <Text
@@ -815,12 +837,12 @@ export default function SplitExpenseScreen() {
                     No expense transactions found.{'\n'}Add a transaction first.
                   </Text>
                 </View>
-              )}
+              ) : null}
               <View style={{ height: 40 }} />
             </ScrollView>
-          </View>
+          </Animated.View>
         </View>
-      </Modal>
+      ) : null}
 
       <CustomPopup
         visible={popupConfig.visible}
@@ -1183,15 +1205,27 @@ function createStyles(colors: ThemeColors) {
 
     // Modal
     modalOverlay: {
-      flex: 1,
+      position: 'absolute',
+      top: 0,
+      right: 0,
+      bottom: 0,
+      left: 0,
       backgroundColor: 'rgba(0,0,0,0.6)',
       justifyContent: 'flex-end',
+      zIndex: 1000,
+      elevation: 1000,
     },
     modalContent: {
+      overflow: 'hidden',
       borderTopLeftRadius: RADIUS.xl,
       borderTopRightRadius: RADIUS.xl,
       padding: SPACING.lg,
       maxHeight: '80%',
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: -6 },
+      shadowOpacity: 0.2,
+      shadowRadius: 16,
+      elevation: 16,
     },
     modalHeader: {
       flexDirection: 'row',
