@@ -2,22 +2,11 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import {
-  ScrollView,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
-} from 'react-native';
+import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTheme, type ThemeColors } from '../../hooks/useTheme';
-import {
-  RADIUS,
-  SPACING,
-  TYPOGRAPHY,
-  formatCurrency,
-} from '../../utils/constants';
+import { RADIUS, SPACING, TYPOGRAPHY, formatCurrency } from '../../utils/constants';
 
 import { CustomPopup } from '../../components/common';
 import { SmsReadService, type ParsedSms } from '../../services/smsReadService';
@@ -115,10 +104,7 @@ export default function SmsImportScreen() {
         </TouchableOpacity>
         <Text style={styles.title}>Import Transactions</Text>
         <View style={styles.headerActions}>
-          <TouchableOpacity
-            style={styles.headerIcon}
-            onPress={() => void scanSms()}
-          >
+          <TouchableOpacity style={styles.headerIcon} onPress={() => void scanSms()}>
             <Ionicons name="refresh" size={20} color={colors.textSecondary} />
           </TouchableOpacity>
           <TouchableOpacity
@@ -132,11 +118,7 @@ export default function SmsImportScreen() {
             }}
           >
             <Ionicons
-              name={
-                selectedIds.size === pending.length
-                  ? 'checkbox'
-                  : 'checkbox-outline'
-              }
+              name={selectedIds.size === pending.length ? 'checkbox' : 'checkbox-outline'}
               size={20}
               color={colors.textSecondary}
             />
@@ -144,10 +126,7 @@ export default function SmsImportScreen() {
         </View>
       </View>
 
-      <ScrollView
-        contentContainerStyle={styles.scroll}
-        showsVerticalScrollIndicator={false}
-      >
+      <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
         {/* Summary Card */}
         <Animated.View entering={FadeInDown.duration(400)}>
           <View style={styles.summaryCard}>
@@ -155,9 +134,7 @@ export default function SmsImportScreen() {
               <Ionicons name="chatbubbles" size={24} color="#FFFFFF" />
             </View>
             <View>
-              <Text style={styles.summaryTitle}>
-                {pending.length} New Messages
-              </Text>
+              <Text style={styles.summaryTitle}>{pending.length} New Messages</Text>
               <Text style={styles.summarySubtitle}>
                 We found {pending.length} transactions to import
               </Text>
@@ -177,10 +154,7 @@ export default function SmsImportScreen() {
         {pending.map((tx, idx) => {
           const isSelected = selectedIds.has(tx.id);
           return (
-            <Animated.View
-              key={tx.id}
-              entering={FadeInDown.duration(400).delay(100 + idx * 80)}
-            >
+            <Animated.View key={tx.id} entering={FadeInDown.duration(400).delay(100 + idx * 80)}>
               <TouchableOpacity
                 activeOpacity={0.9}
                 onPress={() => toggleSelection(tx.id)}
@@ -191,8 +165,7 @@ export default function SmsImportScreen() {
                     style={[
                       styles.txIconBg,
                       {
-                        backgroundColor:
-                          colors.primary + (isSelected ? '25' : '10'),
+                        backgroundColor: colors.primary + (isSelected ? '25' : '10'),
                       },
                     ]}
                   >
@@ -212,17 +185,12 @@ export default function SmsImportScreen() {
                     </Text>
                   </View>
                   <View style={styles.txAmountCol}>
-                    <Text style={styles.txAmount}>
-                      {formatCurrency(tx.amount)}
-                    </Text>
+                    <Text style={styles.txAmount}>{formatCurrency(tx.amount)}</Text>
                     <Text
                       style={[
                         styles.txType,
                         {
-                          color:
-                            tx.type === 'income'
-                              ? colors.income
-                              : colors.expense,
+                          color: tx.type === 'income' ? colors.income : colors.expense,
                         },
                       ]}
                     >
@@ -239,9 +207,7 @@ export default function SmsImportScreen() {
           <View style={styles.emptyState}>
             <Ionicons name="checkmark-circle" size={48} color={colors.income} />
             <Text style={styles.emptyTitle}>All caught up!</Text>
-            <Text style={styles.emptySubtitle}>
-              No pending SMS transactions to review.
-            </Text>
+            <Text style={styles.emptySubtitle}>No pending SMS transactions to review.</Text>
           </View>
         )}
       </ScrollView>
@@ -253,8 +219,7 @@ export default function SmsImportScreen() {
             style={[
               styles.confirmAllBtn,
               {
-                backgroundColor:
-                  selectedIds.size > 0 ? colors.primary : colors.bgElevated,
+                backgroundColor: selectedIds.size > 0 ? colors.primary : colors.bgElevated,
               },
             ]}
             onPress={() => void handleConfirmAll()}
@@ -266,9 +231,7 @@ export default function SmsImportScreen() {
                 { color: selectedIds.size > 0 ? '#fff' : colors.textMuted },
               ]}
             >
-              {loading
-                ? 'Importing...'
-                : `Import Selected (${selectedIds.size})`}
+              {loading ? 'Importing...' : `Import Selected (${selectedIds.size})`}
             </Text>
           </TouchableOpacity>
         </View>

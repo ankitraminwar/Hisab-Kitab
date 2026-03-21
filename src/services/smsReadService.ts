@@ -35,17 +35,13 @@ export const SmsReadService = {
   async requestPermission(): Promise<boolean> {
     if (Platform.OS !== 'android') return false;
     try {
-      const granted = await PermissionsAndroid.request(
-        PermissionsAndroid.PERMISSIONS.READ_SMS,
-        {
-          title: 'SMS Permission',
-          message:
-            'Hisab-Kitab needs access to your SMS to import transactions.',
-          buttonNeutral: 'Ask Me Later',
-          buttonNegative: 'Cancel',
-          buttonPositive: 'OK',
-        },
-      );
+      const granted = await PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.READ_SMS, {
+        title: 'SMS Permission',
+        message: 'Hisab Kitab needs access to your SMS to import transactions.',
+        buttonNeutral: 'Ask Me Later',
+        buttonNegative: 'Cancel',
+        buttonPositive: 'OK',
+      });
       return granted === PermissionsAndroid.RESULTS.GRANTED;
     } catch (err) {
       console.warn(err);
@@ -103,11 +99,8 @@ export const SmsReadService = {
     if (isNaN(amount) || amount === 0) return null;
 
     const isExpense =
-      cleanBody.includes('debited') ||
-      cleanBody.includes('spent') ||
-      cleanBody.includes('paid');
-    const isIncome =
-      cleanBody.includes('credited') || cleanBody.includes('received');
+      cleanBody.includes('debited') || cleanBody.includes('spent') || cleanBody.includes('paid');
+    const isIncome = cleanBody.includes('credited') || cleanBody.includes('received');
 
     if (!isExpense && !isIncome) return null;
 
@@ -140,8 +133,7 @@ export const SmsReadService = {
 
   async importTransactions(smsList: ParsedSms[]) {
     const categories = await CategoryService.getAll();
-    const otherCat =
-      categories.find((c) => c.name === 'Other') || categories[0];
+    const otherCat = categories.find((c) => c.name === 'Other') || categories[0];
 
     const { AccountService: AccService } = await import('./dataServices');
     const accounts = await AccService.getAll();

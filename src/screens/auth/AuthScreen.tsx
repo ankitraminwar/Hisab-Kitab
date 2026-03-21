@@ -21,29 +21,28 @@ import type { IoniconsName } from '../../utils/types';
 
 type Mode = 'login' | 'signup' | 'forgot-password' | 'reset-password';
 
-const copy: Record<Mode, { title: string; subtitle: string; primary: string }> =
-  {
-    login: {
-      title: 'Welcome back',
-      subtitle: 'Log in to manage your finances securely.',
-      primary: 'Login',
-    },
-    signup: {
-      title: 'Create Account',
-      subtitle: 'Join Hisab-Kitab to start managing your finances with ease.',
-      primary: 'Sign Up',
-    },
-    'forgot-password': {
-      title: 'Forgot Password',
-      subtitle: 'Enter your email to receive a password reset link.',
-      primary: 'Send Reset Link',
-    },
-    'reset-password': {
-      title: 'New Password',
-      subtitle: 'Choose a strong password for your account.',
-      primary: 'Update Password',
-    },
-  };
+const copy: Record<Mode, { title: string; subtitle: string; primary: string }> = {
+  login: {
+    title: 'Welcome',
+    subtitle: 'Manage your finances with Hisab Kitab',
+    primary: 'Login',
+  },
+  signup: {
+    title: 'Join Hisab Kitab',
+    subtitle: 'Manage your finances with Hisab Kitab',
+    primary: 'Sign Up',
+  },
+  'forgot-password': {
+    title: 'Forgot Password',
+    subtitle: 'Enter your email to receive a password reset link.',
+    primary: 'Send Reset Link',
+  },
+  'reset-password': {
+    title: 'New Password',
+    subtitle: 'Choose a strong password for your account.',
+    primary: 'Update Password',
+  },
+};
 
 // ─── Input with Icon ──────────────────────────────────────────────────────────
 const IconInput: React.FC<{
@@ -93,11 +92,7 @@ const IconInput: React.FC<{
             zIndex: 1,
           }}
         >
-          <Ionicons
-            name={icon as IoniconsName}
-            size={20}
-            color={colors.textMuted}
-          />
+          <Ionicons name={icon as IoniconsName} size={20} color={colors.textMuted} />
         </View>
         <TextInput
           value={value}
@@ -188,8 +183,10 @@ const SocialButton: React.FC<{
   icon: string;
   label: string;
   colors: ThemeColors;
-}> = ({ icon, label, colors }) => (
+  onPress: () => void;
+}> = ({ icon, label, colors, onPress }) => (
   <TouchableOpacity
+    onPress={onPress}
     activeOpacity={0.7}
     style={{
       height: 56,
@@ -203,11 +200,7 @@ const SocialButton: React.FC<{
       gap: 12,
     }}
   >
-    <Ionicons
-      name={icon as IoniconsName}
-      size={20}
-      color={colors.textPrimary}
-    />
+    <Ionicons name={icon as IoniconsName} size={20} color={colors.textPrimary} />
     <Text
       style={{
         fontSize: 16,
@@ -236,6 +229,17 @@ export default function AuthScreen({ mode }: { mode: Mode }) {
     onClose?: () => void;
   }>({ visible: false, title: '', message: '', type: 'info' });
   const styles = React.useMemo(() => createStyles(colors), [colors]);
+
+  const showSocialNotImplemented = (provider: string) => {
+    const actionLabel = mode === 'signup' ? 'sign up' : 'sign in';
+
+    setPopupConfig({
+      visible: true,
+      title: `${provider} login`,
+      message: `We appreciate your interest in using ${provider} to ${actionLabel}. This option is not available yet, but we are working to add it in a future update.`,
+      type: 'info',
+    });
+  };
 
   const submit = async () => {
     setLoading(true);
@@ -277,10 +281,7 @@ export default function AuthScreen({ mode }: { mode: Mode }) {
       setPopupConfig({
         visible: true,
         title: 'Auth failed',
-        message:
-          error instanceof Error
-            ? error.message
-            : 'Unable to complete the request.',
+        message: error instanceof Error ? error.message : 'Unable to complete the request.',
         type: 'error',
       });
     } finally {
@@ -297,23 +298,20 @@ export default function AuthScreen({ mode }: { mode: Mode }) {
           style={{ flex: 1 }}
         >
           {/* Back button */}
-          <TouchableOpacity
-            onPress={() => router.back()}
-            style={styles.backBtn}
-          >
+          <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
             <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
           </TouchableOpacity>
 
           <View style={styles.forgotCenter}>
-            {/* Icon with glow */}
             <View style={styles.forgotIconWrap}>
-              <View style={styles.forgotIconGlow} />
-              <View style={styles.forgotIconBox}>
-                <Ionicons
-                  name="lock-open-outline"
-                  size={44}
-                  color={colors.primary}
-                />
+              <View style={styles.forgotIconHalo} />
+              <View style={styles.forgotIconOrb}>
+                <View style={styles.forgotIconRing}>
+                  <Ionicons name="mail-open-outline" size={30} color={colors.primary} />
+                </View>
+              </View>
+              <View style={styles.forgotBadge}>
+                <Ionicons name="key-outline" size={16} color="#fff" />
               </View>
             </View>
 
@@ -325,7 +323,7 @@ export default function AuthScreen({ mode }: { mode: Mode }) {
             <View style={{ width: '100%', marginTop: 32 }}>
               <IconInput
                 icon="mail-outline"
-                label="EMAIL ADDRESS"
+                label="Email Address"
                 placeholder="yourname@example.com"
                 value={email}
                 onChangeText={setEmail}
@@ -339,7 +337,7 @@ export default function AuthScreen({ mode }: { mode: Mode }) {
               title={copy[mode].primary}
               onPress={() => void submit()}
               loading={loading}
-              style={styles.bigButton}
+              style={{ ...styles.bigButton, ...styles.resetButtonSpacing }}
             />
           </View>
 
@@ -373,17 +371,14 @@ export default function AuthScreen({ mode }: { mode: Mode }) {
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
           style={{ flex: 1 }}
         >
-          <TouchableOpacity
-            onPress={() => router.back()}
-            style={styles.backBtn}
-          >
+          <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
             <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
           </TouchableOpacity>
 
           <View style={styles.forgotCenter}>
             <View style={styles.forgotIconWrap}>
-              <View style={styles.forgotIconGlow} />
-              <View style={styles.forgotIconBox}>
+              <View style={styles.forgotIconHalo} />
+              <View style={styles.forgotIconOrb}>
                 <Ionicons name="key-outline" size={44} color={colors.primary} />
               </View>
             </View>
@@ -447,45 +442,28 @@ export default function AuthScreen({ mode }: { mode: Mode }) {
           {/* Header bar */}
           <View style={styles.headerBar}>
             {mode === 'signup' ? (
-              <TouchableOpacity
-                onPress={() => router.back()}
-                style={styles.headerBackBtn}
-              >
-                <Ionicons
-                  name="arrow-back"
-                  size={24}
-                  color={colors.textPrimary}
-                />
+              <TouchableOpacity onPress={() => router.back()} style={styles.headerBackBtn}>
+                <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
               </TouchableOpacity>
             ) : (
               <View style={{ width: 48 }} />
             )}
-            <View style={styles.brandRow}>
-              <View style={styles.brandIcon}>
-                <Ionicons name="wallet" size={18} color="#fff" />
-              </View>
-              <Text style={styles.brandText}>Hisab-Kitab</Text>
-            </View>
+            {mode === 'signup' ? <View style={{ width: 48 }} /> : null}
             <View style={{ width: 48 }} />
           </View>
 
           {/* Hero area */}
-          {mode === 'login' ? (
-            <View style={styles.heroImage}>
-              <View style={styles.heroGradient} />
+          <View style={[styles.authHero, mode === 'signup' && styles.authHeroCentered]}>
+            <View style={styles.signupIconBox}>
+              <Ionicons name="wallet" size={32} color="#fff" />
             </View>
-          ) : (
-            <View style={styles.signupHero}>
-              <View style={styles.signupIconBox}>
-                <Ionicons name="wallet" size={32} color="#fff" />
-              </View>
-            </View>
-          )}
+            {mode === 'login' && <Text style={styles.heroWelcome}>Welcome</Text>}
+          </View>
 
           {/* Title & subtitle */}
-          <View style={styles.titleBlock}>
-            <Text style={styles.title}>{copy[mode].title}</Text>
-            <Text style={styles.subtitle}>{copy[mode].subtitle}</Text>
+          <View style={[styles.titleBlock, mode === 'signup' && styles.titleBlockCentered]}>
+            {mode !== 'login' && <Text style={styles.title}>{copy[mode].title}</Text>}
+            <Text style={[styles.subtitle, styles.subtitleCentered]}>{copy[mode].subtitle}</Text>
           </View>
 
           {/* Form */}
@@ -546,11 +524,13 @@ export default function AuthScreen({ mode }: { mode: Mode }) {
               icon="logo-google"
               label="Continue with Google"
               colors={colors}
+              onPress={() => showSocialNotImplemented('Google')}
             />
             <SocialButton
               icon="logo-apple"
               label="Continue with Apple"
               colors={colors}
+              onPress={() => showSocialNotImplemented('Apple')}
             />
           </View>
 
@@ -558,9 +538,7 @@ export default function AuthScreen({ mode }: { mode: Mode }) {
           <View style={[styles.footer, { marginTop: 'auto' }]}>
             {mode === 'login' ? (
               <>
-                <Text style={styles.footerText}>
-                  Don&apos;t have an account?{' '}
-                </Text>
+                <Text style={styles.footerText}>Don&apos;t have an account? </Text>
                 <Link href="/auth/signup" style={styles.footerLink}>
                   Sign Up
                 </Link>
@@ -609,43 +587,14 @@ const createStyles = (colors: ThemeColors) =>
       alignItems: 'center',
       justifyContent: 'center',
     },
-    brandRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 8,
-    },
-    brandIcon: {
-      width: 32,
-      height: 32,
-      borderRadius: 8,
-      backgroundColor: colors.primary,
-      alignItems: 'center',
-      justifyContent: 'center',
-    },
-    brandText: {
-      fontSize: 18,
-      fontWeight: '700',
-      color: colors.textPrimary,
-    },
-
-    // Hero (login)
-    heroImage: {
-      marginHorizontal: 16,
-      aspectRatio: 16 / 9,
-      borderRadius: RADIUS.md,
-      backgroundColor: colors.primary + '15',
-      overflow: 'hidden',
-    },
-    heroGradient: {
-      ...StyleSheet.absoluteFillObject,
-      backgroundColor: colors.primary + '10',
-    },
-
-    // Hero (signup)
-    signupHero: {
+    authHero: {
       paddingHorizontal: 24,
       paddingTop: 32,
       paddingBottom: 16,
+      alignItems: 'center',
+    },
+    authHeroCentered: {
+      justifyContent: 'center',
     },
     signupIconBox: {
       width: 64,
@@ -660,12 +609,22 @@ const createStyles = (colors: ThemeColors) =>
       shadowRadius: 12,
       elevation: 8,
     },
+    heroWelcome: {
+      fontSize: 32,
+      fontWeight: '700',
+      color: colors.textPrimary,
+      letterSpacing: -0.5,
+      marginTop: 20,
+    },
 
     // Title
     titleBlock: {
       paddingHorizontal: 24,
-      paddingTop: 16,
+      paddingTop: 8,
       paddingBottom: 24,
+    },
+    titleBlockCentered: {
+      alignItems: 'center',
     },
     title: {
       fontSize: 32,
@@ -678,6 +637,9 @@ const createStyles = (colors: ThemeColors) =>
       fontSize: 16,
       color: colors.textSecondary,
       lineHeight: 24,
+    },
+    subtitleCentered: {
+      textAlign: 'center',
     },
 
     // Form
@@ -705,6 +667,10 @@ const createStyles = (colors: ThemeColors) =>
       shadowOpacity: 0.2,
       shadowRadius: 12,
       elevation: 6,
+    },
+    resetButtonSpacing: {
+      marginTop: 24,
+      alignSelf: 'stretch',
     },
 
     // Footer
@@ -747,22 +713,48 @@ const createStyles = (colors: ThemeColors) =>
       alignItems: 'center',
       justifyContent: 'center',
     },
-    forgotIconGlow: {
+    forgotIconHalo: {
       position: 'absolute',
-      width: 120,
-      height: 120,
-      borderRadius: 60,
-      backgroundColor: colors.primary + '15',
-    },
-    forgotIconBox: {
-      width: 96,
-      height: 96,
-      borderRadius: 28,
+      width: 132,
+      height: 132,
+      borderRadius: 66,
       backgroundColor: colors.primary + '10',
+    },
+    forgotIconOrb: {
+      width: 104,
+      height: 104,
+      borderRadius: 52,
+      backgroundColor: colors.primary + '12',
+      borderWidth: 1,
+      borderColor: colors.primary + '25',
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    forgotIconRing: {
+      width: 72,
+      height: 72,
+      borderRadius: 36,
+      backgroundColor: colors.bgCard,
       borderWidth: 1,
       borderColor: colors.primary + '20',
       alignItems: 'center',
       justifyContent: 'center',
+    },
+    forgotBadge: {
+      position: 'absolute',
+      right: 4,
+      bottom: 4,
+      width: 30,
+      height: 30,
+      borderRadius: 15,
+      backgroundColor: colors.primary,
+      alignItems: 'center',
+      justifyContent: 'center',
+      shadowColor: colors.primary,
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.25,
+      shadowRadius: 8,
+      elevation: 6,
     },
     forgotTitle: {
       fontSize: 32,

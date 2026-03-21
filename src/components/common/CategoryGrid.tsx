@@ -1,12 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import React from 'react';
-import {
-  type DimensionValue,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
-} from 'react-native';
+import { type DimensionValue, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useTheme } from '../../hooks/useTheme';
 import { RADIUS, SPACING, TYPOGRAPHY } from '../../utils/constants';
 import type { Category } from '../../utils/types';
@@ -28,9 +22,7 @@ export const CategoryGrid: React.FC<CategoryGridProps> = ({
 
   return (
     <View style={styles.container}>
-      <Text style={[styles.label, { color: colors.textMuted }]}>
-        CATEGORIES
-      </Text>
+      <Text style={[styles.label, { color: colors.textMuted }]}>CATEGORIES</Text>
       <View style={styles.grid}>
         {categories.map((cat) => {
           const isSelected = cat.id === selectedId;
@@ -46,9 +38,7 @@ export const CategoryGrid: React.FC<CategoryGridProps> = ({
                 style={[
                   styles.item,
                   {
-                    backgroundColor: isSelected
-                      ? catColor + '15'
-                      : 'transparent',
+                    backgroundColor: isSelected ? catColor + '15' : 'transparent',
                     borderColor: isSelected ? catColor + '80' : colors.border,
                     borderWidth: isSelected ? 2 : 1,
                   },
@@ -57,7 +47,6 @@ export const CategoryGrid: React.FC<CategoryGridProps> = ({
                     shadowOffset: { width: 0, height: 0 },
                     shadowOpacity: 0.3,
                     shadowRadius: 8,
-                    elevation: 6,
                   },
                 ]}
               >
@@ -67,11 +56,10 @@ export const CategoryGrid: React.FC<CategoryGridProps> = ({
                   color={isSelected ? catColor : colors.textMuted}
                 />
                 <Text
-                  style={[
-                    styles.itemLabel,
-                    { color: isSelected ? catColor : colors.textMuted },
-                  ]}
-                  numberOfLines={1}
+                  style={[styles.itemLabel, { color: isSelected ? catColor : colors.textMuted }]}
+                  numberOfLines={2}
+                  adjustsFontSizeToFit
+                  minimumFontScale={0.7}
                 >
                   {cat.name}
                 </Text>
@@ -104,13 +92,18 @@ const styles = StyleSheet.create({
   },
   item: {
     alignItems: 'center',
-    gap: 6,
-    paddingVertical: SPACING.md,
+    gap: 4,
+    paddingVertical: SPACING.sm,
+    paddingHorizontal: 4,
     borderRadius: RADIUS.lg,
+    minHeight: 72,
+    justifyContent: 'center',
   },
   itemLabel: {
     ...TYPOGRAPHY.caption,
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: '700',
+    textAlign: 'center',
+    lineHeight: 13,
   },
 });

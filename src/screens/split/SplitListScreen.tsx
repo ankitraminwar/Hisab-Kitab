@@ -1,14 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import {
-  RefreshControl,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
-} from 'react-native';
+import { RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -16,12 +9,7 @@ import { EmptyState, FAB } from '../../components/common';
 import { useTheme, type ThemeColors } from '../../hooks/useTheme';
 import { SplitService } from '../../services/splitService';
 import { useAppStore } from '../../store/appStore';
-import {
-  RADIUS,
-  SPACING,
-  TYPOGRAPHY,
-  formatCurrency,
-} from '../../utils/constants';
+import { RADIUS, SPACING, TYPOGRAPHY, formatCurrency } from '../../utils/constants';
 import type { SplitExpense, SplitMember } from '../../utils/types';
 
 interface SplitItem {
@@ -92,44 +80,23 @@ export default function SplitListScreen() {
         }
       >
         {/* Summary Cards */}
-        <Animated.View
-          entering={FadeInDown.duration(400)}
-          style={styles.summaryRow}
-        >
-          <View
-            style={[styles.summaryCard, { borderColor: colors.warning + '30' }]}
-          >
-            <Text style={[styles.summaryLabel, { color: colors.warning }]}>
-              Pending
-            </Text>
+        <Animated.View entering={FadeInDown.duration(400)} style={styles.summaryRow}>
+          <View style={[styles.summaryCard, { borderColor: colors.warning + '30' }]}>
+            <Text style={[styles.summaryLabel, { color: colors.warning }]}>Pending</Text>
             <Text style={[styles.summaryValue, { color: colors.textPrimary }]}>
               {formatCurrency(totalOwed)}
             </Text>
             <Text style={styles.summaryCount}>
-              {
-                splits.filter((s) =>
-                  s.members.some((m) => m.status === 'pending'),
-                ).length
-              }{' '}
-              splits
+              {splits.filter((s) => s.members.some((m) => m.status === 'pending')).length} splits
             </Text>
           </View>
-          <View
-            style={[styles.summaryCard, { borderColor: colors.income + '30' }]}
-          >
-            <Text style={[styles.summaryLabel, { color: colors.income }]}>
-              Collected
-            </Text>
+          <View style={[styles.summaryCard, { borderColor: colors.income + '30' }]}>
+            <Text style={[styles.summaryLabel, { color: colors.income }]}>Collected</Text>
             <Text style={[styles.summaryValue, { color: colors.textPrimary }]}>
               {formatCurrency(totalCollected)}
             </Text>
             <Text style={styles.summaryCount}>
-              {
-                splits.filter((s) =>
-                  s.members.every((m) => m.status === 'paid'),
-                ).length
-              }{' '}
-              settled
+              {splits.filter((s) => s.members.every((m) => m.status === 'paid')).length} settled
             </Text>
           </View>
         </Animated.View>
@@ -182,19 +149,13 @@ const SplitCard: React.FC<{
 
   return (
     <Animated.View entering={FadeInDown.duration(400).delay(100 + delay)}>
-      <TouchableOpacity
-        style={styles.splitCard}
-        onPress={onPress}
-        activeOpacity={0.7}
-      >
+      <TouchableOpacity style={styles.splitCard} onPress={onPress} activeOpacity={0.7}>
         <View style={styles.splitCardHeader}>
           <View
             style={[
               styles.splitIcon,
               {
-                backgroundColor: isSettled
-                  ? colors.income + '15'
-                  : colors.primary + '15',
+                backgroundColor: isSettled ? colors.income + '15' : colors.primary + '15',
               },
             ]}
           >
@@ -223,9 +184,7 @@ const SplitCard: React.FC<{
             </Text>
           </View>
           <View style={styles.splitAmountCol}>
-            <Text style={styles.splitTotalAmount}>
-              {formatCurrency(expense.totalAmount)}
-            </Text>
+            <Text style={styles.splitTotalAmount}>{formatCurrency(expense.totalAmount)}</Text>
             <Text
               style={[
                 styles.splitStatus,
@@ -250,9 +209,7 @@ const SplitCard: React.FC<{
                   {
                     marginLeft: i > 0 ? -8 : 0,
                     backgroundColor:
-                      m.status === 'paid'
-                        ? colors.income + '30'
-                        : colors.primary + '30',
+                      m.status === 'paid' ? colors.income + '30' : colors.primary + '30',
                     borderColor: colors.bgCard,
                   },
                 ]}
@@ -261,12 +218,11 @@ const SplitCard: React.FC<{
                   style={[
                     styles.miniAvatarText,
                     {
-                      color:
-                        m.status === 'paid' ? colors.income : colors.primary,
+                      color: m.status === 'paid' ? colors.income : colors.primary,
                     },
                   ]}
                 >
-                  {m.name.charAt(0).toUpperCase()}
+                  {m?.name?.charAt(0)?.toUpperCase()}
                 </Text>
               </View>
             ))}
@@ -281,18 +237,14 @@ const SplitCard: React.FC<{
                   },
                 ]}
               >
-                <Text
-                  style={[styles.miniAvatarText, { color: colors.textMuted }]}
-                >
+                <Text style={[styles.miniAvatarText, { color: colors.textMuted }]}>
                   +{members.length - 4}
                 </Text>
               </View>
             )}
           </View>
           {!isSettled && (
-            <Text style={styles.splitPendingAmount}>
-              {formatCurrency(pendingAmount)} pending
-            </Text>
+            <Text style={styles.splitPendingAmount}>{formatCurrency(pendingAmount)} pending</Text>
           )}
         </View>
 
@@ -302,10 +254,7 @@ const SplitCard: React.FC<{
             style={[
               styles.progressFill,
               {
-                width:
-                  totalMembers > 0
-                    ? `${(paidCount / totalMembers) * 100}%`
-                    : '0%',
+                width: totalMembers > 0 ? `${(paidCount / totalMembers) * 100}%` : '0%',
                 backgroundColor: colors.income,
               },
             ]}

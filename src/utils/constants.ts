@@ -17,16 +17,7 @@ export const DARK_COLORS = {
   textSecondary: '#94A3B8',
   textMuted: '#64748B',
   textInverse: '#F8FAFC',
-  chart: [
-    '#8B5CF6',
-    '#10B981',
-    '#F59E0B',
-    '#F43F5E',
-    '#38BDF8',
-    '#EAB308',
-    '#14B8A6',
-    '#F97316',
-  ],
+  chart: ['#8B5CF6', '#10B981', '#F59E0B', '#F43F5E', '#38BDF8', '#EAB308', '#14B8A6', '#F97316'],
 } as const;
 
 export const LIGHT_COLORS = {
@@ -46,18 +37,9 @@ export const LIGHT_COLORS = {
   borderLight: '#D1D5DB',
   textPrimary: '#0F172A',
   textSecondary: '#64748B',
-  textMuted: '#94A3B8',
+  textMuted: '#78839B',
   textInverse: '#F8FAFC',
-  chart: [
-    '#7C3AED',
-    '#059669',
-    '#D97706',
-    '#E11D48',
-    '#0D9488',
-    '#CA8A04',
-    '#06B6D4',
-    '#EA580C',
-  ],
+  chart: ['#7C3AED', '#059669', '#D97706', '#E11D48', '#0D9488', '#CA8A04', '#06B6D4', '#EA580C'],
 } as const;
 
 // Legacy export for files not yet refactored to useTheme hook
@@ -156,13 +138,15 @@ export const SYNCABLE_TABLES = [
 
 export type SyncableTable = (typeof SYNCABLE_TABLES)[number];
 
+const currencyFormatter = new Intl.NumberFormat(CURRENCY.locale, {
+  style: 'currency',
+  currency: CURRENCY.code,
+  minimumFractionDigits: 0,
+  maximumFractionDigits: 2,
+});
+
 export const formatCurrency = (amount: number, showSign = false): string => {
-  const formatted = new Intl.NumberFormat(CURRENCY.locale, {
-    style: 'currency',
-    currency: CURRENCY.code,
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 2,
-  }).format(Math.abs(amount));
+  const formatted = currencyFormatter.format(Math.abs(amount));
 
   if (showSign && amount > 0) {
     return `+${formatted}`;

@@ -40,6 +40,12 @@ Schema defined in `src/database/index.ts`. Tables:
 Mirrors local tables with snake_case columns. Full idempotent schema in `supabase/schema.sql`.
 RLS policies enforce per-user data isolation via `auth.uid()`.
 
+**FK constraint design**: Inter-table foreign keys (e.g. `transactions.category_id → categories.id`) have been intentionally removed from Supabase. Only the `user_id → auth.users(id)` FK is retained on each table. This allows offline-first sync to push records in any order without FK violations. SQLite enforces relational integrity locally via its own FK constraints.
+
+**Materialized view**: `dashboard_monthly_stats` pre-aggregates monthly income/expenses/net per user. Auto-refreshed via trigger on `transactions` table. Access via `get_dashboard_stats(month)` RPC function. Eliminates expensive client-side aggregation.
+
+**Optimized indexes**: GIN index on `tags` column for fast tag-based analytics. Composite indexes on `(transaction_date DESC, type)` and `(type, category_id, account_id)` for dashboard and filter queries.
+
 ### Column Mapping
 
 `src/services/syncTransform.ts` maps between local camelCase and remote snake_case:
@@ -72,6 +78,8 @@ Local Write → SQLite → enqueueSync() → sync_queue table
 - **Conflict resolution**: latest `updated_at` wins.
 - **Soft deletes**: `deletedAt` timestamp set, row never hard-deleted locally.
 - **Offline guarantee**: all writes succeed locally; sync retries automatically when connectivity is restored.
+- **Parallel pulls**: `pullRemoteChanges()` and `initialSync()` pull tables in parallel by dependency tier (tier 0: independent tables like accounts/categories, tier 1: transactions/budgets, tier 2-3: splits) using `Promise.allSettled()`.
+- **Sync queue compaction**: `enqueueSync()` merges multiple mutations for the same `entity+recordId` into a single queue entry, so only the latest payload is pushed.
 - `SYNCABLE_TABLES` in `src/utils/constants.ts` controls which tables participate in sync.
 
 ## Auth
@@ -87,29 +95,21 @@ Flow:
 
 1. Root layout (`app/_layout.tsx`) checks session on boot
 2. No session → redirect to `/login`
-3. Session exists + biometrics enabled → lock screen shown
+3. Session exists + biometrics enabled → lock screen shown (hardware back button blocked via `BackHandler`)
 4. Biometrics pass or disabled → app unlocked
 5. Logout → clears SQLite, resets Zustand store, redirects to `/login`
 
 ## State Management
 
-Single Zustand store in `src/store/appStore.ts`:
+Zustand store in `src/store/appStore.ts`, organized into three slices:
 
-| Key                                                                        | Purpose                                                   |
-| -------------------------------------------------------------------------- | --------------------------------------------------------- |
-| `theme`                                                                    | `'dark' \| 'light' \| 'system'`                           |
-| `isLocked` / `biometricsEnabled` / `pinEnabled`                            | Auth lock state                                           |
-| `biometricsPrompted`                                                       | Whether the biometrics prompt has been shown this session |
-| `isOnline`                                                                 | NetInfo connectivity flag                                 |
-| `syncInProgress` / `lastSyncAt` / `lastSyncError`                          | Sync status                                               |
-| `userProfile`                                                              | Cached user profile row                                   |
-| `accounts` / `categories` / `budgets` / `goals` / `assets` / `liabilities` | Cached lists                                              |
-| `dashboardStats`                                                           | Cached income/expense/net worth summary                   |
-| `recentTransactions`                                                       | Cached recent transaction list for dashboard              |
-| `dataRevision`                                                             | Counter bumped after every write — screens re-fetch data  |
-| `notificationPreferences`                                                  | Local notification settings                               |
-| `smsEnabled`                                                               | Whether SMS background polling is active                  |
-| `selectedMonth`                                                            | Currently selected month for month-scoped screens         |
+| Slice         | Keys                                                                                       | Purpose                                       |
+| ------------- | ------------------------------------------------------------------------------------------ | --------------------------------------------- |
+| **AuthSlice** | `isLocked`, `biometricsEnabled`, `biometricsPrompted`, `pinEnabled`, `userProfile`         | Auth & biometric lock state                   |
+| **UISlice**   | `isLoading`, `theme`, `notificationPreferences`, `selectedMonth`                           | UI preferences & loading state                |
+| **DataSlice** | `isOnline`, `syncInProgress`, `lastSyncAt`, `lastSyncError`, accounts, categories,         | All data caches, sync state, revision counter |
+|               | recentTransactions, budgets, goals, assets, liabilities, `dashboardStats`, `dataRevision`, |                                               |
+|               | `smsEnabled`                                                                               |                                               |
 
 ## Type System
 
@@ -155,25 +155,37 @@ All types defined in `src/utils/types.ts`. No `any` in the codebase.
 
 ## Component Library (`src/components/common/`)
 
-| Component         | Purpose                                                    |
-| ----------------- | ---------------------------------------------------------- |
-| `Card`            | Rounded bordered container with optional press + glow      |
-| `Button`          | Primary/secondary/danger/ghost button with loading state   |
-| `FAB`             | Floating action button                                     |
-| `EmptyState`      | Centered empty list placeholder with icon, title, action   |
-| `CategoryBadge`   | Circular icon badge with category color                    |
-| `CategoryGrid`    | Responsive grid of selectable category tiles               |
-| `SearchBar`       | Controlled search input with clear button                  |
-| `ProgressBar`     | Horizontal progress bar with color-coded overflow states   |
-| `SectionHeader`   | Section title row with optional action link                |
-| `StatCard`        | Metric card showing amount + type icon + trend             |
-| `CustomPopup`     | Animated modal popup (success/error/info) — replaces Alert |
-| `CustomSwitch`    | Animated toggle switch with spring physics                 |
-| `AmountText`      | Currency-formatted text with income/expense color coding   |
-| `PeriodTabs`      | Month/year period selector tabs                            |
-| `ScreenHeader`    | Consistent back-button header bar                          |
-| `NumericKeypad`   | Custom number keypad for amount entry                      |
-| `TransactionItem` | Swipeable transaction row with gesture + animation         |
+| Component         | Purpose                                                              |
+| ----------------- | -------------------------------------------------------------------- |
+| `Card`            | Rounded bordered container with optional press + glow                |
+| `Button`          | Primary/secondary/danger/ghost button with loading state             |
+| `FAB`             | Floating action button                                               |
+| `EmptyState`      | Centered empty list placeholder with icon, title, action             |
+| `CategoryBadge`   | Circular icon badge with category color                              |
+| `CategoryGrid`    | Responsive grid of selectable category tiles                         |
+| `SearchBar`       | Controlled search input with clear button                            |
+| `ProgressBar`     | Horizontal progress bar with color-coded overflow states             |
+| `SectionHeader`   | Section title row with optional action link                          |
+| `StatCard`        | Metric card showing amount + type icon + trend                       |
+| `CustomPopup`     | Animated modal popup (success/error/info) — replaces Alert           |
+| `CustomSwitch`    | Animated toggle switch with spring physics                           |
+| `AmountText`      | Currency-formatted text with income/expense color coding             |
+| `PeriodTabs`      | Month/year period selector tabs                                      |
+| `ScreenHeader`    | Consistent back-button header bar                                    |
+| `NumericKeypad`   | Custom number keypad for amount entry                                |
+| `TransactionItem` | Swipeable transaction row with gesture + animation + haptic feedback |
+
+### Haptic Feedback
+
+`expo-haptics` light impact feedback is wired into:
+
+- `Button` component (every press)
+- `NumericKeypad` keys and backspace
+- `TransactionItem` long press
+
+### Skeleton Loaders
+
+`src/components/common/SkeletonLoader.tsx` provides `SkeletonTransactionItem` and `SkeletonList` components for loading states using reanimated opacity pulse.
 
 ## Screen Architecture
 
@@ -218,6 +230,10 @@ File-based routing via expo-router. Route → screen mapping:
 
 Modal routes: `presentation: 'modal'` with `slide_from_bottom` or `slide_from_right`.
 
+### Lazy Loading
+
+Chart-heavy tabs (`reports.tsx`, `budgets.tsx`, `goals.tsx`) use `React.lazy()` + `Suspense` wrappers to defer loading their screen bundles until the user navigates to them.
+
 ## Android Widgets
 
 Three home screen widgets via `react-native-android-widget`:
@@ -227,6 +243,8 @@ Three home screen widgets via `react-native-android-widget`:
 | `ExpenseSummary` | `WidgetDataService` | Current month income, expense, top 4 categories |
 | `QuickAdd`       | —                   | Deep-link button to `/transactions/add`         |
 | `BudgetHealth`   | `WidgetDataService` | Budget usage bars, overall spend percent        |
+
+Widget deep links use `hisabkitab://` scheme (double slash, no triple slash). e.g. `hisabkitab://transactions/add`.
 
 Widget task handler: `src/widgets/widgetTaskHandler.ts`
 
@@ -251,4 +269,11 @@ Widget task handler: `src/widgets/widgetTaskHandler.ts`
 - **TypeScript**: strict mode, `tsc --noEmit` = 0 errors
 - **ESLint**: `eslint . --max-warnings 0` = 0 warnings
 - **No `any`**: all `as any` and `: any` eliminated; replaced with `IoniconsName`, `ThemeColors`, `SmsMessage`, `DimensionValue`, `SyncableTable` proper types
-- **Formatting**: Prettier enforced via `npm run format`; pre-commit hook via husky + lint-staged
+- **Formatting**: Prettier enforced via `yarn format`; pre-commit hook via husky + lint-staged
+
+## Build Optimizations
+
+- **R8/ProGuard**: Enabled via `android.enableMinifyInReleaseBuilds=true` and `android.enableShrinkResourcesInReleaseBuilds=true` in `android/gradle.properties`. Reduces bundle size by removing unused code and resources.
+- **AAB production builds**: EAS production profile builds Android App Bundle (`.aab`) for Play Store distribution, enabling Google Play's dynamic delivery.
+- **Hermes**: `jsEngine: "hermes"` set in `app.json`. Bytecode compilation for faster startup.
+- **Dashboard chart**: Donut chart uses SQL-backed `getCategoryBreakdownByDateRange()` for accurate full-month category data instead of aggregating from limited recent transactions.

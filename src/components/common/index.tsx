@@ -1,5 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
-import React, { useMemo } from 'react';
+import * as Haptics from 'expo-haptics';
+import React, { useEffect, useMemo } from 'react';
 import {
   ActivityIndicator,
   Modal,
@@ -19,13 +20,7 @@ import Animated, {
   withSpring,
 } from 'react-native-reanimated';
 import { useTheme, type ThemeColors } from '../../hooks/useTheme';
-import {
-  RADIUS,
-  SHADOWS,
-  SPACING,
-  TYPOGRAPHY,
-  formatCurrency,
-} from '../../utils/constants';
+import { RADIUS, SHADOWS, SPACING, TYPOGRAPHY, formatCurrency } from '../../utils/constants';
 import type { IoniconsName, TransactionType } from '../../utils/types';
 
 // ─── Card ─────────────────────────────────────────────────────────────────────
@@ -35,20 +30,11 @@ interface CardProps {
   onPress?: () => void;
   glow?: boolean;
 }
-export const Card: React.FC<CardProps> = ({
-  children,
-  style,
-  onPress,
-  glow,
-}) => {
+export const Card: React.FC<CardProps> = ({ children, style, onPress, glow }) => {
   const { colors } = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
 
-  const content = (
-    <View style={[styles.card, glow && styles.cardGlow, style]}>
-      {children}
-    </View>
-  );
+  const content = <View style={[styles.card, glow && styles.cardGlow, style]}>{children}</View>;
   if (onPress)
     return (
       <TouchableOpacity onPress={onPress} activeOpacity={0.85}>
@@ -65,22 +51,12 @@ interface AmountProps {
   size?: 'sm' | 'md' | 'lg' | 'xl';
   style?: TextStyle;
 }
-export const AmountText: React.FC<AmountProps> = ({
-  amount,
-  type,
-  size = 'md',
-  style,
-}) => {
+export const AmountText: React.FC<AmountProps> = ({ amount, type, size = 'md', style }) => {
   const { colors } = useTheme();
   const color =
-    type === 'income'
-      ? colors.income
-      : type === 'expense'
-        ? colors.expense
-        : colors.textPrimary;
+    type === 'income' ? colors.income : type === 'expense' ? colors.expense : colors.textPrimary;
 
-  const fontSize =
-    size === 'xl' ? 36 : size === 'lg' ? 24 : size === 'md' ? 18 : 14;
+  const fontSize = size === 'xl' ? 36 : size === 'lg' ? 24 : size === 'md' ? 18 : 14;
   const prefix = type === 'income' ? '+' : type === 'expense' ? '-' : '';
 
   return (
@@ -98,12 +74,7 @@ interface CategoryBadgeProps {
   name?: string;
   size?: number;
 }
-export const CategoryBadge: React.FC<CategoryBadgeProps> = ({
-  icon,
-  color,
-  name,
-  size = 40,
-}) => {
+export const CategoryBadge: React.FC<CategoryBadgeProps> = ({ icon, color, name, size = 40 }) => {
   const { colors } = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
   return (
@@ -138,12 +109,7 @@ interface ProgressBarProps {
   height?: number;
   style?: ViewStyle;
 }
-export const ProgressBar: React.FC<ProgressBarProps> = ({
-  progress,
-  color,
-  height = 6,
-  style,
-}) => {
+export const ProgressBar: React.FC<ProgressBarProps> = ({ progress, color, height = 6, style }) => {
   const { colors } = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
 
@@ -151,11 +117,7 @@ export const ProgressBar: React.FC<ProgressBarProps> = ({
 
   const clampedProgress = Math.min(Math.max(progress, 0), 1);
   const barColor =
-    progress > 0.9
-      ? colors.expense
-      : progress > 0.75
-        ? colors.warning
-        : resolvedColor;
+    progress > 0.9 ? colors.expense : progress > 0.75 ? colors.warning : resolvedColor;
   return (
     <View style={[styles.progressBg, { height }, style]}>
       <View
@@ -178,11 +140,7 @@ interface SectionHeaderProps {
   action?: string;
   onAction?: () => void;
 }
-export const SectionHeader: React.FC<SectionHeaderProps> = ({
-  title,
-  action,
-  onAction,
-}) => {
+export const SectionHeader: React.FC<SectionHeaderProps> = ({ title, action, onAction }) => {
   const { colors } = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
   return (
@@ -217,11 +175,7 @@ export const EmptyState: React.FC<EmptyStateProps> = ({
   return (
     <View style={styles.emptyState}>
       <View style={styles.emptyIcon}>
-        <Ionicons
-          name={icon as IoniconsName}
-          size={32}
-          color={colors.textMuted}
-        />
+        <Ionicons name={icon as IoniconsName} size={32} color={colors.textMuted} />
       </View>
       <Text style={styles.emptyTitle}>{title}</Text>
       {subtitle && <Text style={styles.emptySubtitle}>{subtitle}</Text>}
@@ -249,12 +203,7 @@ export const SearchBar: React.FC<SearchBarProps> = ({
   const styles = useMemo(() => createStyles(colors), [colors]);
   return (
     <View style={styles.searchContainer}>
-      <Ionicons
-        name="search"
-        size={18}
-        color={colors.textMuted}
-        style={styles.searchIcon}
-      />
+      <Ionicons name="search" size={18} color={colors.textMuted} style={styles.searchIcon} />
       <TextInput
         value={value}
         onChangeText={onChangeText}
@@ -301,9 +250,7 @@ export const Button: React.FC<ButtonProps> = ({
           ? colors.bgElevated
           : 'transparent';
   const contentColor =
-    variant === 'primary' || variant === 'danger'
-      ? colors.textInverse
-      : colors.textPrimary;
+    variant === 'primary' || variant === 'danger' ? colors.textInverse : colors.textPrimary;
 
   return (
     <TouchableOpacity
@@ -317,9 +264,16 @@ export const Button: React.FC<ButtonProps> = ({
         style,
         (disabled || loading) && styles.buttonDisabled,
       ]}
-      onPress={onPress}
+      onPress={() => {
+        void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+        onPress();
+      }}
       disabled={disabled || loading}
       activeOpacity={0.8}
+      accessible
+      accessibilityRole="button"
+      accessibilityLabel={title}
+      accessibilityState={{ disabled: disabled || loading }}
     >
       {loading ? (
         <ActivityIndicator size="small" color={contentColor} />
@@ -333,9 +287,7 @@ export const Button: React.FC<ButtonProps> = ({
               style={{ marginRight: 8 }}
             />
           )}
-          <Text style={[styles.buttonText, { color: contentColor }]}>
-            {title}
-          </Text>
+          <Text style={[styles.buttonText, { color: contentColor }]}>{title}</Text>
         </>
       )}
     </TouchableOpacity>
@@ -351,7 +303,14 @@ export const FAB: React.FC<FABProps> = ({ onPress, icon = 'add' }) => {
   const { colors } = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
   return (
-    <TouchableOpacity style={styles.fab} onPress={onPress} activeOpacity={0.85}>
+    <TouchableOpacity
+      style={styles.fab}
+      onPress={onPress}
+      activeOpacity={0.85}
+      accessible
+      accessibilityRole="button"
+      accessibilityLabel="Add new"
+    >
       <View style={styles.fabInner}>
         <Ionicons name={icon as IoniconsName} size={28} color="#fff" />
       </View>
@@ -367,13 +326,7 @@ interface StatCardProps {
   icon: string;
   change?: number;
 }
-export const StatCard: React.FC<StatCardProps> = ({
-  title,
-  amount,
-  type,
-  icon,
-  change,
-}) => {
+export const StatCard: React.FC<StatCardProps> = ({ title, amount, type, icon, change }) => {
   const { colors } = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
   return (
@@ -406,19 +359,9 @@ export const StatCard: React.FC<StatCardProps> = ({
           />
         </View>
       </View>
-      <AmountText
-        amount={amount}
-        type={type}
-        size="lg"
-        style={{ marginTop: 6 }}
-      />
+      <AmountText amount={amount} type={type} size="lg" style={{ marginTop: 6 }} />
       {change !== undefined && (
-        <Text
-          style={[
-            styles.statChange,
-            { color: change >= 0 ? colors.income : colors.expense },
-          ]}
-        >
+        <Text style={[styles.statChange, { color: change >= 0 ? colors.income : colors.expense }]}>
           {change >= 0 ? '+' : ''}
           {change.toFixed(1)}% from last month
         </Text>
@@ -436,6 +379,7 @@ interface CustomPopupProps {
   onClose: () => void;
   actionLabel?: string;
   onAction?: () => void;
+  actions?: { label: string; onPress: () => void }[];
 }
 export const CustomPopup: React.FC<CustomPopupProps> = ({
   visible,
@@ -445,9 +389,20 @@ export const CustomPopup: React.FC<CustomPopupProps> = ({
   onClose,
   actionLabel = 'OK',
   onAction,
+  actions,
 }) => {
   const { colors } = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
+
+  // Auto-dismiss success popups after 3 seconds
+  useEffect(() => {
+    if (visible && type === 'success' && !actions) {
+      const timer = setTimeout(() => {
+        (onAction || onClose)();
+      }, 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [visible, type, actions, onAction, onClose]);
 
   const iconName =
     type === 'success'
@@ -456,36 +411,39 @@ export const CustomPopup: React.FC<CustomPopupProps> = ({
         ? 'close-circle'
         : 'information-circle';
   const iconColor =
-    type === 'success'
-      ? colors.income
-      : type === 'error'
-        ? colors.expense
-        : colors.primary;
+    type === 'success' ? colors.income : type === 'error' ? colors.expense : colors.primary;
 
   return (
     <Modal visible={visible} transparent animationType="none">
-      <Animated.View
-        style={styles.popupOverlay}
-        entering={FadeIn.duration(200)}
-      >
-        <Animated.View
-          style={styles.popupCard}
-          entering={SlideInDown.duration(300).springify()}
-        >
-          <View
-            style={[styles.popupIconBg, { backgroundColor: iconColor + '20' }]}
-          >
+      <Animated.View style={styles.popupOverlay} entering={FadeIn.duration(200)}>
+        <Animated.View style={styles.popupCard} entering={SlideInDown.duration(300).springify()}>
+          <View style={[styles.popupIconBg, { backgroundColor: iconColor + '20' }]}>
             <Ionicons name={iconName} size={32} color={iconColor} />
           </View>
           <Text style={styles.popupTitle}>{title}</Text>
           <Text style={styles.popupMessage}>{message}</Text>
 
-          <Button
-            title={actionLabel}
-            onPress={onAction || onClose}
-            style={{ width: '100%', marginTop: SPACING.md }}
-            variant={type === 'error' ? 'danger' : 'primary'}
-          />
+          {actions ? (
+            <View style={{ width: '100%', gap: SPACING.sm, marginTop: SPACING.md }}>
+              {actions.map((action) => (
+                <Button
+                  key={action.label}
+                  title={action.label}
+                  onPress={action.onPress}
+                  style={{ width: '100%' }}
+                  variant="primary"
+                />
+              ))}
+              <Button title="Cancel" onPress={onClose} style={{ width: '100%' }} variant="ghost" />
+            </View>
+          ) : (
+            <Button
+              title={actionLabel}
+              onPress={onAction || onClose}
+              style={{ width: '100%', marginTop: SPACING.md }}
+              variant={type === 'error' ? 'danger' : 'primary'}
+            />
+          )}
         </Animated.View>
       </Animated.View>
     </Modal>
@@ -498,11 +456,7 @@ interface CustomSwitchProps {
   onValueChange: (val: boolean) => void;
   disabled?: boolean;
 }
-export const CustomSwitch: React.FC<CustomSwitchProps> = ({
-  value,
-  onValueChange,
-  disabled,
-}) => {
+export const CustomSwitch: React.FC<CustomSwitchProps> = ({ value, onValueChange, disabled }) => {
   const { colors } = useTheme();
 
   const trackAnimatedStyle = useAnimatedStyle(() => {
@@ -565,6 +519,74 @@ export const CustomSwitch: React.FC<CustomSwitchProps> = ({
     </Pressable>
   );
 };
+
+// ─── Error Boundary ───────────────────────────────────────────────────────────
+interface ErrorBoundaryProps {
+  children: React.ReactNode;
+  fallback?: React.ReactNode;
+}
+interface ErrorBoundaryState {
+  hasError: boolean;
+}
+export class ScreenErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundaryState> {
+  state: ErrorBoundaryState = { hasError: false };
+
+  static getDerivedStateFromError(): ErrorBoundaryState {
+    return { hasError: true };
+  }
+
+  componentDidCatch(error: Error, info: React.ErrorInfo) {
+    console.warn('ScreenErrorBoundary caught:', error, info.componentStack);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      if (this.props.fallback) return this.props.fallback;
+      return (
+        <View
+          style={{
+            flex: 1,
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: SPACING.lg,
+          }}
+        >
+          <Text
+            style={{
+              ...TYPOGRAPHY.h3,
+              marginBottom: SPACING.sm,
+              color: '#EF4444',
+            }}
+          >
+            Something went wrong
+          </Text>
+          <Text
+            style={{
+              ...TYPOGRAPHY.body,
+              color: '#64748B',
+              textAlign: 'center',
+            }}
+          >
+            An unexpected error occurred. Please go back and try again.
+          </Text>
+          <TouchableOpacity
+            onPress={() => this.setState({ hasError: false })}
+            style={{
+              marginTop: SPACING.lg,
+              paddingHorizontal: SPACING.lg,
+              paddingVertical: SPACING.sm,
+              backgroundColor: '#7C3AED',
+              borderRadius: RADIUS.md,
+            }}
+          >
+            <Text style={{ color: '#fff', fontWeight: '600' }}>Retry</Text>
+          </TouchableOpacity>
+        </View>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 function createStyles(colors: ThemeColors) {
   return StyleSheet.create({

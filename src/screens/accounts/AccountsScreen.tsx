@@ -19,12 +19,7 @@ import { useTheme, type ThemeColors } from '../../hooks/useTheme';
 import { AccountService } from '../../services/dataServices';
 import { triggerBackgroundSync } from '../../services/syncService';
 import { useAppStore } from '../../store/appStore';
-import {
-  RADIUS,
-  SPACING,
-  TYPOGRAPHY,
-  formatCurrency,
-} from '../../utils/constants';
+import { RADIUS, SPACING, TYPOGRAPHY, formatCurrency } from '../../utils/constants';
 import type { Account, AccountType, IoniconsName } from '../../utils/types';
 
 const ACCOUNT_TYPES: {
@@ -87,10 +82,7 @@ export default function AccountsScreen() {
     <SafeAreaView style={styles.container} edges={['top']}>
       <Animated.View entering={FadeInDown.duration(400)} style={styles.header}>
         <Text style={styles.title}>Accounts</Text>
-        <TouchableOpacity
-          onPress={() => setShowAdd(true)}
-          style={styles.addBtn}
-        >
+        <TouchableOpacity onPress={() => setShowAdd(true)} style={styles.addBtn}>
           <Ionicons name="add" size={22} color={colors.primary} />
         </TouchableOpacity>
       </Animated.View>
@@ -161,17 +153,8 @@ const AccountCard: React.FC<{ account: Account; onDelete: () => void }> = ({
   return (
     <Card style={styles.accountCard}>
       <View style={styles.accountRow}>
-        <View
-          style={[
-            styles.accountIcon,
-            { backgroundColor: account.color + '20' },
-          ]}
-        >
-          <Ionicons
-            name={account.icon as IoniconsName}
-            size={22}
-            color={account.color}
-          />
+        <View style={[styles.accountIcon, { backgroundColor: account.color + '20' }]}>
+          <Ionicons name={account.icon as IoniconsName} size={22} color={account.color} />
         </View>
         <View style={styles.accountInfo}>
           <Text style={styles.accountName}>{account.name}</Text>
@@ -184,8 +167,7 @@ const AccountCard: React.FC<{ account: Account; onDelete: () => void }> = ({
             style={[
               styles.accountBalance,
               {
-                color:
-                  account.balance >= 0 ? colors.textPrimary : colors.expense,
+                color: account.balance >= 0 ? colors.textPrimary : colors.expense,
               },
             ]}
           >
@@ -240,26 +222,13 @@ const AddAccountModal: React.FC<{
   };
 
   return (
-    <Modal
-      visible={visible}
-      transparent
-      animationType="slide"
-      onRequestClose={onClose}
-    >
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       <KeyboardAvoidingView
         style={{ flex: 1 }}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
-        <TouchableOpacity
-          style={mStyles.overlay}
-          activeOpacity={1}
-          onPress={onClose}
-        >
-          <TouchableOpacity
-            style={mStyles.sheet}
-            activeOpacity={1}
-            onPress={() => {}}
-          >
+        <TouchableOpacity style={mStyles.overlay} activeOpacity={1} onPress={onClose}>
+          <TouchableOpacity style={mStyles.sheet} activeOpacity={1} onPress={() => {}}>
             <View style={mStyles.handle} />
             <Text style={mStyles.title}>Add Account</Text>
 
@@ -286,12 +255,7 @@ const AddAccountModal: React.FC<{
                     size={14}
                     color={type === t.key ? '#fff' : colors.textMuted}
                   />
-                  <Text
-                    style={[
-                      mStyles.typeLabel,
-                      type === t.key && { color: '#fff' },
-                    ]}
-                  >
+                  <Text style={[mStyles.typeLabel, type === t.key && { color: '#fff' }]}>
                     {t.label}
                   </Text>
                 </TouchableOpacity>
@@ -333,12 +297,7 @@ const AddAccountModal: React.FC<{
             </View>
 
             <View style={mStyles.actions}>
-              <Button
-                title="Cancel"
-                onPress={onClose}
-                variant="ghost"
-                style={{ flex: 1 }}
-              />
+              <Button title="Cancel" onPress={onClose} variant="ghost" style={{ flex: 1 }} />
               <Button
                 title="Add Account"
                 onPress={handleSave}

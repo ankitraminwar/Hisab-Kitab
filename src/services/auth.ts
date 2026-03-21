@@ -14,8 +14,7 @@ export const setPin = async (pin: string): Promise<void> => {
   });
 };
 
-export const getPin = async (): Promise<string | null> =>
-  SecureStore.getItemAsync(PIN_KEY);
+export const getPin = async (): Promise<string | null> => SecureStore.getItemAsync(PIN_KEY);
 
 export const removePin = async (): Promise<void> => {
   await SecureStore.deleteItemAsync(PIN_KEY);
@@ -35,9 +34,7 @@ export const getBiometricPreference = async (): Promise<boolean> => {
   return value === 'true';
 };
 
-export const setBiometricPrompted = async (
-  prompted: boolean,
-): Promise<void> => {
+export const setBiometricPrompted = async (prompted: boolean): Promise<void> => {
   if (prompted) {
     await SecureStore.setItemAsync(BIOMETRIC_PROMPT_KEY, 'true');
     return;
@@ -68,12 +65,10 @@ export const authenticateBiometric = async (): Promise<boolean> => {
 };
 
 export const authService = {
-  signUp: async ({ email, password }: AuthCredentials) =>
-    supabase.auth.signUp({ email, password }),
+  signUp: async ({ email, password }: AuthCredentials) => supabase.auth.signUp({ email, password }),
   signIn: async ({ email, password }: AuthCredentials) =>
     supabase.auth.signInWithPassword({ email, password }),
-  signInWithOtp: async (email: string) =>
-    supabase.auth.signInWithOtp({ email }),
+  signInWithOtp: async (email: string) => supabase.auth.signInWithOtp({ email }),
   verifyOtp: async (email: string, token: string) =>
     supabase.auth.verifyOtp({ email, token, type: 'email' }),
   requestPasswordReset: async (email: string) =>
@@ -89,10 +84,7 @@ export const authService = {
       return await supabase.auth.signOut();
     } catch (error) {
       return {
-        error:
-          error instanceof Error
-            ? error
-            : new Error('Sign out failed unexpectedly'),
+        error: error instanceof Error ? error : new Error('Sign out failed unexpectedly'),
       };
     }
   },
@@ -102,14 +94,10 @@ export const authService = {
     } catch (error) {
       return {
         data: { session: null },
-        error:
-          error instanceof Error
-            ? error
-            : new Error('Failed to retrieve auth session'),
+        error: error instanceof Error ? error : new Error('Failed to retrieve auth session'),
       };
     }
   },
-  onAuthStateChange: (
-    callback: Parameters<typeof supabase.auth.onAuthStateChange>[0],
-  ) => supabase.auth.onAuthStateChange(callback),
+  onAuthStateChange: (callback: Parameters<typeof supabase.auth.onAuthStateChange>[0]) =>
+    supabase.auth.onAuthStateChange(callback),
 };

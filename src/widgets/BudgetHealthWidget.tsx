@@ -57,7 +57,7 @@ function buildWidget(data: WidgetBudgetHealth, colors: C) {
         justifyContent: 'center',
       }}
       clickAction="OPEN_URI"
-      clickActionData={{ uri: 'hisabkitab:///(tabs)/budgets' }}
+      clickActionData={{ uri: 'hisabkitab://budgets' }}
     >
       {/* Header */}
       <FlexWidget

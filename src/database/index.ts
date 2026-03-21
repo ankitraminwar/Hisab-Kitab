@@ -1,10 +1,6 @@
 import * as SQLite from 'expo-sqlite';
 import { runMigrations } from '../services/MigrationRunner';
-import {
-  generateId,
-  SYNCABLE_TABLES,
-  type SyncableTable,
-} from '../utils/constants';
+import { generateId, SYNCABLE_TABLES, type SyncableTable } from '../utils/constants';
 import type { SyncQueueItem, SyncStatus } from '../utils/types';
 
 let db: SQLite.SQLiteDatabase | null = null;
@@ -233,10 +229,16 @@ const indexes = [
   `CREATE INDEX IF NOT EXISTS idx_transactions_deletedAt ON transactions(deletedAt)`,
   `CREATE INDEX IF NOT EXISTS idx_transactions_search ON transactions(merchant, notes, date)`,
   `CREATE INDEX IF NOT EXISTS idx_budgets_month_year ON budgets(month, year)`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS idx_budgets_unique_cat_month ON budgets(categoryId, month, year) WHERE deletedAt IS NULL`,
   `CREATE INDEX IF NOT EXISTS idx_sync_queue_entity_record ON sync_queue(entity, recordId)`,
   `CREATE INDEX IF NOT EXISTS idx_sync_queue_retryCount ON sync_queue(retryCount, updatedAt)`,
   `CREATE INDEX IF NOT EXISTS idx_split_expenses_transaction ON split_expenses(transaction_id)`,
   `CREATE INDEX IF NOT EXISTS idx_split_members_split_id ON split_members(split_expense_id)`,
+  `CREATE INDEX IF NOT EXISTS idx_transactions_type_date_category ON transactions(type, date DESC, categoryId)`,
+  `CREATE INDEX IF NOT EXISTS idx_transactions_tags ON transactions(tags)`,
+  `CREATE INDEX IF NOT EXISTS idx_transactions_dashboard ON transactions(date DESC, type)`,
+  `CREATE INDEX IF NOT EXISTS idx_transactions_filter ON transactions(type, categoryId, accountId)`,
+  `CREATE INDEX IF NOT EXISTS idx_transactions_cat_type_deleted ON transactions(categoryId, type, deletedAt DESC)`,
 ];
 
 const defaultCategories = [
@@ -416,6 +418,10 @@ const localTablesToClear = [
   'accounts',
   'categories',
   'user_profile',
+  'recurring_templates',
+  'split_expenses',
+  'split_members',
+  'payment_methods',
   'sync_queue',
   'sync_state',
 ] as const;
@@ -453,9 +459,7 @@ export const initializeDatabase = async (): Promise<void> => {
 };
 
 const ensureSyncStateSchema = async (database: SQLite.SQLiteDatabase) => {
-  const columns = await database.getAllAsync<{ name: string }>(
-    `PRAGMA table_info(sync_state)`,
-  );
+  const columns = await database.getAllAsync<{ name: string }>(`PRAGMA table_info(sync_state)`);
 
   if (columns.some((column) => column.name === 'key')) {
     return;
@@ -492,16 +496,7 @@ const seedDefaultData = async (database: SQLite.SQLiteDatabase) => {
         `INSERT INTO categories
           (id, name, type, icon, color, isCustom, parentId, createdAt, updatedAt, userId, syncStatus, lastSyncedAt, deletedAt)
          VALUES (?, ?, ?, ?, ?, 0, NULL, ?, ?, NULL, 'synced', ?, NULL)`,
-        [
-          category.id,
-          category.name,
-          category.type,
-          category.icon,
-          category.color,
-          now,
-          now,
-          now,
-        ],
+        [category.id, category.name, category.type, category.icon, category.color, now, now, now],
       );
     }
   }
@@ -575,9 +570,7 @@ export const markRecordSyncStatus = async (
 };
 
 export const removeFromSyncQueue = async (queueId: string) => {
-  await getDatabase().runAsync('DELETE FROM sync_queue WHERE id = ?', [
-    queueId,
-  ]);
+  await getDatabase().runAsync('DELETE FROM sync_queue WHERE id = ?', [queueId]);
 };
 
 export const listPendingSyncItems = async (): Promise<SyncQueueItem[]> =>
@@ -587,10 +580,7 @@ export const listPendingSyncItems = async (): Promise<SyncQueueItem[]> =>
      ORDER BY createdAt ASC`,
   );
 
-export const incrementSyncRetry = async (
-  queueId: string,
-  errorMessage: string,
-) => {
+export const incrementSyncRetry = async (queueId: string, errorMessage: string) => {
   const now = new Date().toISOString();
   await getDatabase().runAsync(
     `UPDATE sync_queue
@@ -622,13 +612,9 @@ export const fetchTableRows = async <T>(
   table: SyncableTable,
   where = 'deletedAt IS NULL',
   params: SQLite.SQLiteBindParams = [],
-) =>
-  getDatabase().getAllAsync<T>(`SELECT * FROM ${table} WHERE ${where}`, params);
+) => getDatabase().getAllAsync<T>(`SELECT * FROM ${table} WHERE ${where}`, params);
 
-export const upsertLocalRecord = async (
-  table: SyncableTable,
-  record: Record<string, unknown>,
-) => {
+export const upsertLocalRecord = async (table: SyncableTable, record: Record<string, unknown>) => {
   const database = getDatabase();
   const columns = Object.keys(record);
   const placeholders = columns.map(() => '?').join(', ');
@@ -658,14 +644,54 @@ export const softDeleteLocalRecord = async (
   );
 };
 
-export const getLastSyncTimestamp = async () =>
-  getSyncState('lastSuccessfulSyncAt');
+export const getLastSyncTimestamp = async () => getSyncState('lastSuccessfulSyncAt');
 
 export const setLastSyncTimestamp = async (timestamp: string) =>
   setSyncState('lastSuccessfulSyncAt', timestamp);
 
-export const getSyncableTables = (): readonly SyncableTable[] =>
-  SYNCABLE_TABLES;
+export const getSyncableTables = (): readonly SyncableTable[] => SYNCABLE_TABLES;
+
+export const hasLocalUserData = async (userId: string | null): Promise<boolean> => {
+  const database = getDatabase();
+
+  const userScopedTables = [
+    'user_profile',
+    'accounts',
+    'transactions',
+    'budgets',
+    'goals',
+    'assets',
+    'liabilities',
+    'net_worth_history',
+    'recurring_templates',
+    'split_expenses',
+    'split_members',
+  ] as const;
+
+  for (const table of userScopedTables) {
+    const row = await database.getFirstAsync<{ count: number }>(
+      `SELECT COUNT(*) as count FROM ${table} WHERE deletedAt IS NULL AND userId = ?`,
+      [userId],
+    );
+    if ((row?.count ?? 0) > 0) {
+      return true;
+    }
+  }
+
+  const customCategoryCount = await database.getFirstAsync<{ count: number }>(
+    'SELECT COUNT(*) as count FROM categories WHERE deletedAt IS NULL AND isCustom = 1 AND userId = ?',
+    [userId],
+  );
+  if ((customCategoryCount?.count ?? 0) > 0) {
+    return true;
+  }
+
+  const customPaymentMethodCount = await database.getFirstAsync<{ count: number }>(
+    'SELECT COUNT(*) as count FROM payment_methods WHERE deletedAt IS NULL AND isCustom = 1 AND userId = ?',
+    [userId],
+  );
+  return (customPaymentMethodCount?.count ?? 0) > 0;
+};
 
 export const clearLocalData = async (): Promise<void> => {
   const database = getDatabase();

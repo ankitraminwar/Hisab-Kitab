@@ -1,9 +1,11 @@
 import { Ionicons } from '@expo/vector-icons';
 import { format } from 'date-fns';
+import * as Haptics from 'expo-haptics';
 import React, { memo, useCallback, useMemo } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
+  runOnJS,
   useAnimatedStyle,
   useSharedValue,
   withSpring,
@@ -20,11 +22,7 @@ interface TransactionItemProps {
 
 const SPRING_CONFIG = { damping: 15, stiffness: 200 };
 
-const TransactionItem: React.FC<TransactionItemProps> = ({
-  item,
-  onPress,
-  onLongPress,
-}) => {
+const TransactionItem: React.FC<TransactionItemProps> = ({ item, onPress, onLongPress }) => {
   const { colors } = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
 
@@ -38,32 +36,38 @@ const TransactionItem: React.FC<TransactionItemProps> = ({
     onLongPress?.(item);
   }, [item, onLongPress]);
 
-  const tapGesture = Gesture.Tap()
+  const tapGesture = Gesture?.Tap()
     .onBegin(() => {
+      'worklet';
       scale.value = withSpring(0.97, SPRING_CONFIG);
     })
     .onFinalize(() => {
+      'worklet';
       scale.value = withSpring(1, SPRING_CONFIG);
     })
     .onEnd(() => {
+      'worklet';
       if (onPress) {
-        handlePress();
+        runOnJS(handlePress)();
       }
     });
 
-  const longPressGesture = Gesture.LongPress()
-    .minDuration(400)
-    .onStart(() => {
+  const longPressGesture = Gesture?.LongPress()
+    ?.minDuration(400)
+    ?.onStart(() => {
+      'worklet';
       scale.value = withSpring(0.95, SPRING_CONFIG);
+      runOnJS(Haptics.impactAsync)(Haptics.ImpactFeedbackStyle.Light);
       if (onLongPress) {
-        handleLongPress();
+        runOnJS(handleLongPress)();
       }
     })
-    .onFinalize(() => {
+    ?.onFinalize(() => {
+      'worklet';
       scale.value = withSpring(1, SPRING_CONFIG);
     });
 
-  const gesture = Gesture.Exclusive(longPressGesture, tapGesture);
+  const gesture = Gesture?.Exclusive(longPressGesture, tapGesture);
 
   const animatedStyle = useAnimatedStyle(() => ({
     transform: [{ scale: scale.value }],
@@ -76,8 +80,7 @@ const TransactionItem: React.FC<TransactionItemProps> = ({
         ? colors.expense
         : colors.transfer;
 
-  const prefix =
-    item.type === 'income' ? '+' : item.type === 'expense' ? '-' : '↔';
+  const prefix = item.type === 'income' ? '+' : item.type === 'expense' ? '-' : '↔';
 
   return (
     <GestureDetector gesture={gesture}>
@@ -104,9 +107,7 @@ const TransactionItem: React.FC<TransactionItemProps> = ({
             {item.date ? (
               <>
                 <View style={styles.dot} />
-                <Text style={styles.category}>
-                  {format(new Date(item.date), 'hh:mm a')}
-                </Text>
+                <Text style={styles.category}>{format(new Date(item.date), 'hh:mm a')}</Text>
               </>
             ) : null}
             {Array.isArray(item.tags) && item.tags.length > 0 && (
@@ -123,9 +124,7 @@ const TransactionItem: React.FC<TransactionItemProps> = ({
             {prefix}
             {formatCurrency(item.amount)}
           </Text>
-          <Text style={styles.date}>
-            {item.date ? format(new Date(item.date), 'dd MMM') : ''}
-          </Text>
+          <Text style={styles.date}>{item.date ? format(new Date(item.date), 'dd MMM') : ''}</Text>
         </View>
       </Animated.View>
     </GestureDetector>

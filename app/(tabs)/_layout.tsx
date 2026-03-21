@@ -2,11 +2,7 @@ import React from 'react';
 import { Pressable, StyleSheet } from 'react-native';
 import { Tabs, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import Animated, {
-  useAnimatedStyle,
-  useSharedValue,
-  withSpring,
-} from 'react-native-reanimated';
+import Animated, { useAnimatedStyle, useSharedValue, withSpring } from 'react-native-reanimated';
 import { useTheme } from '../../src/hooks/useTheme';
 
 const SPRING_CONFIG = { damping: 12, stiffness: 180 };
@@ -50,11 +46,7 @@ const CenterFAB: React.FC = () => {
       onPress={() => router.push('/transactions/add')}
     >
       <Animated.View
-        style={[
-          fabStyles.container,
-          { backgroundColor: colors.primary },
-          animatedStyle,
-        ]}
+        style={[fabStyles.container, { backgroundColor: colors.primary }, animatedStyle]}
       >
         <Ionicons name="add" size={28} color="#fff" />
       </Animated.View>
@@ -82,11 +74,7 @@ export default function TabsLayout() {
         options={{
           title: 'Dashboard',
           tabBarIcon: ({ color, focused }) => (
-            <TabIcon
-              name={focused ? 'grid' : 'grid-outline'}
-              color={color}
-              focused={focused}
-            />
+            <TabIcon name={focused ? 'grid' : 'grid-outline'} color={color} focused={focused} />
           ),
         }}
       />
@@ -133,11 +121,7 @@ export default function TabsLayout() {
         options={{
           title: 'Profile',
           tabBarIcon: ({ color, focused }) => (
-            <TabIcon
-              name={focused ? 'person' : 'person-outline'}
-              color={color}
-              focused={focused}
-            />
+            <TabIcon name={focused ? 'person' : 'person-outline'} color={color} focused={focused} />
           ),
         }}
       />

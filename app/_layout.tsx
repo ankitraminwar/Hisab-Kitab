@@ -1,11 +1,13 @@
 import { Ionicons } from '@expo/vector-icons';
 import type { Session } from '@supabase/supabase-js';
 import { QueryClientProvider } from '@tanstack/react-query';
+import * as Linking from 'expo-linking';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  BackHandler,
   LogBox,
   Platform,
   StyleSheet,
@@ -16,7 +18,8 @@ import {
 import { registerWidgetTaskHandler } from 'react-native-android-widget';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
-import { clearLocalData, initializeDatabase } from '@/database';
+import { ScreenErrorBoundary } from '@/components/common';
+import { clearLocalData, hasLocalUserData, initializeDatabase } from '@/database';
 import { useTheme, type ThemeColors } from '@/hooks/useTheme';
 import { queryClient } from '@/lib/queryClient';
 import {
@@ -35,6 +38,23 @@ import { widgetTaskHandler } from '@/widgets/widgetTaskHandler';
 
 // Suppress the expo-keep-awake warning that fires in dev mode
 LogBox.ignoreLogs(['Unable to activate keep awake']);
+
+type GlobalErrorHandler = (error: Error, isFatal?: boolean) => void;
+type ErrorUtilsShape = {
+  getGlobalHandler?: () => GlobalErrorHandler;
+  setGlobalHandler?: (handler: GlobalErrorHandler) => void;
+};
+
+const errorUtils = (globalThis as typeof globalThis & { ErrorUtils?: ErrorUtilsShape }).ErrorUtils;
+const previousGlobalHandler = errorUtils?.getGlobalHandler?.();
+
+errorUtils?.setGlobalHandler?.((error, isFatal) => {
+  if (error.message.includes('Unable to activate keep awake')) {
+    return;
+  }
+
+  previousGlobalHandler?.(error, isFatal);
+});
 
 // Register Android widget task handler at module level
 if (Platform.OS === 'android') {
@@ -58,16 +78,55 @@ export default function RootLayout() {
     resetAppState,
   } = useAppStore();
   const [initializing, setInitializing] = useState(true);
+  const [slowLoad, setSlowLoad] = useState(false);
   const [session, setSession] = useState<Session | null>(null);
 
   const { colors } = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
 
+  // Max-wait safeguard: if initializing is still true after 8s, force it off
   useEffect(() => {
+    const maxWait = setTimeout(() => setInitializing(false), 8000);
+    return () => clearTimeout(maxWait);
+  }, []);
+
+  // Show slow-load message after 3s
+  useEffect(() => {
+    if (!initializing) return;
+    const t = setTimeout(() => setSlowLoad(true), 3000);
+    return () => clearTimeout(t);
+  }, [initializing]);
+
+  useEffect(() => {
+    const withTimeout = <T,>(promise: Promise<T>, ms: number, fallback: T): Promise<T> =>
+      Promise.race([promise, new Promise<T>((resolve) => setTimeout(() => resolve(fallback), ms))]);
+
+    const hydrateAuthenticatedSession = async (nextSession: Session, reason: string) => {
+      try {
+        const shouldRunInitialSync = !(await hasLocalUserData(nextSession.user.id));
+        if (shouldRunInitialSync) {
+          await syncService.initialSync();
+        } else {
+          await syncService.sync(reason);
+        }
+
+        const syncedProfile = await UserProfileService.getProfile();
+        if (syncedProfile) {
+          setTheme(syncedProfile.themePreference);
+          setUserProfile(syncedProfile);
+        }
+      } catch (error) {
+        console.warn('Session hydration failed', error);
+      }
+    };
+
     const bootstrap = async () => {
       try {
-        await initializeDatabase();
-        const currentSession = await authService.getSession();
+        await withTimeout(initializeDatabase(), 5000, undefined);
+        const currentSession = await withTimeout(authService.getSession(), 5000, {
+          data: { session: null },
+          error: null,
+        });
         const nextSession = currentSession.data.session ?? null;
         setSession(nextSession);
         previousSessionRef.current = nextSession;
@@ -94,14 +153,7 @@ export default function RootLayout() {
             monthlyReportReminder: true,
           });
         } else {
-          if (nextSession) {
-            const createdProfile = await UserProfileService.upsertProfile({
-              userId: nextSession.user.id,
-              email: nextSession.user.email ?? '',
-              themePreference: 'system',
-            });
-            setUserProfile(createdProfile);
-          }
+          setUserProfile(null);
           setTheme('system');
         }
 
@@ -112,11 +164,11 @@ export default function RootLayout() {
         smsImportService.start();
 
         if (nextSession) {
-          void syncService.requestSync('app-start');
+          void hydrateAuthenticatedSession(nextSession, 'app-start');
           void smsImportService.run();
         }
       } catch (error) {
-        console.error('Initialization failed', error);
+        console.warn('Bootstrap failed, continuing in offline mode', error);
         setLocked(false);
       } finally {
         setInitializing(false);
@@ -125,38 +177,31 @@ export default function RootLayout() {
 
     void bootstrap();
 
-    const subscription = authService.onAuthStateChange(
-      async (_event, nextSession) => {
-        const previousSession = previousSessionRef.current;
-        previousSessionRef.current = nextSession;
-        setSession(nextSession);
+    const subscription = authService.onAuthStateChange(async (_event, nextSession) => {
+      const previousSession = previousSessionRef.current;
+      previousSessionRef.current = nextSession;
+      setSession(nextSession);
 
-        if (!nextSession && previousSession) {
-          smsImportService.stop();
-          await clearLocalData();
-          queryClient.clear();
-          resetAppState();
-          setLocked(false);
-          router.replace('/login');
-          return;
-        }
+      if (!nextSession && previousSession) {
+        smsImportService.stop();
+        await clearLocalData();
+        queryClient.clear();
+        resetAppState();
+        setLocked(false);
+        router.replace('/login');
+        return;
+      }
 
-        if (nextSession) {
-          // First-time login: pull all data from Supabase
-          if (!previousSession) {
-            try {
-              await syncService.requestSync('first-login');
-            } catch {
-              // sync errors are non-fatal
-            }
-          }
-          setLocked(useAppStore.getState().biometricsEnabled);
-          void syncService.requestSync('auth-state-change');
-          smsImportService.start();
-          void smsImportService.run();
-        }
-      },
-    );
+      if (nextSession) {
+        setLocked(useAppStore.getState().biometricsEnabled);
+        smsImportService.start();
+        void smsImportService.run();
+        void hydrateAuthenticatedSession(
+          nextSession,
+          previousSession ? 'auth-state-change' : 'login-hydration',
+        );
+      }
+    });
 
     return () => {
       subscription.data.subscription.unsubscribe();
@@ -190,6 +235,25 @@ export default function RootLayout() {
     }
   }, [initializing, router, segments, session]);
 
+  // Block hardware back button while biometric lock screen is shown
+  useEffect(() => {
+    if (!(session && isLocked && biometricsEnabled)) return;
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => true);
+    return () => sub.remove();
+  }, [session, isLocked, biometricsEnabled]);
+
+  // Handle widget deep links that need tab route resolution
+  const deepLinkUrl = Linking.useURL();
+  useEffect(() => {
+    if (!deepLinkUrl || initializing) return;
+    const path = deepLinkUrl.replace(/^hisabkitab:\/\//, '/');
+    if (path === '/transactions') {
+      router.replace('/(tabs)/transactions');
+    } else if (path === '/budgets') {
+      router.replace('/(tabs)/budgets');
+    }
+  }, [deepLinkUrl, initializing, router]);
+
   const handleAuthenticate = async () => {
     try {
       const success = await authenticateBiometric();
@@ -206,6 +270,9 @@ export default function RootLayout() {
       <View style={styles.lockContainer}>
         <ActivityIndicator size="large" color={colors.primary} />
         <Text style={styles.loadingText}>Loading Hisab Kitab...</Text>
+        {slowLoad && (
+          <Text style={styles.loadingSubtext}>Taking longer than usual. Please wait...</Text>
+        )}
       </View>
     );
   }
@@ -218,10 +285,7 @@ export default function RootLayout() {
         </View>
         <Text style={styles.title}>Hisab Kitab</Text>
         <Text style={styles.subtitle}>Your finances are locked</Text>
-        <TouchableOpacity
-          style={styles.unlockButton}
-          onPress={handleAuthenticate}
-        >
+        <TouchableOpacity style={styles.unlockButton} onPress={handleAuthenticate}>
           <Ionicons name="finger-print" size={24} color="#ffffff" />
           <Text style={styles.unlockText}>Unlock</Text>
         </TouchableOpacity>
@@ -230,49 +294,54 @@ export default function RootLayout() {
   }
 
   return (
-    <GestureHandlerRootView style={styles.root}>
-      <QueryClientProvider client={queryClient}>
-        <StatusBar
-          style={theme === 'dark' ? 'light' : 'dark'}
-          backgroundColor={colors.bg}
-        />
-        <Stack
-          screenOptions={{ headerShown: false, animation: 'slide_from_right' }}
-        >
-          <Stack.Screen name="login" options={{ headerShown: false }} />
-          <Stack.Screen name="auth" options={{ headerShown: false }} />
-          <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-          <Stack.Screen
-            name="transactions/add"
-            options={{ presentation: 'modal', animation: 'slide_from_bottom' }}
-          />
-          <Stack.Screen
-            name="transactions/[id]"
-            options={{ presentation: 'modal', animation: 'slide_from_bottom' }}
-          />
-          <Stack.Screen
-            name="accounts/index"
-            options={{ animation: 'slide_from_right' }}
-          />
-          <Stack.Screen
-            name="settings/index"
-            options={{ animation: 'slide_from_right' }}
-          />
-          <Stack.Screen
-            name="sms-import"
-            options={{ presentation: 'modal', animation: 'slide_from_bottom' }}
-          />
-          <Stack.Screen
-            name="splits/index"
-            options={{ animation: 'slide_from_right' }}
-          />
-          <Stack.Screen
-            name="split-expense/[id]"
-            options={{ presentation: 'modal', animation: 'slide_from_bottom' }}
-          />
-        </Stack>
-      </QueryClientProvider>
-    </GestureHandlerRootView>
+    <ScreenErrorBoundary>
+      <GestureHandlerRootView style={styles.root}>
+        <QueryClientProvider client={queryClient}>
+          <StatusBar style={theme === 'dark' ? 'light' : 'dark'} backgroundColor={colors.bg} />
+          <Stack
+            screenOptions={{
+              headerShown: false,
+              animation: 'slide_from_right',
+            }}
+          >
+            <Stack.Screen name="login" options={{ headerShown: false }} />
+            <Stack.Screen name="auth" options={{ headerShown: false }} />
+            <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+            <Stack.Screen
+              name="transactions/add"
+              options={{
+                presentation: 'modal',
+                animation: 'slide_from_bottom',
+              }}
+            />
+            <Stack.Screen
+              name="transactions/[id]"
+              options={{
+                presentation: 'modal',
+                animation: 'slide_from_bottom',
+              }}
+            />
+            <Stack.Screen name="accounts/index" options={{ animation: 'slide_from_right' }} />
+            <Stack.Screen name="settings/index" options={{ animation: 'slide_from_right' }} />
+            <Stack.Screen
+              name="sms-import"
+              options={{
+                presentation: 'modal',
+                animation: 'slide_from_bottom',
+              }}
+            />
+            <Stack.Screen name="splits/index" options={{ animation: 'slide_from_right' }} />
+            <Stack.Screen
+              name="split-expense/[id]"
+              options={{
+                presentation: 'modal',
+                animation: 'slide_from_bottom',
+              }}
+            />
+          </Stack>
+        </QueryClientProvider>
+      </GestureHandlerRootView>
+    </ScreenErrorBoundary>
   );
 }
 
@@ -311,6 +380,11 @@ const createStyles = (colors: ThemeColors) =>
       ...TYPOGRAPHY.body,
       color: colors.textSecondary,
       marginTop: SPACING.md,
+    },
+    loadingSubtext: {
+      ...TYPOGRAPHY.caption,
+      color: colors.textMuted,
+      marginTop: SPACING.sm,
     },
     unlockButton: {
       flexDirection: 'row',

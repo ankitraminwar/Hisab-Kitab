@@ -8,22 +8,22 @@ Offline-first personal finance manager for Android/iOS. Expo + React Native + Ty
 
 ## Tech Stack
 
-| Layer       | Technology                                                   |
-| ----------- | ------------------------------------------------------------ |
-| Framework   | Expo ~54.0.0, React Native 0.81.5                            |
-| Language    | TypeScript strict (`tsc --noEmit` = 0 errors)                |
-| Routing     | expo-router ~6.0.23 (file-based, typed routes)               |
-| Local DB    | expo-sqlite ~16.0.10 (source of truth)                       |
-| Remote DB   | Supabase (PostgreSQL + Auth + Edge Functions)                |
-| State       | Zustand ^4.4.0 (`src/store/appStore.ts`) + React Query ^5    |
-| Styling     | StyleSheet with dynamic theme via `useTheme()` hook          |
-| Animations  | react-native-reanimated ~4.1.1, expo-linear-gradient         |
-| Charts      | @shopify/react-native-skia ^2.2.12, react-native-svg         |
-| Lists       | @shopify/flash-list 2.0.2 (v2 — no `estimatedItemSize` prop) |
-| Widgets     | react-native-android-widget ^0.20.1                          |
-| SMS parsing | react-native-get-sms-android ^2.1.0                          |
-| Linting     | ESLint 9 (`eslint . --max-warnings 0` = 0 warnings)          |
-| Formatting  | Prettier (pre-commit via husky + lint-staged)                |
+| Layer       | Technology                                                                      |
+| ----------- | ------------------------------------------------------------------------------- |
+| Framework   | Expo ~54.0.0, React Native 0.81.5                                               |
+| Language    | TypeScript strict (`tsc --noEmit` = 0 errors)                                   |
+| Routing     | expo-router ~6.0.23 (file-based, typed routes)                                  |
+| Local DB    | expo-sqlite ~16.0.10 (source of truth)                                          |
+| Remote DB   | Supabase (PostgreSQL + Auth + Edge Functions)                                   |
+| State       | Zustand ^4.4.0 (`src/store/appStore.ts` — Auth/UI/Data slices) + React Query ^5 |
+| Styling     | StyleSheet with dynamic theme via `useTheme()` hook                             |
+| Animations  | react-native-reanimated ~4.1.1, expo-linear-gradient                            |
+| Charts      | @shopify/react-native-skia ^2.2.12, react-native-svg                            |
+| Lists       | @shopify/flash-list 2.0.2 (v2 — no `estimatedItemSize` prop)                    |
+| Widgets     | react-native-android-widget ^0.20.1                                             |
+| SMS parsing | react-native-get-sms-android ^2.1.0                                             |
+| Linting     | ESLint 9 (`eslint . --max-warnings 0` = 0 warnings)                             |
+| Formatting  | Prettier (pre-commit via husky + lint-staged)                                   |
 
 ## Hard Rules
 
@@ -71,11 +71,12 @@ src/
     common/                      # Shared UI components (see component library below)
       index.tsx                  # Card, Button, FAB, EmptyState, CategoryBadge, SearchBar,
                                  # ProgressBar, SectionHeader, StatCard, CustomPopup,
-                                 # CustomSwitch, AmountText
+                                 # CustomSwitch, AmountText, ScreenErrorBoundary
       CategoryGrid.tsx           # Responsive category selector grid
-      NumericKeypad.tsx          # Custom number entry keypad
+      NumericKeypad.tsx          # Custom number entry keypad (with haptics)
       PeriodTabs.tsx             # Month/year period selector
       ScreenHeader.tsx           # Consistent back-button header
+      SkeletonLoader.tsx         # Skeleton loading placeholders (SkeletonTransactionItem, SkeletonList)
     TransactionItem.tsx          # Swipeable transaction row (gesture + animation)
   database/
     index.ts                     # SQLite schema init, table creation, enqueueSync(), migrations
@@ -122,7 +123,7 @@ src/
     MigrationRunner.ts           # SQLite migration helper
     permissions.ts               # Android permission requests
   store/
-    appStore.ts                  # Zustand store (see state fields in ARCHITECTURE.md)
+    appStore.ts                  # Zustand store — 3 slices: AuthSlice, UISlice, DataSlice
   utils/
     constants.ts                 # SPACING, RADIUS, TYPOGRAPHY, COLORS, formatCurrency,
                                  # formatCompact, generateId, SYNCABLE_TABLES
@@ -149,18 +150,31 @@ stitch_designs/                  # Reference UI mockups (PNG) — light + dark p
 
 - Local writes call `enqueueSync(table, id, 'upsert'|'delete', payload)` → adds to `sync_queue`. The 4th argument is the **full record as a plain object** (`Record<string, unknown>`). Three-argument calls are wrong and will cause TypeScript errors.
 - `syncService` pushes pending queue items → pulls remote changes by `updated_at`.
+- **Default data bootstrap**: On first push per device, `ensureDefaultsSynced()` runs once and enqueues all default (non-custom) categories and payment methods, so they exist in Supabase before transactions reference them. Tracked with a `defaultsSynced` flag in `sync_state`.
+- **`tags` field**: Stored as a JSON string (`TEXT`) in SQLite but Supabase stores it as `jsonb`. The sync service automatically parses the string to an array on push — do not pre-parse it in payloads.
+- **Parallel pulls**: `pullRemoteChanges()` and `initialSync()` pull tables by dependency tier using `Promise.allSettled()`. Tier 0 (accounts, categories, payment_methods, goals, assets, liabilities, user_profile) → Tier 1 (transactions, budgets, net_worth_history) → Tier 2 (split_expenses) → Tier 3 (split_members).
+- **Sync queue compaction**: `enqueueSync()` automatically merges multiple mutations for the same `entity+recordId` into a single queue entry — only the latest payload is pushed to Supabase.
 - Only tables in `SYNCABLE_TABLES` (constants.ts) are synced.
 - Soft-delete: `deletedAt` timestamp, not row removal.
 - Unreachable Supabase → app works locally; sync retries on reconnect.
 
 ## Key Patterns
 
-- **dataRevision**: Zustand counter bumped after writes. Screens subscribe to it to trigger re-fetches.
+- **dataRevision**: Zustand counter bumped after writes (debounced at 100 ms). Screens subscribe to it to trigger re-fetches.
 - **Screen structure**: `SafeAreaView` → header → `ScrollView` → sections, styled via `useMemo(() => createStyles(colors), [colors])`.
 - **Route params**: `useLocalSearchParams<{ id: string }>()` for dynamic routes.
 - **Modals**: Transaction add/edit and split screens use `presentation: 'modal'` in `_layout.tsx`.
 - **Animations**: `Animated.View` with `FadeInDown` from reanimated for staggered section entry.
 - **useCallback for async effects**: Any `async` function used inside a `useEffect` dependency array must be wrapped in `useCallback` to satisfy the eslint `exhaustive-deps` rule.
+- **Fire-and-forget promises**: Use `.catch(console.warn)` instead of `void`. Example: `triggerBackgroundSync('reason').catch(console.warn)`.
+- **formatCurrency**: Uses a module-level cached `Intl.NumberFormat` instance for performance.
+- **Error boundaries**: `ScreenErrorBoundary` wraps the root layout to catch render crashes with a user-friendly retry UI.
+- **Deep links**: Root layout handles `hisabkitab://transactions` and `hisabkitab://budgets` deep links, mapping them to the correct tab routes.
+- **CustomPopup auto-dismiss**: Success-type popups automatically close after 3 seconds.
+- **SMS editability**: SMS-imported transactions can be edited; the `sms:` origin tag is preserved.
+- **CSV export**: Uses chunked 1000-row streaming to avoid loading the entire dataset into memory.
+- **SMS polling backoff**: Exponential backoff (up to 10 min) when no new messages are detected; resets on app foreground.
+- **Budget query**: Uses a single `LEFT JOIN` on transactions instead of a correlated subquery (N+1 → 1).
 
 ## Navigation Map
 
@@ -214,7 +228,19 @@ stitch_designs/                  # Reference UI mockups (PNG) — light + dark p
 
 ## Supabase Schema
 
-Run `supabase/schema.sql` in the Supabase SQL editor. Single file — all tables, indexes, triggers, RLS policies, and backfill logic. No separate migration files.
+Run `supabase/schema.sql` in the Supabase SQL editor. Single file — all tables, indexes, triggers, RLS policies, materialized views, and backfill logic. No separate migration files.
+
+**Schema design decisions**:
+
+- **No inter-table FK constraints** — constraints like `transactions.category_id → categories.id` have been intentionally dropped. SQLite enforces referential integrity locally; removing them from Supabase allows offline-first sync without FK violations when records arrive out of order.
+- **`user_id → auth.users(id)`** FK is retained on all tables for RLS and cascade delete.
+- **`user_profile.avatar`** — `TEXT` column for avatar URI (added in SQLite migration v2, applied to Supabase).
+- **`payment_method`** — no CHECK constraint; accepts any string to support SMS-imported transactions with varied payment method strings.
+- **`dashboard_monthly_stats`** — Materialized view pre-aggregating monthly income/expenses/net per user. Auto-refreshed via trigger on `transactions`. Access via `get_dashboard_stats(month)` RPC.
+- **GIN index on `tags`** — `idx_transactions_tags_gin` enables fast tag-based analytics on Supabase.
+- **Composite indexes** — `idx_transactions_dashboard` (date DESC, type) and `idx_transactions_filter` (type, category_id, account_id) optimize dashboard and filter queries.
+- **Budget category+month index** — `idx_transactions_cat_type_deleted` (categoryId, type, deletedAt DESC) speeds up budget spending aggregation.
+- **Budget uniqueness** — `idx_budgets_unique_cat_month` partial unique index on `(categoryId, month, year) WHERE deletedAt IS NULL` prevents duplicate budgets for the same category+period.
 
 ## Caveats & Known State
 
@@ -224,13 +250,20 @@ Run `supabase/schema.sql` in the Supabase SQL editor. Single file — all tables
 - `NotificationsScreen` has no persistent bell icon in the tab bar — entry is from dashboard header only.
 - `NetWorthScreen` is reached from within `ReportsScreen`, not from a direct route shown in tab bar.
 - `/(tabs)/goals` and `/(tabs)/reports` are valid navigable routes but excluded from the tab bar (`href: null`).
+- **Default categories** use fixed IDs (prefix `cat_`) shared across all installs. They are pushed to Supabase on first sync via `ensureDefaultsSynced()`. If two devices sync the same default category, the RLS `user_id` check may reject the second push as a non-critical failure — this is silently handled.
+- **Widget deep links** use `hisabkitab://` scheme (double slash, NOT triple). e.g. `hisabkitab://transactions/add`.
+- **R8/ProGuard** enabled for production builds — `minifyEnabled` and `shrinkResources` in `android/gradle.properties`.
+- **Lazy loading** — Reports, Budgets, and Goals tabs use `React.lazy()` + `Suspense` to defer heavy chart bundle loading.
+- **Biometric lock** — hardware back button is blocked via `BackHandler` when lock screen is active.
+- **Dashboard donut chart** — Uses SQL-backed `getCategoryBreakdownByDateRange()` for full-month category data, not limited to recent transactions.
+- **Split expense percent validation** uses `0.01` epsilon (not `0.5`) and transaction picker is limited to 100 items.
 
 ## Code Quality Status
 
-| Check          | Command             | Status        |
-| -------------- | ------------------- | ------------- |
-| TypeScript     | `npm run typecheck` | ✅ 0 errors   |
-| ESLint         | `npm run lint`      | ✅ 0 warnings |
-| `as any` casts | —                   | ✅ 0          |
-| `: any` types  | —                   | ✅ 0          |
-| Formatting     | `npm run format`    | ✅ Prettier   |
+| Check          | Command          | Status        |
+| -------------- | ---------------- | ------------- |
+| TypeScript     | `yarn typecheck` | ✅ 0 errors   |
+| ESLint         | `yarn lint`      | ✅ 0 warnings |
+| `as any` casts | —                | ✅ 0          |
+| `: any` types  | —                | ✅ 0          |
+| Formatting     | `yarn format`    | ✅ Prettier   |

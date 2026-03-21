@@ -1,5 +1,13 @@
 import type { SyncableTable } from '../utils/constants';
 
+/** Columns that exist locally (added by MigrationRunner v1) but not in Supabase. */
+const LOCAL_ONLY_COLUMNS = new Set([
+  'last_modified',
+  'server_id',
+  'version_hash',
+  'sync_status', // migration v1 duplicate — base schema uses camelCase syncStatus
+]);
+
 const baseLocalToRemote: Record<string, string> = {
   userId: 'user_id',
   syncStatus: 'sync_status',
@@ -9,9 +17,7 @@ const baseLocalToRemote: Record<string, string> = {
   updatedAt: 'updated_at',
 };
 
-const tableLocalToRemote: Partial<
-  Record<SyncableTable, Record<string, string>>
-> = {
+const tableLocalToRemote: Partial<Record<SyncableTable, Record<string, string>>> = {
   accounts: {
     isDefault: 'is_default',
   },
@@ -58,31 +64,29 @@ const tableLocalToRemote: Partial<
     notificationsEnabled: 'notifications_enabled',
     biometricEnabled: 'biometric_enabled',
   },
-  split_expenses: {},
-  split_members: {},
+  split_expenses: {
+    transactionId: 'transaction_id',
+    paidByUserId: 'paid_by_user_id',
+    totalAmount: 'total_amount',
+    splitMethod: 'split_method',
+  },
+  split_members: {
+    splitExpenseId: 'split_expense_id',
+    shareAmount: 'share_amount',
+    sharePercent: 'share_percent',
+  },
   payment_methods: {
     isCustom: 'is_custom',
   },
 };
 
 const invert = (mapping: Record<string, string>) =>
-  Object.fromEntries(
-    Object.entries(mapping).map(([localKey, remoteKey]) => [
-      remoteKey,
-      localKey,
-    ]),
-  );
+  Object.fromEntries(Object.entries(mapping).map(([localKey, remoteKey]) => [remoteKey, localKey]));
 
 const tableRemoteToLocal = Object.fromEntries(
-  (
-    Object.entries(tableLocalToRemote) as [
-      SyncableTable,
-      Record<string, string>,
-    ][]
-  ).map(([table, mapping]) => [
-    table,
-    invert({ ...baseLocalToRemote, ...mapping }),
-  ]),
+  (Object.entries(tableLocalToRemote) as [SyncableTable, Record<string, string>][]).map(
+    ([table, mapping]) => [table, invert({ ...baseLocalToRemote, ...mapping })],
+  ),
 ) as Partial<Record<SyncableTable, Record<string, string>>>;
 
 const toBooleanIfNeeded = (key: string, value: unknown) => {
@@ -112,7 +116,9 @@ export const mapLocalToRemoteRecord = (
   };
 
   return Object.fromEntries(
-    Object.entries(record).map(([key, value]) => [mapping[key] ?? key, value]),
+    Object.entries(record)
+      .filter(([key]) => !LOCAL_ONLY_COLUMNS.has(key))
+      .map(([key, value]) => [mapping[key] ?? key, value]),
   );
 };
 

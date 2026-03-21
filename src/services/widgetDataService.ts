@@ -62,18 +62,17 @@ export const WidgetDataService = {
     const month = String(now.getMonth() + 1).padStart(2, '0');
 
     const budgets = await BudgetService.getForMonth(year, month);
-    const totalLimit = budgets.reduce((s, b) => s + b.limit_amount, 0);
+    const totalLimit = budgets.reduce((s, b) => s + b.limitAmount, 0);
     const totalSpent = budgets.reduce((s, b) => s + b.spent, 0);
 
     return {
       budgets: budgets.slice(0, 4).map((b) => ({
         name: b.categoryName ?? 'Budget',
         spent: b.spent,
-        limit: b.limit_amount,
+        limit: b.limitAmount,
         color: b.categoryColor ?? '#8B5CF6',
       })),
-      overallPercent:
-        totalLimit > 0 ? Math.round((totalSpent / totalLimit) * 100) : 0,
+      overallPercent: totalLimit > 0 ? Math.round((totalSpent / totalLimit) * 100) : 0,
     };
   },
 
@@ -94,10 +93,7 @@ export const WidgetDataService = {
       name: g.name,
       current: g.currentAmount,
       target: g.targetAmount,
-      percent:
-        g.targetAmount > 0
-          ? Math.round((g.currentAmount / g.targetAmount) * 100)
-          : 0,
+      percent: g.targetAmount > 0 ? Math.round((g.currentAmount / g.targetAmount) * 100) : 0,
       color: g.color ?? '#7C3AED',
       icon: g.icon ?? 'flag',
     };

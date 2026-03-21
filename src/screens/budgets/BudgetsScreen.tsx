@@ -15,23 +15,12 @@ import {
 } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import {
-  Button,
-  Card,
-  EmptyState,
-  ProgressBar,
-  SectionHeader,
-} from '../../components/common';
+import { Button, Card, EmptyState, ProgressBar, SectionHeader } from '../../components/common';
 import { useTheme, type ThemeColors } from '../../hooks/useTheme';
 import { BudgetService, CategoryService } from '../../services/dataService';
 import { triggerBackgroundSync } from '../../services/syncService';
 import { useAppStore } from '../../store/appStore';
-import {
-  RADIUS,
-  SPACING,
-  TYPOGRAPHY,
-  formatCurrency,
-} from '../../utils/constants';
+import { RADIUS, SPACING, TYPOGRAPHY, formatCurrency } from '../../utils/constants';
 import type { Budget, Category } from '../../utils/types';
 
 export default function BudgetsScreen() {
@@ -40,9 +29,7 @@ export default function BudgetsScreen() {
   const dataRevision = useAppStore((state) => state.dataRevision);
   const now = new Date();
   const [year, setYear] = useState(now.getFullYear());
-  const [month, setMonth] = useState(
-    String(now.getMonth() + 1).padStart(2, '0'),
-  );
+  const [month, setMonth] = useState(String(now.getMonth() + 1).padStart(2, '0'));
   const [budgets, setBudgets] = useState<Budget[]>([]);
   const [showAdd, setShowAdd] = useState(false);
   const [categories, setCategories] = useState<Category[]>([]);
@@ -54,9 +41,7 @@ export default function BudgetsScreen() {
       CategoryService.getAll(),
     ]);
     setBudgets(b);
-    setCategories(
-      c.filter((cat) => cat.type === 'expense' || cat.type === 'both'),
-    );
+    setCategories(c.filter((cat) => cat.type === 'expense' || cat.type === 'both'));
   }, [month, year]);
 
   useEffect(() => {
@@ -70,7 +55,7 @@ export default function BudgetsScreen() {
     setRefreshing(false);
   };
 
-  const totalBudget = budgets.reduce((s, b) => s + b.limit_amount, 0);
+  const totalBudget = budgets.reduce((s, b) => s + b.limitAmount, 0);
   const totalSpent = budgets.reduce((s, b) => s + b.spent, 0);
 
   const prevMonth = () => {
@@ -91,28 +76,18 @@ export default function BudgetsScreen() {
     <SafeAreaView style={styles.container} edges={['top']}>
       <Animated.View entering={FadeInDown.duration(400)} style={styles.header}>
         <Text style={styles.title}>Budgets</Text>
-        <TouchableOpacity
-          onPress={() => setShowAdd(true)}
-          style={styles.addButton}
-        >
+        <TouchableOpacity onPress={() => setShowAdd(true)} style={styles.addButton}>
           <Ionicons name="add" size={24} color={colors.primary} />
         </TouchableOpacity>
       </Animated.View>
 
-      <Animated.View
-        entering={FadeInDown.duration(400).delay(100)}
-        style={styles.monthSelector}
-      >
+      <Animated.View entering={FadeInDown.duration(400).delay(100)} style={styles.monthSelector}>
         <TouchableOpacity onPress={prevMonth} style={styles.monthButton}>
           <Ionicons name="chevron-back" size={20} color={colors.textPrimary} />
         </TouchableOpacity>
         <Text style={styles.monthText}>{monthName}</Text>
         <TouchableOpacity onPress={nextMonth} style={styles.monthButton}>
-          <Ionicons
-            name="chevron-forward"
-            size={20}
-            color={colors.textPrimary}
-          />
+          <Ionicons name="chevron-forward" size={20} color={colors.textPrimary} />
         </TouchableOpacity>
       </Animated.View>
 
@@ -131,9 +106,7 @@ export default function BudgetsScreen() {
           <Card style={styles.summaryCard}>
             <View style={styles.summaryHeader}>
               <Text style={styles.summaryTitle}>Total Budget</Text>
-              <Text style={styles.summaryAmount}>
-                {formatCurrency(totalBudget)}
-              </Text>
+              <Text style={styles.summaryAmount}>{formatCurrency(totalBudget)}</Text>
             </View>
             <ProgressBar
               progress={totalBudget > 0 ? totalSpent / totalBudget : 0}
@@ -147,9 +120,7 @@ export default function BudgetsScreen() {
               height={12}
             />
             <View style={styles.summaryFooter}>
-              <Text style={styles.summarySpent}>
-                Spent: {formatCurrency(totalSpent)}
-              </Text>
+              <Text style={styles.summarySpent}>Spent: {formatCurrency(totalSpent)}</Text>
               <Text style={styles.summaryRemaining}>
                 Left: {formatCurrency(Math.max(0, totalBudget - totalSpent))}
               </Text>
@@ -171,9 +142,7 @@ export default function BudgetsScreen() {
           ) : (
             <View style={styles.budgetList}>
               {budgets.map((budget) => {
-                const category = categories.find(
-                  (c) => c.id === budget.categoryId,
-                );
+                const category = categories.find((c) => c.id === budget.categoryId);
                 return (
                   <BudgetCard
                     key={budget.id}
@@ -194,9 +163,7 @@ export default function BudgetsScreen() {
         visible={showAdd}
         onClose={() => setShowAdd(false)}
         period={`${year}-${month}`}
-        availableCategories={categories.filter(
-          (c) => !budgets.find((b) => b.categoryId === c.id),
-        )}
+        availableCategories={categories.filter((c) => !budgets.find((b) => b.categoryId === c.id))}
         onSave={() => {
           void loadData();
           setShowAdd(false);
@@ -220,7 +187,7 @@ const BudgetCard = ({
   reload: () => void;
 }) => {
   const [showEdit, setShowEdit] = useState(false);
-  const progress = budget.spent / budget.limit_amount;
+  const progress = budget.spent / budget.limitAmount;
   const isOver = progress >= 1;
   const isWarning = progress >= 0.8 && !isOver;
   const color = isOver
@@ -235,26 +202,15 @@ const BudgetCard = ({
         <Card style={cardStyles.card}>
           <View style={cardStyles.header}>
             <View style={cardStyles.categoryInfo}>
-              <View
-                style={[
-                  cardStyles.iconContainer,
-                  { backgroundColor: `${color}15` },
-                ]}
-              >
-                <Ionicons
-                  name={(category?.icon || 'folder') as never}
-                  size={20}
-                  color={color}
-                />
+              <View style={[cardStyles.iconContainer, { backgroundColor: `${color}15` }]}>
+                <Ionicons name={(category?.icon || 'folder') as never} size={20} color={color} />
               </View>
-              <Text
-                style={[cardStyles.categoryName, { color: colors.textPrimary }]}
-              >
+              <Text style={[cardStyles.categoryName, { color: colors.textPrimary }]}>
                 {category?.name || 'Unknown'}
               </Text>
             </View>
             <Text style={[cardStyles.amount, { color: colors.textPrimary }]}>
-              {formatCurrency(budget.limit_amount)}
+              {formatCurrency(budget.limitAmount)}
             </Text>
           </View>
 
@@ -271,8 +227,8 @@ const BudgetCard = ({
               ]}
             >
               {isOver
-                ? `${formatCurrency(budget.spent - budget.limit_amount)} over`
-                : `${formatCurrency(budget.limit_amount - budget.spent)} left`}
+                ? `${formatCurrency(budget.spent - budget.limitAmount)} over`
+                : `${formatCurrency(budget.limitAmount - budget.spent)} left`}
             </Text>
           </View>
         </Card>
@@ -324,7 +280,7 @@ const AddBudgetModal = ({
       month,
       year: Number(year),
       categoryId,
-      limit_amount: Number(amount),
+      limitAmount: Number(amount),
       alertAt: Number(amount) * 0.8,
     });
     setLoading(false);
@@ -334,35 +290,18 @@ const AddBudgetModal = ({
   };
 
   return (
-    <Modal
-      visible={visible}
-      animationType="slide"
-      transparent
-      onRequestClose={onClose}
-    >
+    <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
       <KeyboardAvoidingView
         style={{ flex: 1 }}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
-        <TouchableOpacity
-          style={styles.overlay}
-          activeOpacity={1}
-          onPress={onClose}
-        >
-          <TouchableOpacity
-            style={styles.sheet}
-            activeOpacity={1}
-            onPress={() => {}}
-          >
+        <TouchableOpacity style={styles.overlay} activeOpacity={1} onPress={onClose}>
+          <TouchableOpacity style={styles.sheet} activeOpacity={1} onPress={() => {}}>
             <View style={styles.handle} />
             <Text style={styles.title}>New Budget</Text>
 
             <Text style={styles.label}>Select Category</Text>
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              style={styles.categories}
-            >
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.categories}>
               {availableCategories.map((cat) => (
                 <TouchableOpacity
                   key={cat.id}
@@ -381,10 +320,7 @@ const AddBudgetModal = ({
                     color={categoryId === cat.id ? cat.color : colors.textMuted}
                   />
                   <Text
-                    style={[
-                      styles.categoryChipText,
-                      categoryId === cat.id && { color: cat.color },
-                    ]}
+                    style={[styles.categoryChipText, categoryId === cat.id && { color: cat.color }]}
                   >
                     {cat.name}
                   </Text>
@@ -404,12 +340,7 @@ const AddBudgetModal = ({
             />
 
             <View style={styles.actions}>
-              <Button
-                title="Cancel"
-                variant="secondary"
-                onPress={onClose}
-                style={styles.flex1}
-              />
+              <Button title="Cancel" variant="secondary" onPress={onClose} style={styles.flex1} />
               <Button
                 title="Save"
                 onPress={() => void handleSave()}
@@ -440,14 +371,14 @@ const EditBudgetModal = ({
   onSave: () => void;
   colors: ThemeColors;
 }) => {
-  const [amount, setAmount] = useState(String(budget.limit_amount));
+  const [amount, setAmount] = useState(String(budget.limitAmount));
   const [loading, setLoading] = useState(false);
   const styles = useMemo(() => modalStyles(colors), [colors]);
 
   const handleSave = async () => {
     if (!amount || Number(amount) <= 0) return;
     setLoading(true);
-    await BudgetService.update(budget.id, { limit_amount: Number(amount) });
+    await BudgetService.update(budget.id, { limitAmount: Number(amount) });
     setLoading(false);
     onSave();
   };
@@ -460,26 +391,13 @@ const EditBudgetModal = ({
   };
 
   return (
-    <Modal
-      visible={visible}
-      animationType="slide"
-      transparent
-      onRequestClose={onClose}
-    >
+    <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
       <KeyboardAvoidingView
         style={{ flex: 1 }}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
-        <TouchableOpacity
-          style={styles.overlay}
-          activeOpacity={1}
-          onPress={onClose}
-        >
-          <TouchableOpacity
-            style={styles.sheet}
-            activeOpacity={1}
-            onPress={() => {}}
-          >
+        <TouchableOpacity style={styles.overlay} activeOpacity={1} onPress={onClose}>
+          <TouchableOpacity style={styles.sheet} activeOpacity={1} onPress={() => {}}>
             <View style={styles.handle} />
             <Text style={styles.title}>Edit Budget</Text>
             <Text style={styles.subtitle}>{category?.name}</Text>

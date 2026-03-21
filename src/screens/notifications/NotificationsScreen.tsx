@@ -1,12 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import {
-  FlatList,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
-} from 'react-native';
+import { FlatList, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -15,12 +9,7 @@ import { ScreenHeader } from '../../components/common/ScreenHeader';
 import { useTheme, type ThemeColors } from '../../hooks/useTheme';
 import { BudgetService, GoalService } from '../../services/dataService';
 import { useAppStore } from '../../store/appStore';
-import {
-  RADIUS,
-  SPACING,
-  TYPOGRAPHY,
-  formatCurrency,
-} from '../../utils/constants';
+import { RADIUS, SPACING, TYPOGRAPHY, formatCurrency } from '../../utils/constants';
 
 interface NotificationItem {
   id: string;
@@ -46,13 +35,13 @@ export default function NotificationsScreen() {
     // Budget-based notifications
     const budgets = await BudgetService.getForMonth(year, month);
     for (const b of budgets) {
-      if (b.limit_amount <= 0) continue;
-      const pct = b.spent / b.limit_amount;
+      if (b.limitAmount <= 0) continue;
+      const pct = b.spent / b.limitAmount;
       if (pct >= 1) {
         items.push({
           id: `budget-over-${b.id}`,
           title: 'Budget Exceeded',
-          message: `You have exceeded your ${b.categoryName ?? 'budget'} limit by ${formatCurrency(b.spent - b.limit_amount)}.`,
+          message: `You have exceeded your ${b.categoryName ?? 'budget'} limit by ${formatCurrency(b.spent - b.limitAmount)}.`,
           type: 'alert',
           time: 'This month',
           isRead: false,
@@ -61,7 +50,7 @@ export default function NotificationsScreen() {
         items.push({
           id: `budget-warn-${b.id}`,
           title: 'Budget Warning',
-          message: `${b.categoryName ?? 'Budget'} is ${Math.round(pct * 100)}% used. ${formatCurrency(b.limit_amount - b.spent)} remaining.`,
+          message: `${b.categoryName ?? 'Budget'} is ${Math.round(pct * 100)}% used. ${formatCurrency(b.limitAmount - b.spent)} remaining.`,
           type: 'alert',
           time: 'This month',
           isRead: false,
@@ -81,10 +70,7 @@ export default function NotificationsScreen() {
           time: 'Recently',
           isRead: true,
         });
-      } else if (
-        g.targetAmount > 0 &&
-        g.currentAmount / g.targetAmount >= 0.75
-      ) {
+      } else if (g.targetAmount > 0 && g.currentAmount / g.targetAmount >= 0.75) {
         items.push({
           id: `goal-near-${g.id}`,
           title: 'Almost There!',
@@ -140,36 +126,17 @@ export default function NotificationsScreen() {
     }
   };
 
-  const renderItem = ({
-    item,
-    index,
-  }: {
-    item: NotificationItem;
-    index: number;
-  }) => {
+  const renderItem = ({ item, index }: { item: NotificationItem; index: number }) => {
     const iconColor = getColorForType(item.type);
 
     return (
       <Animated.View entering={FadeInDown.duration(400).delay(index * 100)}>
-        <TouchableOpacity
-          style={[styles.notificationCard, !item.isRead && styles.unreadCard]}
-        >
-          <View
-            style={[
-              styles.iconContainer,
-              { backgroundColor: iconColor + '20' },
-            ]}
-          >
-            <Ionicons
-              name={getIconForType(item.type)}
-              size={24}
-              color={iconColor}
-            />
+        <TouchableOpacity style={[styles.notificationCard, !item.isRead && styles.unreadCard]}>
+          <View style={[styles.iconContainer, { backgroundColor: iconColor + '20' }]}>
+            <Ionicons name={getIconForType(item.type)} size={24} color={iconColor} />
           </View>
           <View style={styles.contentContainer}>
-            <Text style={[styles.title, !item.isRead && styles.unreadText]}>
-              {item.title}
-            </Text>
+            <Text style={[styles.title, !item.isRead && styles.unreadText]}>{item.title}</Text>
             <Text style={styles.message}>{item.message}</Text>
             <Text style={styles.time}>{item.time}</Text>
           </View>

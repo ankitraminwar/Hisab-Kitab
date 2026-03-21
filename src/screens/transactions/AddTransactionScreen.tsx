@@ -2,7 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import * as Haptics from 'expo-haptics';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   KeyboardAvoidingView,
   Modal,
@@ -20,11 +20,7 @@ import { CustomPopup } from '../../components/common';
 import { CategoryGrid } from '../../components/common/CategoryGrid';
 import { NumericKeypad } from '../../components/common/NumericKeypad';
 import { useTheme, type ThemeColors } from '../../hooks/useTheme';
-import {
-  AccountService,
-  CategoryService,
-  PaymentMethodService,
-} from '../../services/dataServices';
+import { AccountService, CategoryService, PaymentMethodService } from '../../services/dataServices';
 import { TransactionService } from '../../services/transactionService';
 import { RADIUS, SPACING } from '../../utils/constants';
 import type {
@@ -67,24 +63,21 @@ export default function AddTransactionScreen() {
   const [paymentMethods, setPaymentMethods] = useState<
     { id: string; name: string; icon: string }[]
   >([]);
-  const [showPaymentMethodOptions, setShowPaymentMethodOptions] =
-    useState(false);
+  const [showPaymentMethodOptions, setShowPaymentMethodOptions] = useState(false);
   const [newPmName, setNewPmName] = useState('');
   const [showNewPmInput, setShowNewPmInput] = useState(false);
   const [showAccountPicker, setShowAccountPicker] = useState(false);
   const [showToAccountPicker, setShowToAccountPicker] = useState(false);
 
-  const [selectedCategory, setSelectedCategory] = useState<Category | null>(
-    null,
-  );
+  const [selectedCategory, setSelectedCategory] = useState<Category | null>(null);
   const [selectedAccount, setSelectedAccount] = useState<Account | null>(null);
   const [loading, setLoading] = useState(false);
-  const [selectedToAccount, setSelectedToAccount] = useState<Account | null>(
-    null,
-  );
+  const [selectedToAccount, setSelectedToAccount] = useState<Account | null>(null);
 
   const [categories, setCategories] = useState<Category[]>([]);
   const [accounts, setAccounts] = useState<Account[]>([]);
+
+  const existingLoadedRef = useRef(false);
 
   const filteredCategories = useMemo(
     () => categories.filter((c) => c.type === type || c.type === 'both'),
@@ -124,27 +117,24 @@ export default function AddTransactionScreen() {
   }, [loadData]);
 
   useEffect(() => {
-    if (categories.length > 0 && accounts.length > 0 && isEditing) {
+    if (categories.length > 0 && accounts.length > 0 && isEditing && !existingLoadedRef.current) {
+      existingLoadedRef.current = true;
       void loadExisting();
     }
   }, [categories, accounts, isEditing, loadExisting]);
 
   // Pre-select category if none matches current type
   useEffect(() => {
+    if (isEditing && existingLoadedRef.current) return;
     if (filteredCategories.length === 0) {
       setSelectedCategory(null);
       return;
     }
     setSelectedCategory((current) => {
-      if (current && filteredCategories.some((c) => c.id === current.id))
-        return current;
-      return (
-        filteredCategories.find((c) => c.name === 'Other') ??
-        filteredCategories[0] ??
-        null
-      );
+      if (current && filteredCategories.some((c) => c.id === current.id)) return current;
+      return filteredCategories.find((c) => c.name === 'Other') ?? filteredCategories[0] ?? null;
     });
-  }, [filteredCategories]);
+  }, [filteredCategories, isEditing]);
 
   const handleDigit = (digit: string) => {
     setAmountStr((prev) => {
@@ -322,7 +312,7 @@ export default function AddTransactionScreen() {
                     },
                   ]}
                 >
-                  {t.charAt(0).toUpperCase() + t.slice(1)}
+                  {t?.charAt(0)?.toUpperCase() + t?.slice(1)}
                 </Text>
               </TouchableOpacity>
             );
@@ -347,6 +337,24 @@ export default function AddTransactionScreen() {
             </Text>
           </View>
 
+          <View style={styles.notesCard}>
+            <View style={styles.notesInputWrap}>
+              <Ionicons name="document-text-outline" size={18} color={colors.textMuted} />
+              <TextInput
+                value={notes}
+                onChangeText={(text) => {
+                  if (text.length <= 120) setNotes(text);
+                }}
+                placeholder="Add a note for this transaction"
+                placeholderTextColor={colors.textMuted}
+                style={styles.notesInput}
+                multiline
+                textAlignVertical="top"
+              />
+            </View>
+            <Text style={styles.notesCounter}>{notes.length}/120</Text>
+          </View>
+
           {/* Categories Grid */}
           <CategoryGrid
             categories={filteredCategories}
@@ -358,29 +366,15 @@ export default function AddTransactionScreen() {
           {/* Details */}
           <View style={styles.detailsWrap}>
             {/* Account */}
-            <TouchableOpacity
-              style={styles.detailRow}
-              onPress={() => setShowAccountPicker(true)}
-            >
-              <View
-                style={[
-                  styles.detailIcon,
-                  { backgroundColor: colors.primary + '20' },
-                ]}
-              >
+            <TouchableOpacity style={styles.detailRow} onPress={() => setShowAccountPicker(true)}>
+              <View style={[styles.detailIcon, { backgroundColor: colors.primary + '20' }]}>
                 <Ionicons name="wallet" size={20} color={colors.primary} />
               </View>
               <View style={styles.detailContent}>
                 <Text style={styles.detailLabel}>PAYMENT ACCOUNT</Text>
-                <Text style={styles.detailText}>
-                  {selectedAccount?.name || 'Select Account'}
-                </Text>
+                <Text style={styles.detailText}>{selectedAccount?.name || 'Select Account'}</Text>
               </View>
-              <Ionicons
-                name="chevron-forward"
-                size={20}
-                color={colors.textMuted}
-              />
+              <Ionicons name="chevron-forward" size={20} color={colors.textMuted} />
             </TouchableOpacity>
 
             {/* Transfer: Destination Account */}
@@ -389,17 +383,8 @@ export default function AddTransactionScreen() {
                 style={styles.detailRow}
                 onPress={() => setShowToAccountPicker(true)}
               >
-                <View
-                  style={[
-                    styles.detailIcon,
-                    { backgroundColor: colors.transfer + '20' },
-                  ]}
-                >
-                  <Ionicons
-                    name="swap-horizontal"
-                    size={20}
-                    color={colors.transfer}
-                  />
+                <View style={[styles.detailIcon, { backgroundColor: colors.transfer + '20' }]}>
+                  <Ionicons name="swap-horizontal" size={20} color={colors.transfer} />
                 </View>
                 <View style={styles.detailContent}>
                   <Text style={styles.detailLabel}>DESTINATION ACCOUNT</Text>
@@ -407,11 +392,7 @@ export default function AddTransactionScreen() {
                     {selectedToAccount?.name || 'Select Destination'}
                   </Text>
                 </View>
-                <Ionicons
-                  name="chevron-forward"
-                  size={20}
-                  color={colors.textMuted}
-                />
+                <Ionicons name="chevron-forward" size={20} color={colors.textMuted} />
               </TouchableOpacity>
             )}
 
@@ -419,71 +400,30 @@ export default function AddTransactionScreen() {
               style={styles.detailRow}
               onPress={() => setShowPaymentMethodOptions(true)}
             >
-              <View
-                style={[
-                  styles.detailIcon,
-                  { backgroundColor: colors.primary + '20' },
-                ]}
-              >
+              <View style={[styles.detailIcon, { backgroundColor: colors.primary + '20' }]}>
                 <Ionicons name="card" size={20} color={colors.primary} />
               </View>
               <View style={styles.detailContent}>
                 <Text style={styles.detailLabel}>PAYMENT METHOD</Text>
-                <Text style={styles.detailText}>
-                  {paymentMethod || 'Select Method'}
-                </Text>
+                <Text style={styles.detailText}>{paymentMethod || 'Select Method'}</Text>
               </View>
-              <Ionicons
-                name="chevron-forward"
-                size={20}
-                color={colors.textMuted}
-              />
+              <Ionicons name="chevron-forward" size={20} color={colors.textMuted} />
             </TouchableOpacity>
 
-            <View style={styles.halfRows}>
-              <TouchableOpacity
-                style={styles.halfRow}
-                onPress={() => setShowDatePicker(true)}
-              >
-                <Ionicons name="calendar" size={20} color={colors.textMuted} />
-                <View style={styles.detailContent}>
-                  <Text style={styles.detailLabel}>DATE</Text>
-                  <Text style={styles.detailText}>
-                    {toDateString(selectedDate) === toDateString(new Date())
-                      ? 'Today'
-                      : toDateString(selectedDate)}
-                  </Text>
-                </View>
-              </TouchableOpacity>
-              <View style={styles.halfRow}>
-                <Ionicons
-                  name="document-text"
-                  size={20}
-                  color={colors.textMuted}
-                />
-                <View style={styles.detailContent}>
-                  <Text style={styles.detailLabel}>NOTES</Text>
-                  <TextInput
-                    value={notes}
-                    onChangeText={(text) => {
-                      if (text.length <= 120) setNotes(text);
-                    }}
-                    placeholder="Add notes..."
-                    placeholderTextColor={colors.textMuted}
-                    style={[styles.detailText, { padding: 0 }]}
-                  />
-                  <Text
-                    style={{
-                      fontSize: 10,
-                      color: colors.textMuted,
-                      marginTop: 4,
-                    }}
-                  >
-                    {notes.length}/120
-                  </Text>
-                </View>
+            <TouchableOpacity style={styles.detailRow} onPress={() => setShowDatePicker(true)}>
+              <View style={[styles.detailIcon, { backgroundColor: colors.primary + '20' }]}>
+                <Ionicons name="calendar" size={20} color={colors.primary} />
               </View>
-            </View>
+              <View style={styles.detailContent}>
+                <Text style={styles.detailLabel}>DATE</Text>
+                <Text style={styles.detailText}>
+                  {toDateString(selectedDate) === toDateString(new Date())
+                    ? 'Today'
+                    : toDateString(selectedDate)}
+                </Text>
+              </View>
+              <Ionicons name="chevron-forward" size={20} color={colors.textMuted} />
+            </TouchableOpacity>
 
             {/* Split This Expense */}
             {isEditing && type === 'expense' && (
@@ -492,25 +432,12 @@ export default function AddTransactionScreen() {
                 onPress={() => router.push(`/split-expense/new?txId=${id}`)}
                 activeOpacity={0.8}
               >
-                <Ionicons
-                  name="people-outline"
-                  size={20}
-                  color={colors.primary}
-                />
-                <Text
-                  style={[
-                    styles.detailLabel,
-                    { color: colors.primary, marginLeft: 8 },
-                  ]}
-                >
+                <Ionicons name="people-outline" size={20} color={colors.primary} />
+                <Text style={[styles.detailLabel, { color: colors.primary, marginLeft: 8 }]}>
                   Split This Expense
                 </Text>
                 <View style={{ flex: 1 }} />
-                <Ionicons
-                  name="chevron-forward"
-                  size={18}
-                  color={colors.primary}
-                />
+                <Ionicons name="chevron-forward" size={18} color={colors.primary} />
               </TouchableOpacity>
             )}
           </View>
@@ -536,11 +463,7 @@ export default function AddTransactionScreen() {
       )}
 
       {/* Payment Method Selection Modal */}
-      <Modal
-        visible={showPaymentMethodOptions}
-        transparent
-        animationType="fade"
-      >
+      <Modal visible={showPaymentMethodOptions} transparent animationType="fade">
         <TouchableOpacity
           style={styles.pmOverlay}
           activeOpacity={1}
@@ -595,30 +518,19 @@ export default function AddTransactionScreen() {
                       gap: 12,
                     }}
                   >
-                    <Ionicons
-                      name={pm.icon as IoniconsName}
-                      size={18}
-                      color={colors.textMuted}
-                    />
+                    <Ionicons name={pm.icon as IoniconsName} size={18} color={colors.textMuted} />
                     <Text
                       style={{
                         fontSize: 15,
                         fontWeight: paymentMethod === pm.name ? '700' : '400',
-                        color:
-                          paymentMethod === pm.name
-                            ? colors.primary
-                            : colors.textPrimary,
+                        color: paymentMethod === pm.name ? colors.primary : colors.textPrimary,
                       }}
                     >
                       {pm.name}
                     </Text>
                   </View>
                   {paymentMethod === pm.name && (
-                    <Ionicons
-                      name="checkmark-circle"
-                      size={20}
-                      color={colors.primary}
-                    />
+                    <Ionicons name="checkmark-circle" size={20} color={colors.primary} />
                   )}
                 </TouchableOpacity>
               ))}
@@ -635,14 +547,8 @@ export default function AddTransactionScreen() {
                 }}
                 onPress={() => setShowNewPmInput(true)}
               >
-                <Ionicons
-                  name="add-circle-outline"
-                  size={22}
-                  color={colors.primary}
-                />
-                <Text style={{ color: colors.primary, fontWeight: '700' }}>
-                  Add New Method
-                </Text>
+                <Ionicons name="add-circle-outline" size={22} color={colors.primary} />
+                <Text style={{ color: colors.primary, fontWeight: '700' }}>Add New Method</Text>
               </TouchableOpacity>
             ) : (
               <View style={{ padding: SPACING.md, gap: 12 }}>
@@ -670,9 +576,7 @@ export default function AddTransactionScreen() {
                     alignItems: 'center',
                   }}
                 >
-                  <Text style={{ color: '#fff', fontWeight: '700' }}>
-                    Add & Select
-                  </Text>
+                  <Text style={{ color: '#fff', fontWeight: '700' }}>Add & Select</Text>
                 </TouchableOpacity>
               </View>
             )}
@@ -741,23 +645,15 @@ export default function AddTransactionScreen() {
                     <Text
                       style={{
                         fontSize: 15,
-                        fontWeight:
-                          selectedAccount?.id === acc.id ? '700' : '400',
-                        color:
-                          selectedAccount?.id === acc.id
-                            ? colors.primary
-                            : colors.textPrimary,
+                        fontWeight: selectedAccount?.id === acc.id ? '700' : '400',
+                        color: selectedAccount?.id === acc.id ? colors.primary : colors.textPrimary,
                       }}
                     >
                       {acc.name}
                     </Text>
                   </View>
                   {selectedAccount?.id === acc.id && (
-                    <Ionicons
-                      name="checkmark-circle"
-                      size={20}
-                      color={colors.primary}
-                    />
+                    <Ionicons name="checkmark-circle" size={20} color={colors.primary} />
                   )}
                 </TouchableOpacity>
               ))}
@@ -829,23 +725,16 @@ export default function AddTransactionScreen() {
                       <Text
                         style={{
                           fontSize: 15,
-                          fontWeight:
-                            selectedToAccount?.id === acc.id ? '700' : '400',
+                          fontWeight: selectedToAccount?.id === acc.id ? '700' : '400',
                           color:
-                            selectedToAccount?.id === acc.id
-                              ? colors.primary
-                              : colors.textPrimary,
+                            selectedToAccount?.id === acc.id ? colors.primary : colors.textPrimary,
                         }}
                       >
                         {acc.name}
                       </Text>
                     </View>
                     {selectedToAccount?.id === acc.id && (
-                      <Ionicons
-                        name="checkmark-circle"
-                        size={20}
-                        color={colors.primary}
-                      />
+                      <Ionicons name="checkmark-circle" size={20} color={colors.primary} />
                     )}
                   </TouchableOpacity>
                 ))}
@@ -936,6 +825,35 @@ const createStyles = (colors: ThemeColors) =>
       fontWeight: '800',
       color: colors.textPrimary,
       letterSpacing: -1.5,
+    },
+    notesCard: {
+      marginHorizontal: SPACING.lg,
+      marginBottom: SPACING.lg,
+      backgroundColor: colors.bgCard,
+      borderRadius: RADIUS.lg,
+      borderWidth: 1,
+      borderColor: colors.border,
+      padding: SPACING.md,
+      gap: SPACING.sm,
+    },
+    notesInputWrap: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      gap: SPACING.sm,
+    },
+    notesInput: {
+      flex: 1,
+      minHeight: 24,
+      fontSize: 14,
+      fontWeight: '600',
+      color: colors.textPrimary,
+      paddingTop: 0,
+      paddingBottom: 0,
+    },
+    notesCounter: {
+      fontSize: 10,
+      color: colors.textMuted,
+      alignSelf: 'flex-end',
     },
     detailsWrap: {
       paddingHorizontal: SPACING.lg,

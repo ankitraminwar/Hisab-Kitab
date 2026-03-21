@@ -4,13 +4,7 @@ import type { ComponentProps } from 'react';
 export type IoniconsName = ComponentProps<typeof Ionicons>['name'];
 
 export type TransactionType = 'expense' | 'income' | 'transfer';
-export type AccountType =
-  | 'cash'
-  | 'bank'
-  | 'upi'
-  | 'credit_card'
-  | 'wallet'
-  | 'investment';
+export type AccountType = 'cash' | 'bank' | 'upi' | 'credit_card' | 'wallet' | 'investment';
 export type AssetType =
   | 'bank'
   | 'cash'
@@ -88,7 +82,7 @@ export interface Transaction extends SyncMetadata {
 export interface Budget extends SyncMetadata {
   id: string;
   categoryId: string;
-  limit_amount: number;
+  limitAmount: number;
   spent: number;
   month: string;
   year: number;

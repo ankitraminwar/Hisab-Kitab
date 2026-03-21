@@ -1,25 +1,27 @@
 import NetInfo from '@react-native-community/netinfo';
 
 import {
+  enqueueSync,
   fetchTableRows,
+  getDatabase,
   getLastSyncTimestamp,
+  hasLocalUserData,
   getSyncableTables,
+  getSyncState,
   incrementSyncRetry,
   listPendingSyncItems,
   markRecordSyncStatus,
   removeFromSyncQueue,
   setLastSyncTimestamp,
+  setSyncState,
   softDeleteLocalRecord,
   upsertLocalRecord,
 } from '../database';
 import { supabase } from '../lib/supabase';
 import { useAppStore } from '../store/appStore';
 import type { SyncableTable } from '../utils/constants';
-import type { SyncQueueItem } from '../utils/types';
-import {
-  mapLocalToRemoteRecord,
-  mapRemoteToLocalRecord,
-} from './syncTransform';
+import type { SyncQueueItem, UserProfile } from '../utils/types';
+import { mapLocalToRemoteRecord, mapRemoteToLocalRecord } from './syncTransform';
 
 /** Extract a readable message from any thrown value (including Supabase PostgrestError). */
 const errorMessage = (error: unknown): string => {
@@ -39,19 +41,18 @@ const MAX_RETRY_DELAY_MS = 60_000;
 const BASE_DELAY_MS = 1_000;
 
 const backoffDelay = (retryCount: number): number => {
-  const exponential = Math.min(
-    BASE_DELAY_MS * Math.pow(2, retryCount),
-    MAX_RETRY_DELAY_MS,
-  );
+  const exponential = Math.min(BASE_DELAY_MS * Math.pow(2, retryCount), MAX_RETRY_DELAY_MS);
   const jitter = Math.random() * exponential * 0.3;
   return exponential + jitter;
 };
 
-const sleep = (ms: number) =>
-  new Promise<void>((resolve) => setTimeout(resolve, ms));
+const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
 class SyncService {
   private syncing = false;
+  private syncStartedAt?: number;
+  private syncRequested = false;
+  private syncDebounceTimer?: ReturnType<typeof setTimeout>;
   private remoteSchemaAvailable = true;
 
   private unsubscribe?: () => void;
@@ -62,9 +63,7 @@ class SyncService {
     }
 
     this.unsubscribe = NetInfo.addEventListener((state) => {
-      const isOnline = Boolean(
-        state.isConnected && state.isInternetReachable !== false,
-      );
+      const isOnline = Boolean(state.isConnected && state.isInternetReachable !== false);
       useAppStore.getState().setOnline(isOnline);
 
       if (isOnline) {
@@ -88,9 +87,7 @@ class SyncService {
     }
 
     const state = await NetInfo.fetch();
-    const isOnline = Boolean(
-      state.isConnected && state.isInternetReachable !== false,
-    );
+    const isOnline = Boolean(state.isConnected && state.isInternetReachable !== false);
     if (!isOnline) {
       return { success: false, error: 'Device is offline' };
     }
@@ -102,15 +99,23 @@ class SyncService {
     if (!this.remoteSchemaAvailable) {
       return {
         success: false,
-        error:
-          'Supabase schema is not deployed yet. Apply supabase/schema.sql and retry.',
+        error: 'Supabase schema is not deployed yet. Apply supabase/schema.sql and retry.',
+      };
+    }
+
+    const session = await supabase.auth.getSession();
+    const userId = session.data.session?.user?.id ?? null;
+    if (userId && !(await hasLocalUserData(userId))) {
+      const result = await this.initialSync();
+      return {
+        success: result.success,
+        error: result.error,
       };
     }
 
     this.syncing = true;
-    useAppStore
-      .getState()
-      .setSyncState({ syncInProgress: true, lastSyncError: null });
+    this.syncStartedAt = Date.now();
+    useAppStore.getState().setSyncState({ syncInProgress: true, lastSyncError: null });
 
     try {
       await this.pushPendingChanges();
@@ -148,11 +153,32 @@ class SyncService {
   }
 
   async requestSync(reason = 'manual') {
-    try {
-      await this.sync(reason);
-    } catch (error) {
-      console.warn('Background sync failed', error);
+    // Sync watchdog: if syncing stuck for >60s, force reset
+    if (this.syncing && this.syncStartedAt && Date.now() - this.syncStartedAt > 60000) {
+      console.warn('Sync watchdog: forcing reset after 60s');
+      this.syncing = false;
     }
+
+    // If a sync is in progress, mark that another is requested
+    if (this.syncing) {
+      this.syncRequested = true;
+      return;
+    }
+
+    // Debounce rapid-fire requests
+    clearTimeout(this.syncDebounceTimer);
+    this.syncDebounceTimer = setTimeout(async () => {
+      try {
+        await this.sync(reason);
+      } catch (error) {
+        console.warn('Background sync failed', error);
+      }
+      // If another sync was requested while this one ran, run it now
+      if (this.syncRequested) {
+        this.syncRequested = false;
+        void this.requestSync('queued');
+      }
+    }, 500);
   }
 
   private isRemoteSchemaMissing(error: unknown) {
@@ -170,6 +196,78 @@ class SyncService {
     }
 
     return false;
+  }
+
+  private isExpectedDefaultCategoryRlsFailure(item: SyncQueueItem, reason: string) {
+    const isDefaultCategory = item.entity === 'categories' && item.recordId.startsWith('cat_');
+    const isRls = reason.includes('row-level security') || reason.includes('42501');
+    return isDefaultCategory && isRls;
+  }
+
+  private hydrateUserProfileStore(record: Record<string, unknown>) {
+    const profile = record as unknown as UserProfile;
+    const store = useAppStore.getState();
+    store.setUserProfile(profile);
+    store.setTheme(profile.themePreference);
+  }
+
+  private async mergeRemoteRecords(
+    table: SyncableTable,
+    records: Record<string, unknown>[],
+    existingLocalById?: Map<string, Record<string, unknown>>,
+    compareWithLocal = true,
+  ) {
+    let changed = false;
+    let processedCount = 0;
+    const syncedAt = new Date().toISOString();
+
+    for (const record of records) {
+      const localRecordData = mapRemoteToLocalRecord(table, record);
+      const recordId = String(localRecordData.id);
+
+      if (localRecordData.deletedAt) {
+        await softDeleteLocalRecord(table, recordId, String(localRecordData.deletedAt));
+        existingLocalById?.delete(recordId);
+        changed = true;
+        processedCount += 1;
+        continue;
+      }
+
+      const localRecord = compareWithLocal ? existingLocalById?.get(recordId) : undefined;
+      const remoteUpdatedAt = new Date(String(localRecordData.updatedAt)).getTime();
+      const localUpdatedAt = localRecord?.updatedAt
+        ? new Date(String(localRecord.updatedAt)).getTime()
+        : 0;
+
+      if (!compareWithLocal || !localRecord || remoteUpdatedAt >= localUpdatedAt) {
+        if (table === 'user_profile') {
+          const remoteIsDefault = String(localRecordData.name) === 'Hisab Kitab User';
+          const localIsCustom =
+            localRecord?.name && String(localRecord.name) !== 'Hisab Kitab User';
+          if (remoteIsDefault && localIsCustom) {
+            localRecordData.name = localRecord.name;
+          }
+        }
+
+        const syncedRecord = {
+          ...localRecordData,
+          syncStatus: 'synced',
+          lastSyncedAt: syncedAt,
+        };
+
+        await upsertLocalRecord(table, syncedRecord);
+        existingLocalById?.set(recordId, syncedRecord);
+
+        if (table === 'user_profile') {
+          this.hydrateUserProfileStore(syncedRecord);
+        }
+
+        changed = true;
+        processedCount += 1;
+      }
+    }
+
+    return { changed, processedCount };
   }
 
   /**
@@ -197,6 +295,10 @@ class SyncService {
     if (!userId) {
       return;
     }
+
+    // One-time: enqueue default categories & payment methods for sync
+    await this.ensureDefaultsSynced();
+
     const pendingItems = await listPendingSyncItems();
 
     // Sort by FK dependency order so parent rows are pushed before children
@@ -214,10 +316,9 @@ class SyncService {
       } catch (error) {
         const reason = errorMessage(error);
         failures.push({ item, reason });
-        console.warn(
-          `Sync push failed for ${item.entity}/${item.recordId}:`,
-          reason,
-        );
+        if (!this.isExpectedDefaultCategoryRlsFailure(item, reason)) {
+          console.warn(`Sync push failed for ${item.entity}/${item.recordId}:`, reason);
+        }
 
         if (item.retryCount >= 2) {
           await sleep(backoffDelay(item.retryCount));
@@ -226,12 +327,27 @@ class SyncService {
     }
 
     if (failures.length > 0) {
-      throw new Error(
-        `Failed to sync ${failures.length} record(s): ${failures
-          .slice(0, 3)
-          .map((failure) => `${failure.item.entity}/${failure.item.recordId}`)
-          .join(', ')}`,
-      );
+      // RLS violations on default categories (shared PK across users) are expected
+      // on shared devices — skip them so the rest of sync can succeed.
+      const critical = failures.filter((f) => {
+        const isDefault = f.item.entity === 'categories' && f.item.recordId.startsWith('cat_');
+        const isRls = f.reason.includes('row-level security') || f.reason.includes('42501');
+        if (isDefault && isRls) {
+          markRecordSyncStatus('categories', f.item.recordId, 'synced').catch(console.warn);
+          removeFromSyncQueue(f.item.id).catch(console.warn);
+          return false;
+        }
+        return true;
+      });
+
+      if (critical.length > 0) {
+        throw new Error(
+          `Failed to sync ${critical.length} record(s): ${critical
+            .slice(0, 3)
+            .map((failure) => `${failure.item.entity}/${failure.item.recordId}`)
+            .join(', ')}`,
+        );
+      }
     }
   }
 
@@ -239,11 +355,17 @@ class SyncService {
     try {
       const payload = JSON.parse(item.payload) as Record<string, unknown>;
       const table = item.entity as SyncableTable;
-      const remoteData = mapLocalToRemoteRecord(
-        item.entity as SyncableTable,
-        payload,
-      );
+      const remoteData = mapLocalToRemoteRecord(item.entity as SyncableTable, payload);
       const recordId = String(payload.id ?? item.recordId);
+
+      // tags is stored as a JSON string in SQLite; Supabase expects jsonb (object/array)
+      if ('tags' in remoteData && typeof remoteData.tags === 'string') {
+        try {
+          remoteData.tags = JSON.parse(remoteData.tags as string);
+        } catch {
+          remoteData.tags = [];
+        }
+      }
 
       const { data: remoteRecord, error: remoteError } = await supabase
         .from(table)
@@ -259,8 +381,7 @@ class SyncService {
         const deletedAt = String(payload.deletedAt ?? new Date().toISOString());
         if (
           !remoteRecord ||
-          new Date(String(remoteRecord.updated_at ?? 0)).getTime() <=
-            new Date(deletedAt).getTime()
+          new Date(String(remoteRecord.updated_at ?? 0)).getTime() <= new Date(deletedAt).getTime()
         ) {
           const { error } = await supabase.from(table).upsert(
             {
@@ -287,10 +408,7 @@ class SyncService {
         : 0;
       if (remoteRecord && remoteUpdatedAt > localUpdatedAt) {
         await upsertLocalRecord(table, {
-          ...mapRemoteToLocalRecord(
-            table,
-            remoteRecord as Record<string, unknown>,
-          ),
+          ...mapRemoteToLocalRecord(table, remoteRecord as Record<string, unknown>),
           syncStatus: 'synced',
           lastSyncedAt: new Date().toISOString(),
         });
@@ -312,13 +430,70 @@ class SyncService {
         throw error;
       }
 
-      await markRecordSyncStatus(table as never, recordId, 'synced', syncedAt);
-      await removeFromSyncQueue(item.id);
+      const localDb = getDatabase();
+      await localDb.execAsync('BEGIN');
+      try {
+        await markRecordSyncStatus(table as never, recordId, 'synced', syncedAt);
+        await removeFromSyncQueue(item.id);
+        await localDb.execAsync('COMMIT');
+      } catch (localErr) {
+        await localDb.execAsync('ROLLBACK');
+        throw localErr;
+      }
     } catch (error) {
-      await incrementSyncRetry(item.id, errorMessage(error) || 'Push failed');
+      const reason = errorMessage(error) || 'Push failed';
+      if (this.isExpectedDefaultCategoryRlsFailure(item, reason)) {
+        await markRecordSyncStatus('categories', item.recordId, 'synced');
+        await removeFromSyncQueue(item.id);
+        return;
+      }
+
+      await incrementSyncRetry(item.id, reason);
       throw error;
     }
   }
+
+  /**
+   * One-time step: enqueue all default (non-custom) categories and payment
+   * methods so they are pushed to Supabase alongside user-created data.
+   */
+  private async ensureDefaultsSynced() {
+    const flag = await getSyncState('defaultsSynced');
+    if (flag === 'true') return;
+
+    const categories = await fetchTableRows<Record<string, unknown>>(
+      'categories',
+      'isCustom = 0 AND deletedAt IS NULL',
+    );
+    for (const cat of categories) {
+      await enqueueSync('categories', String(cat.id), 'upsert', cat);
+      await markRecordSyncStatus('categories', String(cat.id), 'pending');
+    }
+
+    const paymentMethods = await fetchTableRows<Record<string, unknown>>(
+      'payment_methods',
+      'isCustom = 0 AND deletedAt IS NULL',
+    );
+    for (const pm of paymentMethods) {
+      await enqueueSync('payment_methods', String(pm.id), 'upsert', pm);
+      await markRecordSyncStatus('payment_methods', String(pm.id), 'pending');
+    }
+
+    await setSyncState('defaultsSynced', 'true');
+  }
+
+  /**
+   * Tables grouped by dependency tier for parallel pulling.
+   * Tier 0: independent tables (no FK deps on other synced tables)
+   * Tier 1: depend on tier 0 (transactions → categories/accounts)
+   * Tier 2-3: depend on tier 1 (splits → transactions)
+   */
+  private static readonly PULL_TIERS: SyncableTable[][] = [
+    ['user_profile', 'accounts', 'categories', 'payment_methods', 'goals', 'assets', 'liabilities'],
+    ['transactions', 'budgets', 'net_worth_history'],
+    ['split_expenses'],
+    ['split_members'],
+  ];
 
   private async pullRemoteChanges() {
     const session = await supabase.auth.getSession();
@@ -328,69 +503,156 @@ class SyncService {
     }
 
     const lastSyncAt = await getLastSyncTimestamp();
-    let changed = false;
+    const allSyncable = new Set(getSyncableTables());
 
-    for (const table of getSyncableTables()) {
-      let query = supabase
-        .from(table)
-        .select('*')
-        .eq('user_id', userId)
-        .order('updated_at', { ascending: true });
-      if (lastSyncAt) {
-        query = query.gte('updated_at', lastSyncAt);
-      }
+    for (const tier of SyncService.PULL_TIERS) {
+      const tablesToPull = tier.filter((t) => allSyncable.has(t));
+      if (tablesToPull.length === 0) continue;
 
-      const { data, error } = await query;
-      if (error) {
-        if (this.isRemoteSchemaMissing(error)) {
-          throw error;
-        }
-        console.warn(`Pull failed for table ${table}:`, error.message);
-        continue;
-      }
+      let tierChanged = false;
+      const results = await Promise.allSettled(
+        tablesToPull.map(async (table) => {
+          let query = supabase
+            .from(table)
+            .select('*')
+            .eq('user_id', userId)
+            .order('updated_at', { ascending: true });
+          if (lastSyncAt) {
+            query = query.gte('updated_at', lastSyncAt);
+          }
 
-      for (const record of data ?? []) {
-        const localRecordData = mapRemoteToLocalRecord(
-          table,
-          record as Record<string, unknown>,
-        );
+          const { data, error } = await query;
+          if (error) {
+            if (this.isRemoteSchemaMissing(error)) {
+              throw error;
+            }
+            console.warn(`Pull failed for table ${table}:`, error.message);
+            return false;
+          }
 
-        if (localRecordData.deletedAt) {
-          await softDeleteLocalRecord(
+          const localRows = await fetchTableRows<Record<string, unknown>>(table);
+          const localById = new Map(localRows.map((row) => [String(row.id), row]));
+          const mergeResult = await this.mergeRemoteRecords(
             table,
-            String(localRecordData.id),
-            String(localRecordData.deletedAt),
+            (data ?? []) as Record<string, unknown>[],
+            localById,
           );
-          changed = true;
-          continue;
-        }
+          return mergeResult.changed;
+        }),
+      );
 
-        const localRows = await fetchTableRows<Record<string, unknown>>(
-          table,
-          'id = ?',
-          [String(localRecordData.id)],
-        );
-        const localRecord = localRows[0];
-        const remoteUpdatedAt = new Date(
-          String(localRecordData.updatedAt),
-        ).getTime();
-        const localUpdatedAt = localRecord?.updatedAt
-          ? new Date(String(localRecord.updatedAt)).getTime()
-          : 0;
-
-        if (!localRecord || remoteUpdatedAt >= localUpdatedAt) {
-          await upsertLocalRecord(table, {
-            ...localRecordData,
-            syncStatus: 'synced',
-            lastSyncedAt: new Date().toISOString(),
-          });
-          changed = true;
+      // If a schema-missing error was thrown in any table, re-throw it
+      for (const result of results) {
+        if (result.status === 'rejected') {
+          const err = result.reason as unknown;
+          if (this.isRemoteSchemaMissing(err)) {
+            throw err;
+          }
+        } else if (result.value) {
+          tierChanged = true;
         }
+      }
+
+      if (tierChanged) {
+        useAppStore.getState().bumpDataRevision();
       }
     }
+  }
 
-    if (changed) {
+  /** Full sync for first login — pulls ALL remote data regardless of lastSyncAt */
+  async initialSync(): Promise<{
+    success: boolean;
+    recordsPulled: number;
+    error?: string;
+  }> {
+    await setLastSyncTimestamp('1970-01-01T00:00:00.000Z');
+
+    const networkState = await NetInfo.fetch();
+    if (!networkState.isConnected) {
+      return { success: false, recordsPulled: 0, error: 'offline' };
+    }
+
+    if (this.syncing) {
+      return {
+        success: false,
+        recordsPulled: 0,
+        error: 'Sync already in progress',
+      };
+    }
+
+    this.syncing = true;
+    this.syncStartedAt = Date.now();
+    useAppStore.getState().setSyncState({ syncInProgress: true, lastSyncError: null });
+
+    try {
+      const session = await supabase.auth.getSession();
+      const userId = session.data.session?.user?.id;
+      if (!userId) {
+        return { success: false, recordsPulled: 0, error: 'Not authenticated' };
+      }
+
+      let totalPulled = 0;
+      const allSyncable = new Set(getSyncableTables());
+
+      for (const tier of SyncService.PULL_TIERS) {
+        const tablesToPull = tier.filter((t) => allSyncable.has(t));
+        if (tablesToPull.length === 0) continue;
+
+        let tierChanged = false;
+        const results = await Promise.allSettled(
+          tablesToPull.map(async (table) => {
+            const { data, error } = await supabase
+              .from(table)
+              .select('*')
+              .eq('user_id', userId)
+              .is('deleted_at', null)
+              .order('updated_at', { ascending: true });
+
+            if (error) {
+              console.warn(`Initial pull failed for ${table}:`, error.message);
+              return 0;
+            }
+
+            const mergeResult = await this.mergeRemoteRecords(
+              table,
+              (data ?? []) as Record<string, unknown>[],
+              undefined,
+              false,
+            );
+            return mergeResult.processedCount;
+          }),
+        );
+
+        for (const result of results) {
+          if (result.status === 'fulfilled' && typeof result.value === 'number') {
+            totalPulled += result.value;
+            if (result.value > 0) {
+              tierChanged = true;
+            }
+          }
+        }
+
+        if (tierChanged) {
+          useAppStore.getState().bumpDataRevision();
+        }
+      }
+
+      const completedAt = new Date().toISOString();
+      await setLastSyncTimestamp(completedAt);
+      useAppStore.getState().setSyncState({
+        syncInProgress: false,
+        lastSyncAt: completedAt,
+        lastSyncError: null,
+      });
       useAppStore.getState().bumpDataRevision();
+
+      return { success: true, recordsPulled: totalPulled };
+    } catch (error) {
+      const msg = errorMessage(error);
+      useAppStore.getState().setSyncState({ syncInProgress: false, lastSyncError: msg });
+      return { success: false, recordsPulled: 0, error: msg };
+    } finally {
+      this.syncing = false;
     }
   }
 }

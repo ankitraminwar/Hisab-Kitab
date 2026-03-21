@@ -5,7 +5,6 @@ import { useRouter, type Href } from 'expo-router';
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Image,
   ScrollView,
   StyleSheet,
@@ -52,6 +51,7 @@ export default function SettingsScreen() {
     onClose?: () => void;
   }>({ visible: false, title: '', message: '', type: 'info' });
   const [showExportPicker, setShowExportPicker] = useState(false);
+  const [showImportConfirm, setShowImportConfirm] = useState(false);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [syncing, setSyncing] = useState(false);
 
@@ -103,22 +103,26 @@ export default function SettingsScreen() {
     }
   };
 
-  const handleExportCsv = async () => {
+  const handleExportFormat = async (format: 'csv' | 'pdf' | 'json') => {
     setShowExportPicker(false);
     try {
-      const uri = await exportService.exportTransactionsCsv();
+      let uri: string | undefined;
+      if (format === 'csv') uri = await exportService.exportTransactionsCsv();
+      else if (format === 'pdf') uri = await exportService.exportTransactionsPdf();
+      else uri = await exportService.exportFullBackupJson();
+
       if (uri)
         setPopupConfig({
           visible: true,
           title: 'Success',
-          message: `Data exported to:\n${uri}`,
+          message: `${format.toUpperCase()} exported successfully.`,
           type: 'success',
         });
     } catch {
       setPopupConfig({
         visible: true,
         title: 'Export Failed',
-        message: 'Could not export CSV data.',
+        message: `Could not export ${format.toUpperCase()} data.`,
         type: 'error',
       });
     }
@@ -129,37 +133,29 @@ export default function SettingsScreen() {
   };
 
   const handleImportBackup = () => {
-    Alert.alert(
-      'Import Backup',
-      'This will merge the backup data into your existing data. Any conflicting records will be overwritten. Continue?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Choose File',
-          onPress: async () => {
-            try {
-              const result = await exportService.importBackupJson();
-              if (result) {
-                setPopupConfig({
-                  visible: true,
-                  title: 'Import Successful',
-                  message: `${result.imported} records imported.`,
-                  type: 'success',
-                });
-              }
-            } catch {
-              setPopupConfig({
-                visible: true,
-                title: 'Import Failed',
-                message:
-                  'Could not import backup. Make sure you selected a valid Hisab Kitab backup file.',
-                type: 'error',
-              });
-            }
-          },
-        },
-      ],
-    );
+    setShowImportConfirm(true);
+  };
+
+  const confirmImportBackup = async () => {
+    setShowImportConfirm(false);
+    try {
+      const result = await exportService.importBackupJson();
+      if (result) {
+        setPopupConfig({
+          visible: true,
+          title: 'Import Successful',
+          message: `${result.imported} records imported.`,
+          type: 'success',
+        });
+      }
+    } catch {
+      setPopupConfig({
+        visible: true,
+        title: 'Import Failed',
+        message: 'Could not import backup. Make sure you selected a valid Hisab Kitab backup file.',
+        type: 'error',
+      });
+    }
   };
 
   const handleEmailReport = async () => {
@@ -229,46 +225,26 @@ export default function SettingsScreen() {
         }}
       />
 
-      <ScrollView
-        contentContainerStyle={styles.scroll}
-        showsVerticalScrollIndicator={false}
-      >
+      <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
         <Animated.View entering={FadeInDown.duration(400)}>
           {/* Account Section */}
           <Text style={styles.sectionTitle}>ACCOUNT</Text>
-          <TouchableOpacity
-            style={styles.profileCard}
-            onPress={() => router.push('/profile/edit')}
-          >
+          <TouchableOpacity style={styles.profileCard} onPress={() => router.push('/profile/edit')}>
             <TouchableOpacity
-              style={[
-                styles.avatar,
-                !userProfile?.avatar && styles.avatarPlaceholder,
-              ]}
+              style={[styles.avatar, !userProfile?.avatar && styles.avatarPlaceholder]}
               onPress={() => void pickImage()}
             >
               {userProfile?.avatar ? (
-                <Image
-                  source={{ uri: userProfile.avatar }}
-                  style={styles.avatarImage}
-                />
+                <Image source={{ uri: userProfile.avatar }} style={styles.avatarImage} />
               ) : (
                 <Ionicons name="person" size={24} color={colors.primary} />
               )}
             </TouchableOpacity>
             <View style={styles.profileInfo}>
-              <Text style={styles.profileName}>
-                {userProfile?.name || 'My Account'}
-              </Text>
-              <Text style={styles.profileEmail}>
-                {userProfile?.email || 'user@example.com'}
-              </Text>
+              <Text style={styles.profileName}>{userProfile?.name || 'My Account'}</Text>
+              <Text style={styles.profileEmail}>{userProfile?.email || 'user@example.com'}</Text>
             </View>
-            <Ionicons
-              name="chevron-forward"
-              size={20}
-              color={colors.textMuted}
-            />
+            <Ionicons name="chevron-forward" size={20} color={colors.textMuted} />
           </TouchableOpacity>
         </Animated.View>
 
@@ -280,11 +256,7 @@ export default function SettingsScreen() {
           <View style={styles.prefRow}>
             <View style={styles.prefLeft}>
               <View style={styles.iconBox}>
-                <Ionicons
-                  name="moon-outline"
-                  size={20}
-                  color={colors.primary}
-                />
+                <Ionicons name="moon-outline" size={20} color={colors.primary} />
               </View>
               <Text style={styles.prefTitle}>Appearance</Text>
             </View>
@@ -303,7 +275,7 @@ export default function SettingsScreen() {
                         { color: isActive ? colors.primary : colors.textMuted },
                       ]}
                     >
-                      {t.charAt(0).toUpperCase() + t.slice(1)}
+                      {t?.charAt(0)?.toUpperCase() + t.slice(1)}
                     </Text>
                   </TouchableOpacity>
                 );
@@ -315,11 +287,7 @@ export default function SettingsScreen() {
           <View style={styles.prefRow}>
             <View style={styles.prefLeft}>
               <View style={styles.iconBox}>
-                <Ionicons
-                  name="chatbubble-ellipses-outline"
-                  size={20}
-                  color={colors.primary}
-                />
+                <Ionicons name="chatbubble-ellipses-outline" size={20} color={colors.primary} />
               </View>
               <View>
                 <Text style={styles.prefTitle}>SMS Auto-import</Text>
@@ -332,9 +300,7 @@ export default function SettingsScreen() {
             onPress={() => router.push('/sms-import')}
             style={{ paddingHorizontal: SPACING.lg, paddingBottom: SPACING.lg }}
           >
-            <Text
-              style={{ fontSize: 13, color: colors.primary, fontWeight: '700' }}
-            >
+            <Text style={{ fontSize: 13, color: colors.primary, fontWeight: '700' }}>
               Run manual SMS check now
             </Text>
           </TouchableOpacity>
@@ -343,11 +309,7 @@ export default function SettingsScreen() {
           <View style={styles.prefRow}>
             <View style={styles.prefLeft}>
               <View style={styles.iconBox}>
-                <Ionicons
-                  name="finger-print-outline"
-                  size={20}
-                  color={colors.primary}
-                />
+                <Ionicons name="finger-print-outline" size={20} color={colors.primary} />
               </View>
               <Text style={styles.prefTitle}>Biometric Lock</Text>
             </View>
@@ -364,64 +326,36 @@ export default function SettingsScreen() {
           <Text style={styles.sectionTitle}>DATA & SYNC</Text>
 
           {/* Bank Accounts */}
-          <TouchableOpacity
-            style={styles.prefRow}
-            onPress={() => router.push('/accounts')}
-          >
+          <TouchableOpacity style={styles.prefRow} onPress={() => router.push('/accounts')}>
             <View style={styles.prefLeft}>
               <View style={styles.iconBox}>
-                <Ionicons
-                  name="card-outline"
-                  size={20}
-                  color={colors.primary}
-                />
+                <Ionicons name="card-outline" size={20} color={colors.primary} />
               </View>
               <Text style={styles.prefTitle}>Bank Accounts</Text>
             </View>
-            <Ionicons
-              name="chevron-forward"
-              size={20}
-              color={colors.textMuted}
-            />
+            <Ionicons name="chevron-forward" size={20} color={colors.textMuted} />
           </TouchableOpacity>
 
           {/* Split Expenses */}
-          <TouchableOpacity
-            style={styles.prefRow}
-            onPress={() => router.push('/splits' as Href)}
-          >
+          <TouchableOpacity style={styles.prefRow} onPress={() => router.push('/splits' as Href)}>
             <View style={styles.prefLeft}>
               <View style={styles.iconBox}>
-                <Ionicons
-                  name="people-outline"
-                  size={20}
-                  color={colors.primary}
-                />
+                <Ionicons name="people-outline" size={20} color={colors.primary} />
               </View>
               <Text style={styles.prefTitle}>Split Expenses</Text>
             </View>
-            <Ionicons
-              name="chevron-forward"
-              size={20}
-              color={colors.textMuted}
-            />
+            <Ionicons name="chevron-forward" size={20} color={colors.textMuted} />
           </TouchableOpacity>
 
           {/* Cloud Sync */}
           <View style={styles.prefRow}>
             <View style={styles.prefLeft}>
               <View style={styles.iconBox}>
-                <Ionicons
-                  name="cloud-done-outline"
-                  size={20}
-                  color={colors.primary}
-                />
+                <Ionicons name="cloud-done-outline" size={20} color={colors.primary} />
               </View>
               <View>
                 <Text style={styles.prefTitle}>Cloud Backup</Text>
-                <Text style={styles.prefSub}>
-                  Last synced: {formattedLastSync}
-                </Text>
+                <Text style={styles.prefSub}>Last synced: {formattedLastSync}</Text>
               </View>
             </View>
             <TouchableOpacity
@@ -441,11 +375,7 @@ export default function SettingsScreen() {
           <TouchableOpacity style={styles.prefRow} onPress={handleExport}>
             <View style={styles.prefLeft}>
               <View style={styles.iconBox}>
-                <Ionicons
-                  name="download-outline"
-                  size={20}
-                  color={colors.primary}
-                />
+                <Ionicons name="download-outline" size={20} color={colors.primary} />
               </View>
               <Text style={styles.prefTitle}>Export Data</Text>
             </View>
@@ -454,13 +384,12 @@ export default function SettingsScreen() {
                 <Text style={styles.badgeText}>CSV</Text>
               </View>
               <View style={styles.badge}>
+                <Text style={styles.badgeText}>PDF</Text>
+              </View>
+              <View style={styles.badge}>
                 <Text style={styles.badgeText}>JSON</Text>
               </View>
-              <Ionicons
-                name="chevron-forward"
-                size={16}
-                color={colors.textMuted}
-              />
+              <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
             </View>
           </TouchableOpacity>
 
@@ -468,50 +397,31 @@ export default function SettingsScreen() {
           <TouchableOpacity style={styles.prefRow} onPress={handleImportBackup}>
             <View style={styles.prefLeft}>
               <View style={styles.iconBox}>
-                <Ionicons
-                  name="push-outline"
-                  size={20}
-                  color={colors.primary}
-                />
+                <Ionicons name="push-outline" size={20} color={colors.primary} />
               </View>
               <Text style={styles.prefTitle}>Import Backup</Text>
             </View>
-            <Ionicons
-              name="chevron-forward"
-              size={16}
-              color={colors.textMuted}
-            />
+            <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
           </TouchableOpacity>
 
           {/* Email Monthly Report */}
           <TouchableOpacity style={styles.prefRow} onPress={handleEmailReport}>
             <View style={styles.prefLeft}>
               <View style={styles.iconBox}>
-                <Ionicons
-                  name="mail-outline"
-                  size={20}
-                  color={colors.primary}
-                />
+                <Ionicons name="mail-outline" size={20} color={colors.primary} />
               </View>
               <Text style={styles.prefTitle}>Email Monthly Report</Text>
             </View>
-            <Ionicons
-              name="chevron-forward"
-              size={16}
-              color={colors.textMuted}
-            />
+            <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
           </TouchableOpacity>
         </Animated.View>
 
-        <Animated.View
-          entering={FadeInDown.duration(400).delay(300)}
-          style={styles.logoutWrapper}
-        >
+        <Animated.View entering={FadeInDown.duration(400).delay(300)} style={styles.logoutWrapper}>
           <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout}>
             <Ionicons name="log-out-outline" size={20} color={colors.expense} />
             <Text style={styles.logoutText}>Logout</Text>
           </TouchableOpacity>
-          <Text style={styles.versionText}>Hisab-Kitab v2.4.1 (Stable)</Text>
+          <Text style={styles.versionText}>Hisab Kitab v2.0.0 (Stable)</Text>
         </Animated.View>
         <View style={{ height: 100 }} />
       </ScrollView>
@@ -522,9 +432,29 @@ export default function SettingsScreen() {
         title="Export Format"
         message="Choose data format to export:"
         type="info"
-        actionLabel="CSV (Transactions)"
-        onAction={() => void handleExportCsv()}
+        actions={[
+          { label: 'CSV', onPress: () => void handleExportFormat('csv') },
+          {
+            label: 'PDF Report',
+            onPress: () => void handleExportFormat('pdf'),
+          },
+          {
+            label: 'JSON Backup',
+            onPress: () => void handleExportFormat('json'),
+          },
+        ]}
         onClose={() => setShowExportPicker(false)}
+      />
+
+      {/* Import Confirmation */}
+      <CustomPopup
+        visible={showImportConfirm}
+        title="Import Backup"
+        message="This will merge the backup data into your existing data. Any conflicting records will be overwritten. Continue?"
+        type="info"
+        actionLabel="Choose File"
+        onAction={() => void confirmImportBackup()}
+        onClose={() => setShowImportConfirm(false)}
       />
 
       {/* Logout Confirmation */}

@@ -2,19 +2,19 @@ import { enqueueSync, getDatabase } from '@/database';
 import { triggerBackgroundSync } from '@/services/syncService';
 import { useAppStore } from '@/store/appStore';
 import { generateId } from '@/utils/constants';
-import type {
-  Transaction,
-  TransactionFilters,
-  TransactionType,
-} from '@/utils/types';
+import type { Transaction, TransactionFilters, TransactionType } from '@/utils/types';
 import type { SQLiteBindValue } from 'expo-sqlite';
 
 /** Lazy-import to break the require cycle:
- *  transactionService → refreshWidgets → widgetDataService → transactionService */
+ *  transactionService → refreshWidgets → widgetDataService → transactionService
+ *  Cached after first resolution to avoid repeated dynamic import overhead. */
+let _refreshFn: (() => Promise<void>) | null = null;
 const refreshAllWidgets = async () => {
-  const { refreshAllWidgets: refresh } =
-    await import('@/widgets/refreshWidgets');
-  return refresh();
+  if (!_refreshFn) {
+    const mod = await import('@/widgets/refreshWidgets');
+    _refreshFn = mod.refreshAllWidgets;
+  }
+  return _refreshFn();
 };
 
 const bindValue = (value: unknown): SQLiteBindValue => {
@@ -83,11 +83,7 @@ const applyBalanceEffect = async (
 };
 
 export const TransactionService = {
-  async getAll(
-    filters?: TransactionFilters,
-    limit = 50,
-    offset = 0,
-  ): Promise<Transaction[]> {
+  async getAll(filters?: TransactionFilters, limit = 50, offset = 0): Promise<Transaction[]> {
     let query = `
       SELECT t.*,
              c.name as categoryName,
@@ -134,8 +130,7 @@ export const TransactionService = {
       params.push(filters.maxAmount);
     }
     if (filters?.search) {
-      query +=
-        ' AND (t.merchant LIKE ? OR t.notes LIKE ? OR t.tags LIKE ? OR c.name LIKE ?)';
+      query += ' AND (t.merchant LIKE ? OR t.notes LIKE ? OR t.tags LIKE ? OR c.name LIKE ?)';
       const searchTerm = `%${filters.search}%`;
       params.push(searchTerm, searchTerm, searchTerm, searchTerm);
     }
@@ -171,13 +166,7 @@ export const TransactionService = {
   async create(
     data: Omit<
       Transaction,
-      | 'id'
-      | 'createdAt'
-      | 'updatedAt'
-      | 'userId'
-      | 'syncStatus'
-      | 'lastSyncedAt'
-      | 'deletedAt'
+      'id' | 'createdAt' | 'updatedAt' | 'userId' | 'syncStatus' | 'lastSyncedAt' | 'deletedAt'
     >,
   ): Promise<Transaction> {
     const now = new Date().toISOString();
@@ -231,8 +220,8 @@ export const TransactionService = {
       isRecurring: transaction.isRecurring ? 1 : 0,
     });
     useAppStore.getState().bumpDataRevision();
-    void triggerBackgroundSync('transaction-created');
-    void refreshAllWidgets();
+    triggerBackgroundSync('transaction-created').catch(console.warn);
+    refreshAllWidgets().catch(console.warn);
 
     const created = await this.getById(transaction.id);
     if (!created) {
@@ -247,14 +236,7 @@ export const TransactionService = {
       throw new Error('Transaction not found');
     }
 
-    await applyBalanceEffect(
-      existing.type,
-      existing.amount,
-      existing.accountId,
-      existing.toAccountId,
-      true,
-    );
-
+    const db = getDatabase();
     const updatedAt = new Date().toISOString();
     const updated: Transaction = {
       ...existing,
@@ -263,42 +245,58 @@ export const TransactionService = {
       syncStatus: 'pending',
     };
 
-    await getDatabase().runAsync(
-      `UPDATE transactions
-       SET amount = ?, type = ?, categoryId = ?, accountId = ?, toAccountId = ?, merchant = ?, notes = ?, tags = ?, date = ?, paymentMethod = ?, isRecurring = ?, recurringId = ?, updatedAt = ?, syncStatus = 'pending'
-       WHERE id = ?`,
-      [
-        updated.amount,
-        updated.type,
-        updated.categoryId,
-        updated.accountId,
-        bindValue(updated.toAccountId),
-        bindValue(updated.merchant),
-        bindValue(updated.notes),
-        JSON.stringify(updated.tags ?? []),
-        updated.date,
-        updated.paymentMethod,
-        updated.isRecurring ? 1 : 0,
-        bindValue(updated.recurringId),
-        updated.updatedAt,
-        id,
-      ],
-    );
+    await db.execAsync('BEGIN IMMEDIATE TRANSACTION');
+    try {
+      await applyBalanceEffect(
+        existing.type,
+        existing.amount,
+        existing.accountId,
+        existing.toAccountId,
+        true,
+      );
 
-    await applyBalanceEffect(
-      updated.type,
-      updated.amount,
-      updated.accountId,
-      updated.toAccountId,
-    );
+      await db.runAsync(
+        `UPDATE transactions
+         SET amount = ?, type = ?, categoryId = ?, accountId = ?, toAccountId = ?, merchant = ?, notes = ?, tags = ?, date = ?, paymentMethod = ?, isRecurring = ?, recurringId = ?, updatedAt = ?, syncStatus = 'pending'
+         WHERE id = ?`,
+        [
+          updated.amount,
+          updated.type,
+          updated.categoryId,
+          updated.accountId,
+          bindValue(updated.toAccountId),
+          bindValue(updated.merchant),
+          bindValue(updated.notes),
+          JSON.stringify(updated.tags ?? []),
+          updated.date,
+          updated.paymentMethod,
+          updated.isRecurring ? 1 : 0,
+          bindValue(updated.recurringId),
+          updated.updatedAt,
+          id,
+        ],
+      );
+
+      await applyBalanceEffect(
+        updated.type,
+        updated.amount,
+        updated.accountId,
+        updated.toAccountId,
+      );
+      await db.execAsync('COMMIT');
+    } catch (e) {
+      await db.execAsync('ROLLBACK');
+      throw e;
+    }
+
     await enqueueSync('transactions', id, 'upsert', {
       ...updated,
       tags: JSON.stringify(updated.tags ?? []),
       isRecurring: updated.isRecurring ? 1 : 0,
     });
     useAppStore.getState().bumpDataRevision();
-    void triggerBackgroundSync('transaction-updated');
-    void refreshAllWidgets();
+    triggerBackgroundSync('transaction-updated').catch(console.warn);
+    refreshAllWidgets().catch(console.warn);
   },
 
   async delete(id: string): Promise<void> {
@@ -307,28 +305,38 @@ export const TransactionService = {
       return;
     }
 
+    const db = getDatabase();
     const deletedAt = new Date().toISOString();
-    await applyBalanceEffect(
-      existing.type,
-      existing.amount,
-      existing.accountId,
-      existing.toAccountId,
-      true,
-    );
-    await getDatabase().runAsync(
-      `UPDATE transactions
-       SET deletedAt = ?, updatedAt = ?, syncStatus = 'pending'
-       WHERE id = ?`,
-      [deletedAt, deletedAt, id],
-    );
+
+    await db.execAsync('BEGIN IMMEDIATE TRANSACTION');
+    try {
+      await applyBalanceEffect(
+        existing.type,
+        existing.amount,
+        existing.accountId,
+        existing.toAccountId,
+        true,
+      );
+      await db.runAsync(
+        `UPDATE transactions
+         SET deletedAt = ?, updatedAt = ?, syncStatus = 'pending'
+         WHERE id = ?`,
+        [deletedAt, deletedAt, id],
+      );
+      await db.execAsync('COMMIT');
+    } catch (e) {
+      await db.execAsync('ROLLBACK');
+      throw e;
+    }
+
     await enqueueSync('transactions', id, 'delete', {
       id,
       deletedAt,
       updatedAt: deletedAt,
     });
     useAppStore.getState().bumpDataRevision();
-    void triggerBackgroundSync('transaction-deleted');
-    void refreshAllWidgets();
+    triggerBackgroundSync('transaction-deleted').catch(console.warn);
+    refreshAllWidgets().catch(console.warn);
   },
 
   async hasImportedSms(messageId: string): Promise<boolean> {
@@ -336,15 +344,12 @@ export const TransactionService = {
       `SELECT COUNT(*) as count
        FROM transactions
        WHERE deletedAt IS NULL AND tags LIKE ?`,
-      [`%${SMS_TAG_PREFIX}${messageId}%`],
+      [`%"${SMS_TAG_PREFIX}${messageId}"%`],
     );
     return (row?.count ?? 0) > 0;
   },
 
-  async getMonthlyStats(
-    year: number,
-    month: string,
-  ): Promise<{ income: number; expense: number }> {
+  async getMonthlyStats(year: number, month: string): Promise<{ income: number; expense: number }> {
     const rows = await getDatabase().getAllAsync<{
       type: string;
       total: number;
@@ -370,11 +375,7 @@ export const TransactionService = {
     );
   },
 
-  async getCategoryBreakdown(
-    year: number,
-    month: string,
-    type: TransactionType = 'expense',
-  ) {
+  async getCategoryBreakdown(year: number, month: string, type: TransactionType = 'expense') {
     return getDatabase().getAllAsync<{
       categoryId: string;
       categoryName: string;
@@ -457,25 +458,34 @@ export const TransactionService = {
   },
 
   async exportToCSV(): Promise<string> {
-    const transactions = await this.getAll(undefined, 100000, 0);
-    const header =
-      'Date,Type,Amount,Category,Account,Payment Method,Merchant,Notes,Tags';
-    const rows = transactions.map((transaction) =>
-      [
-        transaction.date,
-        transaction.type,
-        transaction.amount,
-        transaction.categoryName ?? '',
-        transaction.accountName ?? '',
-        transaction.paymentMethod,
-        transaction.merchant ?? '',
-        transaction.notes ?? '',
-        transaction.tags.join(';'),
-      ]
-        .map((value) => `"${String(value).replace(/"/g, '""')}"`)
-        .join(','),
-    );
+    const header = 'Date,Type,Amount,Category,Account,Payment Method,Merchant,Notes,Tags';
+    const chunks: string[] = [header];
+    let offset = 0;
+    const CHUNK = 1000;
+    while (true) {
+      const batch = await this.getAll(undefined, CHUNK, offset);
+      if (batch.length === 0) break;
+      chunks.push(
+        ...batch.map((transaction) =>
+          [
+            transaction.date,
+            transaction.type,
+            transaction.amount,
+            transaction.categoryName ?? '',
+            transaction.accountName ?? '',
+            transaction.paymentMethod,
+            transaction.merchant ?? '',
+            transaction.notes ?? '',
+            transaction.tags.join(';'),
+          ]
+            .map((value) => `"${String(value).replace(/"/g, '""')}"`)
+            .join(','),
+        ),
+      );
+      offset += CHUNK;
+      if (batch.length < CHUNK) break;
+    }
 
-    return [header, ...rows].join('\n');
+    return chunks.join('\n');
   },
 };

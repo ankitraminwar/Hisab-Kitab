@@ -1,21 +1,13 @@
-import SmsAndroid from 'react-native-get-sms-android';
 import NetInfo from '@react-native-community/netinfo';
 import { PermissionsAndroid, Platform } from 'react-native';
+import SmsAndroid from 'react-native-get-sms-android';
 
 import { getSyncState, setSyncState } from '../database';
-import {
-  AccountService,
-  CategoryService,
-  UserProfileService,
-} from './dataServices';
+import { useAppStore } from '../store/appStore';
+import type { Account, Category, PaymentMethod, TransactionType } from '../utils/types';
+import { AccountService, CategoryService, UserProfileService } from './dataServices';
 import { triggerBackgroundSync } from './syncService';
 import { TransactionService } from './transactionService';
-import type {
-  Account,
-  Category,
-  PaymentMethod,
-  TransactionType,
-} from '../utils/types';
 
 const SMS_IMPORT_STATE_KEY = 'sms.lastImportedAt';
 const SMS_POLL_INTERVAL_MS = 60_000;
@@ -99,9 +91,7 @@ const detectType = (body: string): TransactionType | null => {
     return 'income';
   }
 
-  if (
-    /(debited|spent|withdrawn|sent|paid|purchase|dr\b|txn)/i.test(normalized)
-  ) {
+  if (/(debited|spent|withdrawn|sent|paid|purchase|dr\b|txn)/i.test(normalized)) {
     return 'expense';
   }
 
@@ -138,10 +128,7 @@ const detectPaymentMethod = (body: string): PaymentMethod => {
   return 'other';
 };
 
-const extractMerchant = (
-  body: string,
-  address?: string,
-): string | undefined => {
+const extractMerchant = (body: string, address?: string): string | undefined => {
   const patterns = [
     /(?:at|to|towards|for)\s+([A-Za-z0-9 .,&-]{3,40})/i,
     /merchant[:\s]+([A-Za-z0-9 .,&-]{3,40})/i,
@@ -163,9 +150,7 @@ const inferCategory = (
   categories: Category[],
 ): Category | undefined => {
   const normalized = body.toLowerCase();
-  const pool = categories.filter(
-    (category) => category.type === type || category.type === 'both',
-  );
+  const pool = categories.filter((category) => category.type === type || category.type === 'both');
 
   const keywordMap: { keyword: RegExp; categoryNames: string[] }[] = [
     {
@@ -194,9 +179,7 @@ const inferCategory = (
 
   const matched = keywordMap.find((entry) => entry.keyword.test(normalized));
   if (matched) {
-    return pool.find((category) =>
-      matched.categoryNames.includes(category.name),
-    );
+    return pool.find((category) => matched.categoryNames.includes(category.name));
   }
 
   return pool.find((category) => category.name === 'Other') ?? pool[0];
@@ -270,9 +253,7 @@ export const requestSmsReadPermission = async (): Promise<boolean> => {
     return false;
   }
 
-  const result = await PermissionsAndroid.request(
-    PermissionsAndroid.PERMISSIONS.READ_SMS,
-  );
+  const result = await PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.READ_SMS);
   return result === PermissionsAndroid.RESULTS.GRANTED;
 };
 
@@ -296,9 +277,7 @@ const parseSmsToTransaction = async (
   }
 
   const sender = message.address ?? '';
-  const senderLooksBank = BANK_SENDERS.some((token) =>
-    sender.toUpperCase().includes(token),
-  );
+  const senderLooksBank = BANK_SENDERS.some((token) => sender.toUpperCase().includes(token));
   if (
     !senderLooksBank &&
     !/(debited|credited|upi|a\/c|account|txn|spent|paid|received)/i.test(body)
@@ -337,9 +316,7 @@ const parseSmsToTransaction = async (
   };
 };
 
-export const importSmsTransactions = async (
-  interactive = true,
-): Promise<SmsImportResult> => {
+export const importSmsTransactions = async (interactive = true): Promise<SmsImportResult> => {
   if (Platform.OS !== 'android') {
     return {
       granted: false,
@@ -349,17 +326,13 @@ export const importSmsTransactions = async (
     };
   }
 
-  const granted = interactive
-    ? await requestSmsReadPermission()
-    : await hasSmsReadPermission();
+  const granted = interactive ? await requestSmsReadPermission() : await hasSmsReadPermission();
   if (!granted) {
     return {
       granted: false,
       supported: true,
       importedCount: 0,
-      message: interactive
-        ? 'SMS read permission was denied.'
-        : 'SMS permission is not granted.',
+      message: interactive ? 'SMS read permission was denied.' : 'SMS permission is not granted.',
     };
   }
 
@@ -379,9 +352,7 @@ export const importSmsTransactions = async (
   let importedCount = 0;
   let newestTimestamp = minDate;
 
-  const orderedMessages = [...messages].sort(
-    (left, right) => left.date - right.date,
-  );
+  const orderedMessages = [...messages].sort((left, right) => left.date - right.date);
 
   for (const message of orderedMessages) {
     newestTimestamp = Math.max(newestTimestamp, message.date);
@@ -390,9 +361,7 @@ export const importSmsTransactions = async (
       continue;
     }
 
-    const alreadyImported = await TransactionService.hasImportedSms(
-      parsed.messageId,
-    );
+    const alreadyImported = await TransactionService.hasImportedSms(parsed.messageId);
     if (alreadyImported) {
       continue;
     }
@@ -413,19 +382,12 @@ export const importSmsTransactions = async (
   }
 
   if (newestTimestamp > minDate) {
-    await setSyncState(
-      SMS_IMPORT_STATE_KEY,
-      new Date(newestTimestamp).toISOString(),
-    );
+    await setSyncState(SMS_IMPORT_STATE_KEY, new Date(newestTimestamp).toISOString());
   }
 
   const network = await NetInfo.fetch();
-  if (
-    network.isConnected &&
-    network.isInternetReachable !== false &&
-    importedCount > 0
-  ) {
-    void triggerBackgroundSync('sms-import');
+  if (network.isConnected && network.isInternetReachable !== false && importedCount > 0) {
+    triggerBackgroundSync('sms-import').catch(console.warn);
   }
 
   return {
@@ -440,31 +402,52 @@ export const importSmsTransactions = async (
 };
 
 class SmsImportService {
-  private intervalId?: ReturnType<typeof setInterval>;
+  private timeoutId?: ReturnType<typeof setTimeout>;
+  private consecutiveEmpty = 0;
 
   start() {
-    if (Platform.OS !== 'android' || this.intervalId) {
+    if (Platform.OS !== 'android' || this.timeoutId) {
       return;
     }
 
     void this.run();
-    this.intervalId = setInterval(() => {
-      void this.run();
-    }, SMS_POLL_INTERVAL_MS);
+    this.scheduleNext();
   }
 
   stop() {
-    if (this.intervalId) {
-      clearInterval(this.intervalId);
-      this.intervalId = undefined;
+    if (this.timeoutId) {
+      clearTimeout(this.timeoutId);
+      this.timeoutId = undefined;
     }
+    this.consecutiveEmpty = 0;
+  }
+
+  private scheduleNext() {
+    // Exponential backoff: 60s, 120s, 240s, max 10min when no new SMS
+    const delay =
+      this.consecutiveEmpty === 0
+        ? SMS_POLL_INTERVAL_MS
+        : Math.min(SMS_POLL_INTERVAL_MS * Math.pow(2, this.consecutiveEmpty), 600_000);
+    this.timeoutId = setTimeout(() => {
+      void this.run().then(() => this.scheduleNext());
+    }, delay);
   }
 
   async run() {
+    const autoImportEnabled = useAppStore.getState().smsEnabled;
+    if (!autoImportEnabled) {
+      return;
+    }
     try {
-      await importSmsTransactions(false);
+      const result = await importSmsTransactions(false);
+      if (result.importedCount > 0) {
+        this.consecutiveEmpty = 0;
+      } else {
+        this.consecutiveEmpty = Math.min(this.consecutiveEmpty + 1, 6);
+      }
     } catch (error) {
       console.warn('SMS import failed', error);
+      this.consecutiveEmpty = Math.min(this.consecutiveEmpty + 1, 6);
     }
   }
 }

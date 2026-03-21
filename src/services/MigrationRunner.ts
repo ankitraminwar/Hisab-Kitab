@@ -40,26 +40,16 @@ const ensureMigrationsTable = async (db: SQLite.SQLiteDatabase) => {
 };
 
 const getAppliedVersions = async (db: SQLite.SQLiteDatabase) => {
-  const rows = await db.getAllAsync<{ version: number }>(
-    'SELECT version FROM _migrations',
-  );
+  const rows = await db.getAllAsync<{ version: number }>('SELECT version FROM _migrations');
   return new Set(rows.map((row) => row.version));
 };
 
-const getTableColumns = async (
-  db: SQLite.SQLiteDatabase,
-  tableName: string,
-) => {
-  const columns = await db.getAllAsync<{ name: string }>(
-    `PRAGMA table_info(${tableName})`,
-  );
+const getTableColumns = async (db: SQLite.SQLiteDatabase, tableName: string) => {
+  const columns = await db.getAllAsync<{ name: string }>(`PRAGMA table_info(${tableName})`);
   return new Set(columns.map((column) => column.name));
 };
 
-const addMissingSyncColumns = async (
-  db: SQLite.SQLiteDatabase,
-  tableName: string,
-) => {
+const addMissingSyncColumns = async (db: SQLite.SQLiteDatabase, tableName: string) => {
   const existingColumns = await getTableColumns(db, tableName);
 
   for (const column of REQUIRED_SYNC_COLUMNS) {
@@ -67,9 +57,7 @@ const addMissingSyncColumns = async (
       continue;
     }
 
-    await db.execAsync(
-      `ALTER TABLE ${tableName} ADD COLUMN ${column.name} ${column.sqlType};`,
-    );
+    await db.execAsync(`ALTER TABLE ${tableName} ADD COLUMN ${column.name} ${column.sqlType};`);
   }
 };
 
@@ -80,6 +68,16 @@ const migrations: Migration[] = [
     run: async (db) => {
       for (const tableName of DOMAIN_TABLES) {
         await addMissingSyncColumns(db, tableName);
+      }
+    },
+  },
+  {
+    version: 2,
+    name: 'add_avatar_column_to_user_profile',
+    run: async (db) => {
+      const columns = await getTableColumns(db, 'user_profile');
+      if (!columns.has('avatar')) {
+        await db.execAsync(`ALTER TABLE user_profile ADD COLUMN avatar TEXT;`);
       }
     },
   },
@@ -97,10 +95,11 @@ export const runMigrations = async (db: SQLite.SQLiteDatabase) => {
     await db.execAsync('BEGIN IMMEDIATE TRANSACTION;');
     try {
       await migration.run(db);
-      await db.runAsync(
-        `INSERT INTO _migrations (version, name, applied_at) VALUES (?, ?, ?);`,
-        [migration.version, migration.name, new Date().toISOString()],
-      );
+      await db.runAsync(`INSERT INTO _migrations (version, name, applied_at) VALUES (?, ?, ?);`, [
+        migration.version,
+        migration.name,
+        new Date().toISOString(),
+      ]);
       await db.execAsync('COMMIT;');
     } catch (error) {
       await db.execAsync('ROLLBACK;');

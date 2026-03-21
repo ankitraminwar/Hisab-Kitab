@@ -21,12 +21,20 @@ Paste the following file into the Supabase SQL editor and run it:
 
 This single idempotent file creates:
 
-- All tables (accounts, categories, transactions, budgets, goals, assets, liabilities, net_worth_history, user_profile, recurring_templates, split_expenses, split_members, payment_methods, sync_queue, sync_state)
-- All indexes and foreign keys
+- All tables (accounts, categories, transactions, budgets, goals, assets, liabilities, net_worth_history, user_profile, split_expenses, split_members, payment_methods)
+- All indexes and triggers (including GIN index on `tags`, composite indexes for dashboard/filter queries)
 - RLS policies (per-user isolation via `auth.uid()`)
-- Triggers (e.g. auto-create `user_profile` on new auth user)
-- Seed data for default categories and payment methods
+- `handle_new_user` trigger (auto-creates `user_profile` on new auth user with `theme_preference: 'system'`)
+- `dashboard_monthly_stats` materialized view (pre-aggregated monthly income/expenses/net per user, auto-refreshed via trigger)
+- `get_dashboard_stats(month)` RPC function for accessing dashboard aggregates
 - Backfill for existing auth users missing `user_profile`
+
+**Design decisions**:
+
+- **No inter-table FK constraints** — e.g. `transactions.category_id → categories.id` is intentionally absent. SQLite enforces FK integrity locally. Removing them from Supabase prevents FK violations when offline-first sync pushes records out of dependency order.
+- **`user_id → auth.users(id)`** FK is retained on all tables.
+- **`payment_method`** column on `transactions` has no CHECK constraint — accepts any string (SMS imports use varied values).
+- **`user_profile.avatar`** — `TEXT` column for profile photo URI.
 
 Safe to run multiple times — triggers and policies are dropped and recreated.
 
@@ -76,7 +84,7 @@ Current auth behavior in the app:
 - Authenticated users → redirected away from auth screens
 - Logout → clears local SQLite data, resets app store, returns to `/login`
 - Biometric lock preference stored locally and mirrored to `user_profile`
-- If a signed-in user is missing `user_profile`, the app creates it locally and syncs on next connection
+- If local user data is missing after sign-in, the app forces a full pull from Supabase before showing finance data
 
 ## 5. Sync Behavior
 
@@ -95,7 +103,7 @@ The app is fully offline-first:
 SMS import requires a **native Android build** (not Expo Go):
 
 ```bash
-npm run android   # npx expo run:android
+yarn android   # expo run:android
 ```
 
 - Uses `react-native-get-sms-android ^2.1.0`
@@ -110,7 +118,7 @@ npm run android   # npx expo run:android
 Widgets also require a native Android build:
 
 ```bash
-npm run android
+yarn android
 ```
 
 Three widgets available:

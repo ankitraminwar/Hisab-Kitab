@@ -15,8 +15,7 @@ export async function sendMonthlyReport(): Promise<{
 }> {
   const session = await supabase.auth.getSession();
   const email = session.data.session?.user?.email;
-  if (!email)
-    return { ok: false, error: 'No email address found. Please log in.' };
+  if (!email) return { ok: false, error: 'No email address found. Please log in.' };
 
   const now = new Date();
   const year = now.getFullYear();
@@ -56,7 +55,7 @@ export async function sendMonthlyReport(): Promise<{
       ctaUrl: 'hisabkitab:///',
     },
   });
-
+  console.log('Email report sent:', { email, error });
   if (error) return { ok: false, error: error.message };
   return { ok: true };
 }
