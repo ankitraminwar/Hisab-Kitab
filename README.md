@@ -76,7 +76,10 @@ supabase/schema.sql
 Deploy email edge function:
 
 ```bash
-supabase functions deploy send-email
+npx supabase login
+npx supabase link --project-ref SECRETES
+npx supabase secrets set RESEND_API_KEY=your_resend_key RESEND_FROM_EMAIL=no-reply@yourdomain.com RESEND_FROM_NAME="Hisab Kitab"
+npx supabase functions deploy send-email
 # Add secrets in Supabase dashboard:
 # RESEND_API_KEY
 # RESEND_FROM_EMAIL
