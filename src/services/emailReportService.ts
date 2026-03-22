@@ -48,13 +48,14 @@ export async function sendMonthlyReport(): Promise<{
   const { error } = await supabase.functions.invoke('send-email', {
     body: {
       to: email,
-      subject: `Hisab Kitab — ${monthLabel} Report`,
+      subject: `Hisab Kitab - ${monthLabel} Report`,
       title: `Your ${monthLabel} Financial Report`,
       body,
       ctaLabel: 'Open App',
       ctaUrl: 'hisabkitab:///',
     },
   });
+
   console.log('Email report sent:', { email, error });
   if (error) return { ok: false, error: error.message };
   return { ok: true };

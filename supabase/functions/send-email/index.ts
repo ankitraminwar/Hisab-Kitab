@@ -1,6 +1,10 @@
 import { Resend } from 'npm:resend@4.1.2';
 
-const resend = new Resend(Deno.env.get('RESEND_API_KEY'));
+const resendApiKey = Deno.env.get('RESEND_API_KEY');
+const resendFromEmail = Deno.env.get('RESEND_FROM_EMAIL');
+const resendFromName = Deno.env.get('RESEND_FROM_NAME') ?? 'Hisab Kitab';
+
+const resend = resendApiKey ? new Resend(resendApiKey) : null;
 
 const template = ({
   title,
@@ -41,16 +45,46 @@ Deno.serve(async (request) => {
     return new Response('Method not allowed', { status: 405 });
   }
 
+  if (!resendApiKey || !resend) {
+    return Response.json(
+      {
+        error:
+          'Missing RESEND_API_KEY secret. Set it in Supabase Dashboard -> Edge Functions -> Secrets.',
+      },
+      { status: 500 },
+    );
+  }
+
+  if (!resendFromEmail) {
+    return Response.json(
+      {
+        error:
+          'Missing RESEND_FROM_EMAIL secret. Set it to a verified Resend sender address before sending emails.',
+      },
+      { status: 500 },
+    );
+  }
+
   const { to, subject, title, body, ctaLabel, ctaUrl } = await request.json();
 
+  if (!to || !subject || !title || !body || !ctaLabel || !ctaUrl) {
+    return Response.json(
+      {
+        error: 'Missing required fields. Expected: to, subject, title, body, ctaLabel, ctaUrl.',
+      },
+      { status: 400 },
+    );
+  }
+
   const { error } = await resend.emails.send({
-    from: 'Hisab Kitab <notifications@hisabkitab.app>',
+    from: `${resendFromName} <${resendFromEmail}>`,
     to,
     subject,
     html: template({ title, body, ctaLabel, ctaUrl }),
   });
 
   if (error) {
+    console.error('Resend send failed', error);
     return Response.json({ error }, { status: 500 });
   }
 

@@ -57,9 +57,11 @@ supabase functions deploy send-email
 
 Add the required secret in the Supabase dashboard → Edge Functions → Secrets:
 
-| Secret           | Value                               |
-| ---------------- | ----------------------------------- |
-| `RESEND_API_KEY` | Your Resend API key from resend.com |
+| Secret              | Value                                                    |
+| ------------------- | -------------------------------------------------------- |
+| `RESEND_API_KEY`    | Your Resend API key from resend.com                      |
+| `RESEND_FROM_EMAIL` | A verified sender address in Resend, e.g. `no-reply@...` |
+| `RESEND_FROM_NAME`  | Optional display name, e.g. `Hisab Kitab`                |
 
 Source file: [supabase/functions/send-email/index.ts](./supabase/functions/send-email/index.ts)
 
@@ -144,4 +146,6 @@ To verify sync is working, sign in, add a transaction, and check the Supabase ta
 If the `send-email` edge function returns an error, check:
 
 1. `RESEND_API_KEY` secret is set in Supabase
-2. The email address is verified in your Resend account (if in sandbox mode)
+2. `RESEND_FROM_EMAIL` is set in Supabase
+3. The domain used by `RESEND_FROM_EMAIL` is verified in Resend
+4. Open Supabase Dashboard -> Edge Functions -> `send-email` -> Logs / Invocations and inspect the exact error

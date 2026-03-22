@@ -77,7 +77,10 @@ Deploy email edge function:
 
 ```bash
 supabase functions deploy send-email
-# Add secret in Supabase dashboard: RESEND_API_KEY
+# Add secrets in Supabase dashboard:
+# RESEND_API_KEY
+# RESEND_FROM_EMAIL
+# Optional: RESEND_FROM_NAME
 ```
 
 Enable email/password auth in Supabase dashboard.
