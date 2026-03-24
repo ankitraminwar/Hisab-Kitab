@@ -14,15 +14,15 @@ import {
   subMonths,
   subYears,
 } from 'date-fns';
+import { router, type Href } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { PeriodTabs } from '../../components/common/PeriodTabs';
 import { ScreenHeader } from '../../components/common/ScreenHeader';
 import { useTheme, type ThemeColors } from '../../hooks/useTheme';
-import { exportService } from '../../services/exportService';
 import { TransactionService } from '../../services/transactionService';
 import { useAppStore } from '../../store/appStore';
 import { RADIUS, SPACING, TYPOGRAPHY, formatCompact, formatCurrency } from '../../utils/constants';
@@ -128,33 +128,19 @@ export default function ReportsScreen() {
     setAnchor(new Date());
   };
 
+  const openPreview = () => {
+    router.push(
+      `/reports/preview?from=${encodeURIComponent(range.from)}&to=${encodeURIComponent(range.to)}&label=${encodeURIComponent(range.label)}&period=${encodeURIComponent(period.toLowerCase())}&focus=pdf` as Href,
+    );
+  };
+
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <ScreenHeader
         title="Financial Analytics"
         rightAction={{
           icon: 'share-outline',
-          onPress: () => {
-            Alert.alert('Export Report', 'Choose export format', [
-              {
-                text: 'PDF Report',
-                onPress: () => {
-                  exportService
-                    .exportTransactionsPdf()
-                    .catch(() => Alert.alert('Error', 'Failed to export PDF'));
-                },
-              },
-              {
-                text: 'CSV Spreadsheet',
-                onPress: () => {
-                  exportService
-                    .exportTransactionsCsv()
-                    .catch(() => Alert.alert('Error', 'Failed to export CSV'));
-                },
-              },
-              { text: 'Cancel', style: 'cancel' },
-            ]);
-          },
+          onPress: openPreview,
         }}
       />
 

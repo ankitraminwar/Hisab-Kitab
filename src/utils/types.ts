@@ -147,10 +147,18 @@ export interface SplitExpense extends SyncMetadata {
 export interface SplitMember extends SyncMetadata {
   id: string;
   splitExpenseId: string;
+  friendId?: string;
   name: string;
   shareAmount: number;
   sharePercent?: number;
   status: SplitStatus;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface SplitFriend extends SyncMetadata {
+  id: string;
+  name: string;
   createdAt: string;
   updatedAt: string;
 }

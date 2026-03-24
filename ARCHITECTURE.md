@@ -30,6 +30,7 @@ Schema defined in `src/database/index.ts`. Tables:
 | `user_profile`        | User settings, theme, notification prefs  |
 | `recurring_templates` | Recurring transaction definitions         |
 | `split_expenses`      | Split expense headers                     |
+| `split_friends`       | Native friend tracker for split balancing |
 | `split_members`       | Split expense member shares               |
 | `payment_methods`     | Payment method definitions                |
 | `sync_queue`          | Pending sync operations                   |
@@ -129,29 +130,29 @@ All types defined in `src/utils/types.ts`. No `any` in the codebase.
 
 ## Service Layer
 
-| Service                | File                    | Purpose                                                       |
-| ---------------------- | ----------------------- | ------------------------------------------------------------- |
-| `AccountService`       | `dataService.ts`        | Account CRUD                                                  |
-| `CategoryService`      | `dataService.ts`        | Category CRUD                                                 |
-| `BudgetService`        | `dataService.ts`        | Budget CRUD + spent calculation                               |
-| `GoalService`          | `dataService.ts`        | Goal CRUD + fund/withdraw                                     |
-| `NetWorthService`      | `dataService.ts`        | Asset, Liability, NetWorthHistory CRUD                        |
-| `UserProfileService`   | `dataService.ts`        | Profile read/upsert                                           |
-| `PaymentMethodService` | `dataService.ts`        | Payment method CRUD                                           |
-| `DataService`          | `dataServices.ts`       | Re-export umbrella + aggregate helpers                        |
-| `TransactionService`   | `transactionService.ts` | Transaction CRUD, filtered queries, CSV export, monthly stats |
-| `SplitService`         | `splitService.ts`       | Split expense create/read/update/delete, mark share paid      |
-| `SyncService`          | `syncService.ts`        | Background push/pull sync orchestration                       |
-| `syncTransform`        | `syncTransform.ts`      | camelCase ↔ snake_case column mapping for all synced tables   |
-| `authService`          | `auth.ts`               | Sign in/up/out, biometric, session management, profile create |
-| `SmsReadService`       | `smsReadService.ts`     | Android SMS list + bank message parser (regex-based)          |
-| `SmsService`           | `sms.ts`                | SMS polling, deduplication, transaction creation from SMS     |
-| `NotificationService`  | `notifications.ts`      | Expo scheduled notification management                        |
-| `exportService`        | `exportService.ts`      | CSV export, PDF export, full JSON backup, JSON import         |
-| `emailReportService`   | `emailReportService.ts` | Monthly summary email via Supabase Edge Function + Resend     |
-| `WidgetDataService`    | `widgetDataService.ts`  | Data fetchers for Android home screen widgets                 |
-| `MigrationRunner`      | `MigrationRunner.ts`    | SQLite schema migration helper                                |
-| `permissions`          | `permissions.ts`        | Android runtime permission requests                           |
+| Service                | File                    | Purpose                                                             |
+| ---------------------- | ----------------------- | ------------------------------------------------------------------- |
+| `AccountService`       | `dataService.ts`        | Account CRUD                                                        |
+| `CategoryService`      | `dataService.ts`        | Category CRUD                                                       |
+| `BudgetService`        | `dataService.ts`        | Budget CRUD + spent calculation                                     |
+| `GoalService`          | `dataService.ts`        | Goal CRUD + fund/withdraw                                           |
+| `NetWorthService`      | `dataService.ts`        | Asset, Liability, NetWorthHistory CRUD                              |
+| `UserProfileService`   | `dataService.ts`        | Profile read/upsert                                                 |
+| `PaymentMethodService` | `dataService.ts`        | Payment method CRUD                                                 |
+| `DataService`          | `dataServices.ts`       | Re-export umbrella + aggregate helpers                              |
+| `TransactionService`   | `transactionService.ts` | Transaction CRUD, filtered queries, CSV export, monthly stats       |
+| `SplitService`         | `splitService.ts`       | Split CRUD, friend management, Google Pay style balance aggregation |
+| `SyncService`          | `syncService.ts`        | Background push/pull sync orchestration                             |
+| `syncTransform`        | `syncTransform.ts`      | camelCase ↔ snake_case column mapping for all synced tables         |
+| `authService`          | `auth.ts`               | Sign in/up/out, biometric, session management, profile create       |
+| `SmsReadService`       | `smsReadService.ts`     | Android SMS list + bank message parser (regex-based)                |
+| `SmsService`           | `sms.ts`                | SMS polling, deduplication, transaction creation from SMS           |
+| `NotificationService`  | `notifications.ts`      | Expo scheduled notification management                              |
+| `exportService`        | `exportService.ts`      | CSV export, PDF export, full JSON backup, JSON import               |
+| `emailReportService`   | `emailReportService.ts` | Monthly summary email via Supabase Edge Function + Resend           |
+| `WidgetDataService`    | `widgetDataService.ts`  | Data fetchers for Android home screen widgets                       |
+| `MigrationRunner`      | `MigrationRunner.ts`    | SQLite schema migration helper                                      |
+| `permissions`          | `permissions.ts`        | Android runtime permission requests                                 |
 
 ## Component Library (`src/components/common/`)
 
@@ -220,6 +221,7 @@ File-based routing via expo-router. Route → screen mapping:
 - `app/transactions/add.tsx` — Add transaction modal
 - `app/transactions/[id].tsx` — Edit transaction modal
 - `app/split-expense/[id].tsx` — Split create (`id=new`) or detail view
+- `app/split-expense/friend-detail/[id].tsx` — Friend timeline and settlement
 - `app/splits/index.tsx` — Split expense list
 - `app/auth/` — Login, signup, forgot/reset password
 - `app/settings/index.tsx` — Settings

@@ -197,6 +197,7 @@ const transactionalTables = [
   `CREATE TABLE IF NOT EXISTS split_members (
     id TEXT PRIMARY KEY,
     split_expense_id TEXT NOT NULL,
+    friendId TEXT,
     name TEXT NOT NULL,
     share_amount REAL NOT NULL,
     share_percent REAL,
@@ -205,6 +206,13 @@ const transactionalTables = [
     updatedAt TEXT NOT NULL,
     ${baseSyncColumns},
     FOREIGN KEY (split_expense_id) REFERENCES split_expenses(id) ON DELETE CASCADE
+  )`,
+  `CREATE TABLE IF NOT EXISTS split_friends (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    createdAt TEXT NOT NULL,
+    updatedAt TEXT NOT NULL,
+    ${baseSyncColumns}
   )`,
   `CREATE TABLE IF NOT EXISTS payment_methods (
     id TEXT PRIMARY KEY,
@@ -234,6 +242,8 @@ const indexes = [
   `CREATE INDEX IF NOT EXISTS idx_sync_queue_retryCount ON sync_queue(retryCount, updatedAt)`,
   `CREATE INDEX IF NOT EXISTS idx_split_expenses_transaction ON split_expenses(transaction_id)`,
   `CREATE INDEX IF NOT EXISTS idx_split_members_split_id ON split_members(split_expense_id)`,
+  `CREATE INDEX IF NOT EXISTS idx_split_members_friend_id ON split_members(friendId)`,
+  `CREATE INDEX IF NOT EXISTS idx_split_friends_name ON split_friends(name)`,
   `CREATE INDEX IF NOT EXISTS idx_transactions_type_date_category ON transactions(type, date DESC, categoryId)`,
   `CREATE INDEX IF NOT EXISTS idx_transactions_tags ON transactions(tags)`,
   `CREATE INDEX IF NOT EXISTS idx_transactions_dashboard ON transactions(date DESC, type)`,

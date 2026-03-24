@@ -86,7 +86,7 @@ const FAQ_DATA: FaqItem[] = [
   },
   {
     q: 'How does split expense work?',
-    a: 'A split is linked to an expense transaction. You can divide the amount equally, by exact values, or by percentages, then track which members have paid.',
+    a: 'A split is linked to an expense transaction. You can add friends to a split, divide the amount equally, by exact values, or by percentages, then track which friends have paid.',
   },
   {
     q: 'How does SMS import work?',

@@ -124,7 +124,14 @@ const TransactionItem: React.FC<TransactionItemProps> = ({ item, onPress, onLong
             {prefix}
             {formatCurrency(item.amount)}
           </Text>
-          <Text style={styles.date}>{item.date ? format(new Date(item.date), 'dd MMM') : ''}</Text>
+          <View style={{ alignItems: 'flex-end' }}>
+            {item.date ? (
+              <>
+                <Text style={styles.dateDay}>{format(new Date(item.date), 'dd')}</Text>
+                <Text style={styles.dateMonth}>{format(new Date(item.date), 'MMM')}</Text>
+              </>
+            ) : null}
+          </View>
         </View>
       </Animated.View>
     </GestureDetector>
@@ -190,8 +197,17 @@ const createStyles = (colors: ThemeColors) =>
       ...TYPOGRAPHY.bodyMedium,
       fontWeight: '700',
     },
-    date: {
+    dateDay: {
+      ...TYPOGRAPHY.bodyMedium,
+      color: colors.textPrimary,
+      fontWeight: '800',
+    },
+    dateMonth: {
       ...TYPOGRAPHY.caption,
       color: colors.textMuted,
+      fontSize: 10,
+      textTransform: 'uppercase',
+      letterSpacing: 0.8,
+      marginTop: -2,
     },
   });

@@ -1,6 +1,10 @@
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
+import { StatusBar } from 'expo-status-bar';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
+  Dimensions,
+  FlatList,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -12,15 +16,19 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import Animated, { FadeInDown } from 'react-native-reanimated';
+import Animated, { FadeInDown, FadeInRight } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Button, Card } from '../../components/common';
+
+import { Button } from '../../components/common';
 import { useTheme, type ThemeColors } from '../../hooks/useTheme';
 import { AccountService } from '../../services/dataServices';
 import { triggerBackgroundSync } from '../../services/syncService';
 import { useAppStore } from '../../store/appStore';
 import { RADIUS, SPACING, TYPOGRAPHY, formatCurrency } from '../../utils/constants';
 import type { Account, AccountType, IoniconsName } from '../../utils/types';
+
+const { width } = Dimensions.get('window');
+const CARD_WIDTH = width * 0.85;
 
 const ACCOUNT_TYPES: {
   key: AccountType;
@@ -31,29 +39,25 @@ const ACCOUNT_TYPES: {
   { key: 'cash', label: 'Cash', icon: 'cash', color: '#22C55E' },
   { key: 'bank', label: 'Bank', icon: 'business', color: '#3B82F6' },
   { key: 'upi', label: 'UPI', icon: 'phone-portrait', color: '#8B5CF6' },
-  { key: 'credit_card', label: 'Credit Card', icon: 'card', color: '#F43F5E' },
+  { key: 'credit_card', label: 'Credit', icon: 'card', color: '#F43F5E' },
   { key: 'wallet', label: 'Wallet', icon: 'wallet', color: '#F97316' },
-  {
-    key: 'investment',
-    label: 'Investment',
-    icon: 'trending-up',
-    color: '#06B6D4',
-  },
+  { key: 'investment', label: 'Invest', icon: 'trending-up', color: '#06B6D4' },
 ];
 
 const ACCOUNT_COLORS = [
-  '#22C55E',
   '#3B82F6',
   '#8B5CF6',
   '#F43F5E',
   '#F97316',
+  '#22C55E',
   '#06B6D4',
   '#EAB308',
   '#EC4899',
+  '#14B8A6',
 ];
 
 export default function AccountsScreen() {
-  const { colors } = useTheme();
+  const { colors, isDark } = useTheme();
   const dataRevision = useAppStore((state) => state.dataRevision);
   const styles = useMemo(() => createStyles(colors), [colors]);
   const [accounts, setAccounts] = useState<Account[]>([]);
@@ -76,59 +80,156 @@ export default function AccountsScreen() {
     setRefreshing(false);
   };
 
-  const totalBalance = accounts.reduce((s, a) => s + a.balance, 0);
+  const totalBalance = accounts.reduce((sum, account) => sum + account.balance, 0);
+  const activeAccountsCount = accounts.length;
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      <Animated.View entering={FadeInDown.duration(400)} style={styles.header}>
-        <Text style={styles.title}>Accounts</Text>
-        <TouchableOpacity onPress={() => setShowAdd(true)} style={styles.addBtn}>
-          <Ionicons name="add" size={22} color={colors.primary} />
-        </TouchableOpacity>
-      </Animated.View>
+    <View style={styles.container}>
+      <StatusBar style={isDark ? 'light' : 'dark'} />
+      <SafeAreaView style={{ flex: 1 }} edges={['top']}>
+        {/* Header */}
+        <Animated.View entering={FadeInDown.duration(400)} style={styles.header}>
+          <View>
+            <Text style={styles.title}>My Accounts</Text>
+            <Text style={styles.subtitle}>Organize your finances effortlessly</Text>
+          </View>
+          <TouchableOpacity onPress={() => setShowAdd(true)} style={styles.addBtn}>
+            <LinearGradient
+              colors={[colors.primary, '#6D28D9']}
+              style={styles.addBtnGradient}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+            >
+              <Ionicons name="add" size={24} color="#FFF" />
+            </LinearGradient>
+          </TouchableOpacity>
+        </Animated.View>
 
-      <ScrollView
-        contentContainerStyle={styles.scroll}
-        showsVerticalScrollIndicator={false}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={onRefresh}
-            tintColor={colors.primary}
-          />
-        }
-      >
-        {/* Total Balance */}
-        <Card style={styles.totalCard} glow>
-          <Text style={styles.totalLabel}>TOTAL BALANCE</Text>
-          <Text
-            style={[
-              styles.totalAmount,
-              {
-                color: totalBalance >= 0 ? colors.textPrimary : colors.expense,
-              },
-            ]}
+        <ScrollView
+          showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              tintColor={colors.primary}
+            />
+          }
+        >
+          {/* Total Net Worth Card */}
+          <Animated.View
+            entering={FadeInDown.duration(400).delay(100)}
+            style={styles.netWorthCardWrap}
           >
-            {formatCurrency(totalBalance)}
-          </Text>
-          <Text style={styles.totalSub}>
-            {accounts.length} account{accounts.length !== 1 ? 's' : ''}
-          </Text>
-        </Card>
+            <LinearGradient
+              colors={isDark ? ['#1E1E2E', '#2D2D44'] : ['#FFFFFF', '#F8FAFC']}
+              style={styles.netWorthCard}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+            >
+              <View style={styles.netWorthTop}>
+                <View>
+                  <Text style={styles.netWorthLabel}>TOTAL NET WORTH</Text>
+                  <Text
+                    style={[
+                      styles.netWorthAmount,
+                      { color: totalBalance >= 0 ? colors.textPrimary : colors.expense },
+                    ]}
+                  >
+                    {formatCurrency(totalBalance)}
+                  </Text>
+                </View>
+                <View style={[styles.iconWrap, { backgroundColor: colors.primary + '15' }]}>
+                  <Ionicons name="pie-chart" size={24} color={colors.primary} />
+                </View>
+              </View>
 
-        {accounts.map((account) => (
-          <AccountCard
-            key={account.id}
-            account={account}
-            onDelete={async () => {
-              await AccountService.delete(account.id);
-              void loadAccounts();
-            }}
-          />
-        ))}
+              <View style={styles.netWorthStats}>
+                <View style={styles.statBox}>
+                  <Text style={styles.statLabel}>Active Accounts</Text>
+                  <Text style={styles.statValue}>{activeAccountsCount}</Text>
+                </View>
+                <View style={styles.statDivider} />
+                <View style={styles.statBox}>
+                  <Text style={styles.statLabel}>Status</Text>
+                  <Text
+                    style={[
+                      styles.statValue,
+                      { color: totalBalance >= 0 ? colors.income : colors.expense },
+                    ]}
+                  >
+                    {totalBalance >= 0 ? 'Healthy' : 'Attention'}
+                  </Text>
+                </View>
+              </View>
+            </LinearGradient>
+          </Animated.View>
 
-        <View style={{ height: 80 }} />
-      </ScrollView>
+          {/* Accounts Carousel */}
+          <Animated.View entering={FadeInDown.duration(400).delay(200)}>
+            <View style={styles.sectionHeaderRow}>
+              <Text style={styles.sectionTitle}>Cards & Wallets</Text>
+            </View>
+
+            {accounts.length === 0 ? (
+              <View style={styles.emptyWrap}>
+                <View style={styles.emptyIconWrap}>
+                  <Ionicons name="wallet-outline" size={40} color={colors.textMuted} />
+                </View>
+                <Text style={styles.emptyTitle}>No accounts yet</Text>
+                <Text style={styles.emptySub}>Add your first bank account or wallet.</Text>
+                <Button
+                  title="Add Account"
+                  icon="add-circle-outline"
+                  onPress={() => setShowAdd(true)}
+                  style={{ marginTop: SPACING.md }}
+                />
+              </View>
+            ) : (
+              <FlatList
+                data={accounts}
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                snapToInterval={CARD_WIDTH + SPACING.md}
+                decelerationRate="fast"
+                contentContainerStyle={styles.carouselContent}
+                keyExtractor={(item) => item.id}
+                renderItem={({ item, index }) => (
+                  <Animated.View entering={FadeInRight.duration(400).delay(250 + index * 50)}>
+                    <AccountCreditCard
+                      account={item}
+                      onDelete={async () => {
+                        await AccountService.delete(item.id);
+                        void loadAccounts();
+                      }}
+                    />
+                  </Animated.View>
+                )}
+              />
+            )}
+          </Animated.View>
+
+          {/* Quick Actions or Info */}
+          {accounts.length > 0 && (
+            <Animated.View
+              entering={FadeInDown.duration(400).delay(350)}
+              style={styles.infoSection}
+            >
+              <Text style={styles.sectionTitle}>Account Insights</Text>
+              <View style={styles.infoCard}>
+                <Ionicons name="bulb" size={24} color={colors.warning} />
+                <View style={{ flex: 1, marginLeft: SPACING.md }}>
+                  <Text style={styles.infoCardTitle}>Keep track of balances</Text>
+                  <Text style={styles.infoCardText}>
+                    Updating your account balances regularly ensures accurate net worth tracking.
+                  </Text>
+                </View>
+              </View>
+            </Animated.View>
+          )}
+
+          <View style={{ height: 100 }} />
+        </ScrollView>
+      </SafeAreaView>
 
       <AddAccountModal
         visible={showAdd}
@@ -138,56 +239,65 @@ export default function AccountsScreen() {
           setShowAdd(false);
         }}
       />
-    </SafeAreaView>
+    </View>
   );
 }
 
-const AccountCard: React.FC<{ account: Account; onDelete: () => void }> = ({
+const AccountCreditCard: React.FC<{ account: Account; onDelete: () => void }> = ({
   account,
   onDelete,
 }) => {
-  const { colors } = useTheme();
+  const { colors, isDark } = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
-  const typeInfo = ACCOUNT_TYPES.find((t) => t.key === account.type);
+  const typeInfo = ACCOUNT_TYPES.find((type) => type.key === account.type);
+
+  // Derive gradient colors randomly based on account color for a premium look
+  const c1 = account.color;
 
   return (
-    <Card style={styles.accountCard}>
-      <View style={styles.accountRow}>
-        <View style={[styles.accountIcon, { backgroundColor: account.color + '20' }]}>
-          <Ionicons name={account.icon as IoniconsName} size={22} color={account.color} />
+    <View style={styles.creditCardWrap}>
+      <LinearGradient
+        colors={[c1, c1 + 'CC']}
+        style={StyleSheet.absoluteFillObject}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+      />
+      {/* Decorative patterns */}
+      <View style={styles.cardPattern1} />
+      <View style={styles.cardPattern2} />
+
+      <View style={styles.cardTop}>
+        <View style={styles.cardIconBox}>
+          <Ionicons name={account.icon as IoniconsName} size={20} color={c1} />
         </View>
-        <View style={styles.accountInfo}>
-          <Text style={styles.accountName}>{account.name}</Text>
-          <Text style={styles.accountType}>
-            {typeInfo?.label || account.type} • {account.currency}
+        <TouchableOpacity onPress={onDelete} style={styles.deleteAction} hitSlop={10}>
+          <Ionicons name="trash" size={18} color="rgba(255,255,255,0.8)" />
+        </TouchableOpacity>
+      </View>
+
+      <View style={styles.cardMiddle}>
+        <Text style={styles.cardBalanceLabel}>Current Balance</Text>
+        <Text style={styles.cardBalanceValue}>{formatCurrency(account.balance)}</Text>
+      </View>
+
+      <View style={styles.cardBottom}>
+        <View>
+          <Text style={styles.cardName} numberOfLines={1}>
+            {account.name}
           </Text>
+          <Text style={styles.cardType}>{typeInfo?.label || account.type}</Text>
         </View>
-        <View style={styles.accountRight}>
-          <Text
-            style={[
-              styles.accountBalance,
-              {
-                color: account.balance >= 0 ? colors.textPrimary : colors.expense,
-              },
-            ]}
-          >
-            {formatCurrency(account.balance)}
-          </Text>
-          {account.isDefault && (
-            <View style={styles.defaultBadge}>
-              <Text style={styles.defaultText}>Default</Text>
-            </View>
-          )}
-        </View>
-        {!account.isDefault && (
-          <TouchableOpacity onPress={onDelete} style={styles.deleteBtn}>
-            <Ionicons name="trash-outline" size={16} color={colors.textMuted} />
-          </TouchableOpacity>
+        {account.isDefault && (
+          <View style={styles.defaultPill}>
+            <Text style={styles.defaultPillText}>Primary</Text>
+          </View>
         )}
       </View>
-    </Card>
+    </View>
   );
 };
+
+// ── ADD ACCOUNT MODAL ─────────────────────────────────────────────────────────
 
 const AddAccountModal: React.FC<{
   visible: boolean;
@@ -195,7 +305,7 @@ const AddAccountModal: React.FC<{
   onSave: () => void;
 }> = ({ visible, onClose, onSave }) => {
   const { colors } = useTheme();
-  const mStyles = useMemo(() => createModalStyles(colors), [colors]);
+  const styles = useMemo(() => createModalStyles(colors), [colors]);
   const [name, setName] = useState('');
   const [type, setType] = useState<AccountType>('bank');
   const [balance, setBalance] = useState('');
@@ -203,11 +313,13 @@ const AddAccountModal: React.FC<{
   const [loading, setLoading] = useState(false);
 
   const handleSave = async () => {
-    if (!name) return;
+    if (!name.trim()) return;
+
     setLoading(true);
-    const typeInfo = ACCOUNT_TYPES.find((t) => t.key === type);
+    const typeInfo = ACCOUNT_TYPES.find((item) => item.key === type);
+
     await AccountService.create({
-      name,
+      name: name.trim(),
       type,
       balance: parseFloat(balance) || 0,
       currency: 'INR',
@@ -215,6 +327,7 @@ const AddAccountModal: React.FC<{
       icon: typeInfo?.icon || 'wallet',
       isDefault: false,
     });
+
     setLoading(false);
     setName('');
     setBalance('');
@@ -222,41 +335,57 @@ const AddAccountModal: React.FC<{
   };
 
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <KeyboardAvoidingView
-        style={{ flex: 1 }}
+        style={styles.overlay}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
-        <TouchableOpacity style={mStyles.overlay} activeOpacity={1} onPress={onClose}>
-          <TouchableOpacity style={mStyles.sheet} activeOpacity={1} onPress={() => {}}>
-            <View style={mStyles.handle} />
-            <Text style={mStyles.title}>Add Account</Text>
+        <TouchableOpacity style={styles.backdrop} activeOpacity={1} onPress={onClose} />
+        <View style={styles.modalContainer}>
+          <View style={styles.handle} />
+          <View style={styles.modalHeader}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.title}>Add Account</Text>
+              <Text style={styles.subtitle}>
+                Create a clean home for each bank, wallet, or cash balance.
+              </Text>
+            </View>
+            <TouchableOpacity style={styles.closeBtn} onPress={onClose}>
+              <Ionicons name="close" size={20} color={colors.textSecondary} />
+            </TouchableOpacity>
+          </View>
 
-            <Text style={mStyles.label}>Account Type</Text>
+          <ScrollView
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={styles.formContent}
+            keyboardShouldPersistTaps="handled"
+          >
+            <Text style={styles.label}>Account Type</Text>
             <ScrollView
               horizontal
               showsHorizontalScrollIndicator={false}
-              style={{ marginBottom: SPACING.md }}
+              style={{ marginBottom: SPACING.lg }}
+              keyboardShouldPersistTaps="handled"
             >
-              {ACCOUNT_TYPES.map((t) => (
+              {ACCOUNT_TYPES.map((item) => (
                 <TouchableOpacity
-                  key={t.key}
-                  onPress={() => setType(t.key)}
+                  key={item.key}
+                  onPress={() => setType(item.key)}
                   style={[
-                    mStyles.typeChip,
-                    type === t.key && {
-                      backgroundColor: t.color,
-                      borderColor: t.color,
+                    styles.typeChip,
+                    type === item.key && {
+                      backgroundColor: item.color,
+                      borderColor: item.color,
                     },
                   ]}
                 >
                   <Ionicons
-                    name={t.icon as IoniconsName}
-                    size={14}
-                    color={type === t.key ? '#fff' : colors.textMuted}
+                    name={item.icon as IoniconsName}
+                    size={16}
+                    color={type === item.key ? '#fff' : colors.textMuted}
                   />
-                  <Text style={[mStyles.typeLabel, type === t.key && { color: '#fff' }]}>
-                    {t.label}
+                  <Text style={[styles.typeLabel, type === item.key && { color: '#fff' }]}>
+                    {item.label}
                   </Text>
                 </TouchableOpacity>
               ))}
@@ -265,9 +394,9 @@ const AddAccountModal: React.FC<{
             <TextInput
               value={name}
               onChangeText={setName}
-              placeholder="Account name (e.g. HDFC Savings)"
+              placeholder="Account name (e.g. ICICI Savings)"
               placeholderTextColor={colors.textMuted}
-              style={mStyles.input}
+              style={styles.input}
             />
             <TextInput
               value={balance}
@@ -275,58 +404,69 @@ const AddAccountModal: React.FC<{
               keyboardType="numeric"
               placeholder="Opening balance (₹)"
               placeholderTextColor={colors.textMuted}
-              style={mStyles.input}
+              style={styles.input}
             />
 
-            <Text style={mStyles.label}>Color</Text>
-            <View style={mStyles.colorRow}>
-              {ACCOUNT_COLORS.map((c) => (
+            <Text style={styles.label}>Theme Color</Text>
+            <View style={styles.colorRow}>
+              {ACCOUNT_COLORS.map((value) => (
                 <TouchableOpacity
-                  key={c}
-                  onPress={() => setColor(c)}
+                  key={value}
+                  onPress={() => setColor(value)}
                   style={[
-                    mStyles.colorDot,
+                    styles.colorDot,
                     {
-                      backgroundColor: c,
-                      borderWidth: color === c ? 3 : 0,
-                      borderColor: '#fff',
+                      backgroundColor: value,
+                      borderWidth: color === value ? 3 : 0,
+                      borderColor: colors.bgCard,
+                      shadowColor: value,
+                      shadowOpacity: color === value ? 0.3 : 0,
+                      shadowRadius: 4,
+                      elevation: color === value ? 4 : 0,
                     },
                   ]}
                 />
               ))}
             </View>
+          </ScrollView>
 
-            <View style={mStyles.actions}>
-              <Button title="Cancel" onPress={onClose} variant="ghost" style={{ flex: 1 }} />
-              <Button
-                title="Add Account"
-                onPress={handleSave}
-                loading={loading}
-                style={{ flex: 1 }}
-              />
-            </View>
-          </TouchableOpacity>
-        </TouchableOpacity>
+          <View style={styles.actions}>
+            <Button title="Cancel" onPress={onClose} variant="ghost" style={{ flex: 1 }} />
+            <Button
+              title="Add Account"
+              onPress={handleSave}
+              loading={loading}
+              style={{ flex: 1 }}
+            />
+          </View>
+        </View>
       </KeyboardAvoidingView>
     </Modal>
   );
 };
 
+// ── STYLES ────────────────────────────────────────────────────────────────────
+
 function createModalStyles(colors: ThemeColors) {
   return StyleSheet.create({
     overlay: {
       flex: 1,
-      backgroundColor: 'rgba(0,0,0,0.6)',
-      justifyContent: 'flex-end',
+      justifyContent: 'center',
+      padding: SPACING.md,
     },
-    sheet: {
+    backdrop: {
+      ...StyleSheet.absoluteFillObject,
+      backgroundColor: 'rgba(0,0,0,0.6)',
+    },
+    modalContainer: {
       backgroundColor: colors.bgCard,
-      borderTopLeftRadius: RADIUS.xl,
-      borderTopRightRadius: RADIUS.xl,
+      borderRadius: RADIUS.xl,
       padding: SPACING.lg,
-      paddingBottom: 40,
       borderWidth: 1,
       borderColor: colors.border,
+      maxHeight: Platform.OS === 'ios' ? '85%' : '90%',
+      // Center the modal on screen to avoid keyboard blocking bottom area
+      alignSelf: 'stretch',
     },
     handle: {
       width: 40,
@@ -336,33 +476,60 @@ function createModalStyles(colors: ThemeColors) {
       alignSelf: 'center',
       marginBottom: SPACING.md,
     },
+    modalHeader: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      gap: SPACING.md,
+      marginBottom: SPACING.lg,
+    },
     title: {
       ...TYPOGRAPHY.h3,
       color: colors.textPrimary,
-      marginBottom: SPACING.md,
+      fontWeight: '800',
+    },
+    subtitle: {
+      ...TYPOGRAPHY.caption,
+      color: colors.textMuted,
+      marginTop: 4,
+      lineHeight: 18,
+    },
+    closeBtn: {
+      width: 36,
+      height: 36,
+      borderRadius: 18,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: colors.bgElevated,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    formContent: {
+      paddingBottom: SPACING.md,
     },
     label: {
       ...TYPOGRAPHY.label,
-      color: colors.textMuted,
+      color: colors.textPrimary,
       marginBottom: SPACING.sm,
       textTransform: 'uppercase',
+      fontWeight: '700',
+      letterSpacing: 0.5,
     },
     typeChip: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: 4,
-      paddingHorizontal: 12,
-      paddingVertical: 7,
+      gap: 6,
+      paddingHorizontal: 14,
+      paddingVertical: 10,
       borderRadius: RADIUS.full,
       borderWidth: 1,
       borderColor: colors.border,
       backgroundColor: colors.bgElevated,
-      marginRight: 8,
+      marginRight: 10,
     },
     typeLabel: {
       ...TYPOGRAPHY.caption,
       color: colors.textMuted,
-      fontWeight: '600',
+      fontWeight: '700',
     },
     input: {
       backgroundColor: colors.bgInput,
@@ -372,11 +539,27 @@ function createModalStyles(colors: ThemeColors) {
       ...TYPOGRAPHY.body,
       borderWidth: 1,
       borderColor: colors.border,
-      marginBottom: SPACING.sm,
+      marginBottom: SPACING.md,
+      fontSize: 16,
     },
-    colorRow: { flexDirection: 'row', gap: 10, marginBottom: SPACING.lg },
-    colorDot: { width: 32, height: 32, borderRadius: 16 },
-    actions: { flexDirection: 'row', gap: SPACING.sm },
+    colorRow: {
+      flexDirection: 'row',
+      gap: 12,
+      marginBottom: SPACING.lg,
+      flexWrap: 'wrap',
+    },
+    colorDot: {
+      width: 36,
+      height: 36,
+      borderRadius: 18,
+    },
+    actions: {
+      flexDirection: 'row',
+      gap: SPACING.sm,
+      borderTopWidth: 1,
+      borderTopColor: colors.border,
+      paddingTop: SPACING.md,
+    },
   });
 }
 
@@ -388,70 +571,248 @@ function createStyles(colors: ThemeColors) {
       justifyContent: 'space-between',
       alignItems: 'center',
       paddingHorizontal: SPACING.md,
-      paddingVertical: SPACING.sm,
+      paddingVertical: SPACING.md,
     },
-    title: { ...TYPOGRAPHY.h2, color: colors.textPrimary },
+    title: { ...TYPOGRAPHY.h2, color: colors.textPrimary, fontWeight: '800', letterSpacing: -0.5 },
+    subtitle: { ...TYPOGRAPHY.caption, color: colors.textMuted, marginTop: 4, fontSize: 14 },
     addBtn: {
-      width: 40,
-      height: 40,
-      borderRadius: 20,
-      backgroundColor: colors.primary + '20',
+      shadowColor: colors.primary,
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.3,
+      shadowRadius: 8,
+      elevation: 5,
+    },
+    addBtnGradient: {
+      width: 48,
+      height: 48,
+      borderRadius: 24,
       alignItems: 'center',
       justifyContent: 'center',
+    },
+    netWorthCardWrap: {
+      paddingHorizontal: SPACING.md,
+      marginBottom: SPACING.xl,
+    },
+    netWorthCard: {
+      borderRadius: 24,
+      padding: SPACING.xl,
       borderWidth: 1,
-      borderColor: colors.primary + '40',
+      borderColor: colors.border,
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 8 },
+      shadowOpacity: 0.05,
+      shadowRadius: 16,
+      elevation: 4,
     },
-    scroll: { paddingHorizontal: SPACING.md },
-    totalCard: {
-      marginBottom: SPACING.lg,
-      alignItems: 'center',
-      borderColor: colors.primary + '40',
-      backgroundColor: colors.primary + '08',
+    netWorthTop: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'flex-start',
     },
-    totalLabel: {
+    netWorthLabel: {
       ...TYPOGRAPHY.label,
       color: colors.textMuted,
       textTransform: 'uppercase',
+      letterSpacing: 1,
     },
-    totalAmount: {
-      fontSize: 36,
+    netWorthAmount: {
+      fontSize: 40,
       fontWeight: '800',
       letterSpacing: -1,
-      marginVertical: 6,
+      marginTop: 8,
     },
-    totalSub: { ...TYPOGRAPHY.caption, color: colors.textMuted },
-    accountCard: { marginBottom: SPACING.sm },
-    accountRow: { flexDirection: 'row', alignItems: 'center', gap: SPACING.sm },
-    accountIcon: {
-      width: 44,
-      height: 44,
-      borderRadius: 14,
+    iconWrap: {
+      width: 52,
+      height: 52,
+      borderRadius: 16,
       alignItems: 'center',
       justifyContent: 'center',
     },
-    accountInfo: { flex: 1 },
-    accountName: { ...TYPOGRAPHY.bodyMedium, color: colors.textPrimary },
-    accountType: {
+    netWorthStats: {
+      flexDirection: 'row',
+      marginTop: SPACING.xl,
+      borderTopWidth: 1,
+      borderTopColor: colors.border + '50',
+      paddingTop: SPACING.lg,
+    },
+    statBox: {
+      flex: 1,
+    },
+    statDivider: {
+      width: 1,
+      backgroundColor: colors.border + '50',
+      marginHorizontal: SPACING.md,
+    },
+    statLabel: {
       ...TYPOGRAPHY.caption,
       color: colors.textMuted,
+    },
+    statValue: {
+      ...TYPOGRAPHY.bodyMedium,
+      color: colors.textPrimary,
+      fontWeight: '800',
+      marginTop: 4,
+    },
+    sectionHeaderRow: {
+      paddingHorizontal: SPACING.md,
+      marginBottom: SPACING.md,
+    },
+    sectionTitle: {
+      ...TYPOGRAPHY.h3,
+      color: colors.textPrimary,
+      fontWeight: '800',
+    },
+    carouselContent: {
+      paddingHorizontal: SPACING.md,
+      gap: SPACING.md,
+    },
+    creditCardWrap: {
+      width: CARD_WIDTH,
+      height: 200,
+      borderRadius: 24,
+      overflow: 'hidden',
+      padding: SPACING.lg,
+      justifyContent: 'space-between',
+    },
+    cardPattern1: {
+      position: 'absolute',
+      width: 150,
+      height: 150,
+      borderRadius: 75,
+      backgroundColor: 'rgba(255,255,255,0.1)',
+      top: -50,
+      right: -20,
+    },
+    cardPattern2: {
+      position: 'absolute',
+      width: 200,
+      height: 200,
+      borderRadius: 100,
+      backgroundColor: 'rgba(255,255,255,0.05)',
+      bottom: -80,
+      left: -40,
+    },
+    cardTop: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      zIndex: 1,
+    },
+    cardIconBox: {
+      width: 40,
+      height: 40,
+      borderRadius: 12,
+      backgroundColor: 'rgba(255,255,255,0.9)',
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    deleteAction: {
+      padding: 6,
+      backgroundColor: 'rgba(0,0,0,0.2)',
+      borderRadius: 20,
+    },
+    cardMiddle: {
+      zIndex: 1,
+      marginTop: SPACING.sm,
+    },
+    cardBalanceLabel: {
+      fontSize: 12,
+      color: 'rgba(255,255,255,0.7)',
+      textTransform: 'uppercase',
+      letterSpacing: 0.5,
+    },
+    cardBalanceValue: {
+      fontSize: 32,
+      fontWeight: '800',
+      color: '#FFF',
+      marginTop: 4,
+      letterSpacing: 1,
+    },
+    cardBottom: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'flex-end',
+      zIndex: 1,
+    },
+    cardName: {
+      fontSize: 16,
+      fontWeight: '700',
+      color: '#FFF',
+      maxWidth: 180,
+    },
+    cardType: {
+      fontSize: 12,
+      color: 'rgba(255,255,255,0.7)',
       marginTop: 2,
     },
-    accountRight: { alignItems: 'flex-end', gap: 4 },
-    accountBalance: { ...TYPOGRAPHY.bodyMedium, fontWeight: '700' },
-    defaultBadge: {
-      paddingHorizontal: 6,
-      paddingVertical: 2,
-      borderRadius: 4,
-      backgroundColor: colors.primary + '20',
+    defaultPill: {
+      paddingHorizontal: 10,
+      paddingVertical: 4,
+      borderRadius: 12,
+      backgroundColor: 'rgba(255,255,255,0.2)',
       borderWidth: 1,
-      borderColor: colors.primary + '40',
+      borderColor: 'rgba(255,255,255,0.4)',
     },
-    defaultText: {
-      ...TYPOGRAPHY.caption,
-      color: colors.primary,
-      fontWeight: '600',
+    defaultPillText: {
       fontSize: 10,
+      fontWeight: '800',
+      color: '#FFF',
+      textTransform: 'uppercase',
     },
-    deleteBtn: { padding: 4 },
+    emptyWrap: {
+      marginHorizontal: SPACING.md,
+      padding: SPACING.xl,
+      borderRadius: 24,
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderStyle: 'dashed',
+      alignItems: 'center',
+      backgroundColor: colors.bgCard,
+    },
+    emptyIconWrap: {
+      width: 72,
+      height: 72,
+      borderRadius: 36,
+      backgroundColor: colors.bgElevated,
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginBottom: SPACING.md,
+    },
+    emptyTitle: {
+      ...TYPOGRAPHY.h3,
+      color: colors.textPrimary,
+      fontWeight: '700',
+    },
+    emptySub: {
+      ...TYPOGRAPHY.body,
+      color: colors.textMuted,
+      textAlign: 'center',
+      marginTop: 4,
+    },
+    infoSection: {
+      marginTop: SPACING.xl,
+      paddingHorizontal: SPACING.md,
+    },
+    infoCard: {
+      flexDirection: 'row',
+      backgroundColor: colors.bgCard,
+      borderRadius: 20,
+      padding: SPACING.lg,
+      borderWidth: 1,
+      borderColor: colors.border,
+      marginTop: SPACING.md,
+      alignItems: 'center',
+    },
+    infoCardTitle: {
+      ...TYPOGRAPHY.bodyMedium,
+      color: colors.textPrimary,
+      fontWeight: '700',
+    },
+    infoCardText: {
+      ...TYPOGRAPHY.caption,
+      color: colors.textMuted,
+      marginTop: 4,
+      lineHeight: 18,
+    },
   });
 }

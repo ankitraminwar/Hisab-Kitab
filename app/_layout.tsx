@@ -251,6 +251,8 @@ export default function RootLayout() {
       router.replace('/(tabs)/transactions');
     } else if (path === '/budgets') {
       router.replace('/(tabs)/budgets');
+    } else if (path === '/reports') {
+      router.replace('/(tabs)/reports');
     }
   }, [deepLinkUrl, initializing, router]);
 
@@ -322,6 +324,13 @@ export default function RootLayout() {
               }}
             />
             <Stack.Screen name="accounts/index" options={{ animation: 'slide_from_right' }} />
+            <Stack.Screen
+              name="reports/preview"
+              options={{
+                presentation: 'modal',
+                animation: 'slide_from_bottom',
+              }}
+            />
             <Stack.Screen name="settings/index" options={{ animation: 'slide_from_right' }} />
             <Stack.Screen
               name="sms-import"

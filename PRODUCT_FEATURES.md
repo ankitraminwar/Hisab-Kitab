@@ -124,7 +124,7 @@ Account features include:
 - Assign icon and color
 - Use accounts as sources and destinations in transactions
 
-This gives the app a more complete personal-finance feel instead of behaving like a simple expense-only tracker.
+This is presented via a premium horizontal carousel of glassmorphic cards, giving the app a more complete personal-finance feel instead of behaving like a simple expense-only tracker.
 
 ## 5. Categories and Payment Methods
 
@@ -222,11 +222,11 @@ Users can:
 
 - Create a split from an expense
 - Link a split to a transaction
-- Add members to a split
+- Maintain a list of friends to add to splits across different transactions
 - Choose split method
-- Mark member shares as paid
-- Review split details
-- View list of all splits
+- Mark friend shares as paid
+- View a "By Friend" timeline with aggregated net balances
+- Settle up all debts with a specific friend with one tap
 
 Supported split methods include:
 
@@ -277,7 +277,7 @@ Hisab Kitab includes strong data portability and recovery features.
 Users can export data in multiple formats:
 
 - CSV for spreadsheet analysis
-- PDF for readable report sharing
+- PDF for readable report sharing, fully styled with pure CSS, icons, and daily financial motivation quotes
 - JSON for full backup and restore
 
 Export content includes:

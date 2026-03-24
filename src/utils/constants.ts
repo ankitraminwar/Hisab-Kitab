@@ -132,6 +132,7 @@ export const SYNCABLE_TABLES = [
   'net_worth_history',
   'split_expenses',
   'split_members',
+  'split_friends',
   'user_profile',
   'payment_methods',
 ] as const;

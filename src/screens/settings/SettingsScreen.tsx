@@ -21,6 +21,7 @@ import { useTheme, type ThemeColors } from '../../hooks/useTheme';
 import { authService, setBiometricPreference } from '../../services/auth';
 import { sendMonthlyReport } from '../../services/emailReportService';
 import { exportService } from '../../services/exportService';
+import { createCurrentMonthReportInput } from '../../services/reportExportService';
 import { syncService } from '../../services/syncService';
 import { useAppStore } from '../../store/appStore';
 import { RADIUS, SPACING, TYPOGRAPHY } from '../../utils/constants';
@@ -50,7 +51,6 @@ export default function SettingsScreen() {
     type: 'success' | 'error' | 'info';
     onClose?: () => void;
   }>({ visible: false, title: '', message: '', type: 'info' });
-  const [showExportPicker, setShowExportPicker] = useState(false);
   const [showImportConfirm, setShowImportConfirm] = useState(false);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [syncing, setSyncing] = useState(false);
@@ -103,33 +103,32 @@ export default function SettingsScreen() {
     }
   };
 
-  const handleExportFormat = async (format: 'csv' | 'pdf' | 'json') => {
-    setShowExportPicker(false);
+  const handleJsonBackupExport = async () => {
     try {
-      let uri: string | undefined;
-      if (format === 'csv') uri = await exportService.exportTransactionsCsv();
-      else if (format === 'pdf') uri = await exportService.exportTransactionsPdf();
-      else uri = await exportService.exportFullBackupJson();
+      const uri = await exportService.exportFullBackupJson();
 
       if (uri)
         setPopupConfig({
           visible: true,
           title: 'Success',
-          message: `${format.toUpperCase()} exported successfully.`,
+          message: 'JSON backup exported successfully.',
           type: 'success',
         });
     } catch {
       setPopupConfig({
         visible: true,
         title: 'Export Failed',
-        message: `Could not export ${format.toUpperCase()} data.`,
+        message: 'Could not export JSON backup data.',
         type: 'error',
       });
     }
   };
 
   const handleExport = () => {
-    setShowExportPicker(true);
+    const currentMonthReport = createCurrentMonthReportInput();
+    router.push(
+      `/reports/preview?from=${encodeURIComponent(currentMonthReport.from)}&to=${encodeURIComponent(currentMonthReport.to)}&label=${encodeURIComponent(currentMonthReport.label)}&period=${currentMonthReport.period}&focus=pdf` as Href,
+    );
   };
 
   const handleImportBackup = () => {
@@ -377,15 +376,33 @@ export default function SettingsScreen() {
               <View style={styles.iconBox}>
                 <Ionicons name="download-outline" size={20} color={colors.primary} />
               </View>
-              <Text style={styles.prefTitle}>Export Data</Text>
+              <View>
+                <Text style={styles.prefTitle}>Export Reports</Text>
+                <Text style={styles.prefSub}>Open preview for PDF and CSV exports</Text>
+              </View>
             </View>
             <View style={styles.exportBadges}>
               <View style={styles.badge}>
-                <Text style={styles.badgeText}>CSV</Text>
-              </View>
-              <View style={styles.badge}>
                 <Text style={styles.badgeText}>PDF</Text>
               </View>
+              <View style={styles.badge}>
+                <Text style={styles.badgeText}>CSV</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+            </View>
+          </TouchableOpacity>
+
+          <TouchableOpacity style={styles.prefRow} onPress={() => void handleJsonBackupExport()}>
+            <View style={styles.prefLeft}>
+              <View style={styles.iconBox}>
+                <Ionicons name="archive-outline" size={20} color={colors.primary} />
+              </View>
+              <View>
+                <Text style={styles.prefTitle}>Export JSON Backup</Text>
+                <Text style={styles.prefSub}>Full app backup for restore and migration</Text>
+              </View>
+            </View>
+            <View style={styles.exportBadges}>
               <View style={styles.badge}>
                 <Text style={styles.badgeText}>JSON</Text>
               </View>
@@ -425,26 +442,6 @@ export default function SettingsScreen() {
         </Animated.View>
         <View style={{ height: 100 }} />
       </ScrollView>
-
-      {/* Export Format Picker */}
-      <CustomPopup
-        visible={showExportPicker}
-        title="Export Format"
-        message="Choose data format to export:"
-        type="info"
-        actions={[
-          { label: 'CSV', onPress: () => void handleExportFormat('csv') },
-          {
-            label: 'PDF Report',
-            onPress: () => void handleExportFormat('pdf'),
-          },
-          {
-            label: 'JSON Backup',
-            onPress: () => void handleExportFormat('json'),
-          },
-        ]}
-        onClose={() => setShowExportPicker(false)}
-      />
 
       {/* Import Confirmation */}
       <CustomPopup

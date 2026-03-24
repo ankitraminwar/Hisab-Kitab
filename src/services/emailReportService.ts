@@ -1,15 +1,11 @@
-import { AccountService } from './dataService';
 import { supabase } from '../lib/supabase';
-import { TransactionService } from './transactionService';
+import {
+  buildReportDocumentData,
+  createCurrentMonthReportInput,
+  formatReportAmount,
+} from './reportExportService';
 
-const formatCurr = (n: number) =>
-  new Intl.NumberFormat('en-IN', {
-    style: 'currency',
-    currency: 'INR',
-    maximumFractionDigits: 0,
-  }).format(n);
-
-const formatPercent = (n: number) => `${n.toFixed(1)}%`;
+const formatPercent = (value: number) => `${value.toFixed(1)}%`;
 
 /** Send a monthly summary email report via Supabase Edge Function */
 export async function sendMonthlyReport(): Promise<{
@@ -18,80 +14,67 @@ export async function sendMonthlyReport(): Promise<{
 }> {
   const session = await supabase.auth.getSession();
   const email = session.data.session?.user?.email;
-  if (!email) return { ok: false, error: 'No email address found. Please log in.' };
+  if (!email) {
+    return { ok: false, error: 'No email address found. Please log in.' };
+  }
 
-  const now = new Date();
-  const year = now.getFullYear();
-  const month = String(now.getMonth() + 1).padStart(2, '0');
-  const monthLabel = now.toLocaleDateString('en-IN', {
-    month: 'long',
-    year: 'numeric',
-  });
-  const monthShort = now.toLocaleDateString('en-IN', {
-    month: 'short',
-  });
-  const monthStart = `${year}-${month}-01`;
-  const monthEnd = new Date(year, Number(month), 0).toISOString().slice(0, 10);
-
-  const [stats, breakdown, accounts, topExpenses] = await Promise.all([
-    TransactionService.getMonthlyStats(year, month),
-    TransactionService.getCategoryBreakdown(year, month, 'expense'),
-    AccountService.getAll(),
-    TransactionService.getAll({ type: 'expense', dateFrom: monthStart, dateTo: monthEnd }, 3, 0),
-  ]);
-
-  const net = stats.income - stats.expense;
-  const totalBalance = accounts.reduce((sum, account) => sum + account.balance, 0);
-  const savingsRate = stats.income > 0 ? (Math.max(net, 0) / stats.income) * 100 : 0;
-  const totalSaved = Math.max(net, 0);
-  const totalExpense = stats.expense || 0;
-
-  const spendingBreakdown = breakdown.slice(0, 4).map((category) => ({
-    name: category.categoryName,
-    amount: formatCurr(category.total),
-    percentage: totalExpense > 0 ? Math.round((category.total / totalExpense) * 100) : 0,
-    color: category.categoryColor || '#1d4ed8',
-  }));
-
-  const topSpending = topExpenses.map((item) => ({
-    title: item.merchant || item.categoryName || 'Expense',
-    subtitle: new Date(item.date).toLocaleDateString('en-IN', {
-      day: '2-digit',
-      month: 'short',
-      year: 'numeric',
-    }),
-    amount: formatCurr(item.amount),
-    categoryName: item.categoryName || 'General',
-  }));
+  const input = createCurrentMonthReportInput();
+  const report = await buildReportDocumentData(input);
 
   const { error } = await supabase.functions.invoke('send-email', {
     body: {
       to: email,
-      subject: `Hisab Kitab - ${monthLabel} Summary`,
-      title: `Your ${monthLabel} Summary`,
-      previewText: `Balance ${formatCurr(totalBalance)}, income ${formatCurr(stats.income)}, expenses ${formatCurr(stats.expense)}.`,
-      intro: `Here is your complete financial snapshot for ${monthLabel}, styled like a polished product report and filled with your actual app data.`,
-      monthLabel,
-      monthShort,
+      subject: `Hisab Kitab - ${report.input.label} Financial Statement`,
+      title: `Your ${report.input.label} Financial Statement`,
+      previewText: `Balance ${formatReportAmount(report.totalBalance)}, income ${formatReportAmount(report.income)}, expenses ${formatReportAmount(report.expense)}.`,
+      intro:
+        'Your monthly statement is ready with the same summary, budget view, and spending highlights you see inside the app.',
+      monthLabel: report.input.label,
+      reportRange: `${report.input.from} to ${report.input.to}`,
       summary: {
-        totalBalance: formatCurr(totalBalance),
-        savingsRate: formatPercent(savingsRate),
-        totalSaved: formatCurr(totalSaved),
-        accountCount: `${accounts.length}`,
+        totalBalance: formatReportAmount(report.totalBalance),
+        income: formatReportAmount(report.income),
+        expenses: formatReportAmount(report.expense),
+        savings: formatReportAmount(report.savings),
+        savingsRate: formatPercent(report.savingsRate),
+        transactionCount: `${report.transactions.length}`,
       },
-      stats: {
-        income: formatCurr(stats.income),
-        expenses: formatCurr(stats.expense),
-        net: formatCurr(net),
-      },
-      spendingBreakdown,
-      topSpending,
-      ctaLabel: 'View Full Report',
-      ctaUrl: 'hisabkitab:///',
+      spendingBreakdown: report.categoryBreakdown.slice(0, 5).map((category) => ({
+        name: category.categoryName,
+        amount: formatReportAmount(category.total),
+        percentage: Number(category.percentage.toFixed(1)),
+        color: category.categoryColor || '#7C3AED',
+      })),
+      budgetPerformance: report.budgets.slice(0, 5).map((budget) => ({
+        name: budget.categoryName || 'Budget',
+        limit: formatReportAmount(budget.limitAmount),
+        spent: formatReportAmount(budget.spent),
+        statusLabel: budget.statusLabel,
+        statusTone: budget.statusTone,
+      })),
+      recentTransactions: report.transactions.slice(0, 5).map((transaction) => ({
+        title: transaction.merchant || transaction.categoryName || 'Transaction',
+        subtitle: `${new Date(transaction.date).toLocaleDateString('en-IN', {
+          day: '2-digit',
+          month: 'short',
+          year: 'numeric',
+        })}${transaction.accountName ? ` - ${transaction.accountName}` : ''}`,
+        amount: `${transaction.type === 'expense' ? '-' : transaction.type === 'income' ? '+' : ''}${formatReportAmount(transaction.amount)}`,
+        tone:
+          transaction.type === 'income'
+            ? 'income'
+            : transaction.type === 'expense'
+              ? 'expense'
+              : 'neutral',
+      })),
+      ctaLabel: 'Open Reports',
+      ctaUrl: 'hisabkitab://reports',
     },
   });
 
-  console.log('Email report sent:', { email, error });
-  if (error) return { ok: false, error: error.message };
+  if (error) {
+    return { ok: false, error: error.message };
+  }
+
   return { ok: true };
 }
