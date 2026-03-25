@@ -13,14 +13,7 @@ import {
   View,
   ViewStyle,
 } from 'react-native';
-import { BlurView } from 'expo-blur';
-import Animated, {
-  FadeIn,
-  SlideInDown,
-  ZoomIn,
-  useAnimatedStyle,
-  withSpring,
-} from 'react-native-reanimated';
+import Animated, { useAnimatedStyle, withSpring } from 'react-native-reanimated';
 import { useTheme, type ThemeColors } from '../../hooks/useTheme';
 import { RADIUS, SHADOWS, SPACING, TYPOGRAPHY, formatCurrency } from '../../utils/constants';
 import type { IoniconsName, TransactionType } from '../../utils/types';
@@ -241,8 +234,8 @@ export const Button: React.FC<ButtonProps> = ({
   icon,
   style,
 }) => {
-  const { colors, isDark } = useTheme();
-  const styles = useMemo(() => createStyles(colors, isDark), [colors, isDark]);
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors, false), [colors]);
   const bgColor =
     variant === 'primary'
       ? colors.primary
@@ -302,8 +295,8 @@ interface FABProps {
   icon?: string;
 }
 export const FAB: React.FC<FABProps> = ({ onPress, icon = 'add' }) => {
-  const { colors, isDark } = useTheme();
-  const styles = useMemo(() => createStyles(colors, isDark), [colors, isDark]);
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors, false), [colors]);
   return (
     <TouchableOpacity
       style={styles.fab}

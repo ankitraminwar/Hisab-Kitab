@@ -244,7 +244,7 @@ const AccountCreditCard: React.FC<{ account: Account; onDelete: () => void }> = 
   account,
   onDelete,
 }) => {
-  const { colors, isDark } = useTheme();
+  const { colors } = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const typeInfo = ACCOUNT_TYPES.find((type) => type.key === account.type);
 

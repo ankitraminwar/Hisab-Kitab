@@ -1,5 +1,4 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
 import {
   Alert,
@@ -33,7 +32,6 @@ const NOTE_COLORS = [
 ];
 
 export default function NotesScreen() {
-  const router = useRouter();
   const { colors, isDark } = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const dataRevision = useAppStore((state) => state.dataRevision);

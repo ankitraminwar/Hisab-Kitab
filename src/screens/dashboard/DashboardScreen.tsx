@@ -5,7 +5,6 @@ import { useRouter, type Href } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
-  Dimensions,
   NativeScrollEvent,
   NativeSyntheticEvent,
   RefreshControl,
@@ -36,8 +35,6 @@ import { TransactionService } from '../../services/transactionService';
 import { useAppStore } from '../../store/appStore';
 import { RADIUS, SPACING, TYPOGRAPHY, formatCompact, formatCurrency } from '../../utils/constants';
 import type { Budget } from '../../utils/types';
-
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 const GREETINGS = [
   'Namaste 🇮🇳',
