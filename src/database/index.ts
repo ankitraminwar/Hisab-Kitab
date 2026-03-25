@@ -224,6 +224,16 @@ const transactionalTables = [
     updatedAt TEXT NOT NULL,
     ${baseSyncColumns}
   )`,
+  `CREATE TABLE IF NOT EXISTS notes (
+    id TEXT PRIMARY KEY,
+    title TEXT NOT NULL,
+    content TEXT NOT NULL,
+    color TEXT DEFAULT '#7C3AED',
+    isPinned INTEGER DEFAULT 0,
+    createdAt TEXT NOT NULL,
+    updatedAt TEXT NOT NULL,
+    ${baseSyncColumns}
+  )`,
 ];
 
 const indexes = [
@@ -434,6 +444,7 @@ const localTablesToClear = [
   'payment_methods',
   'sync_queue',
   'sync_state',
+  'notes',
 ] as const;
 
 export const getDatabase = (): SQLite.SQLiteDatabase => {
@@ -676,6 +687,7 @@ export const hasLocalUserData = async (userId: string | null): Promise<boolean> 
     'recurring_templates',
     'split_expenses',
     'split_members',
+    'notes',
   ] as const;
 
   for (const table of userScopedTables) {

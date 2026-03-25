@@ -5,9 +5,6 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Dimensions,
   FlatList,
-  KeyboardAvoidingView,
-  Modal,
-  Platform,
   RefreshControl,
   ScrollView,
   StyleSheet,
@@ -19,7 +16,7 @@ import {
 import Animated, { FadeInDown, FadeInRight } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { Button } from '../../components/common';
+import { Button, CustomModal } from '../../components/common';
 import { useTheme, type ThemeColors } from '../../hooks/useTheme';
 import { AccountService } from '../../services/dataServices';
 import { triggerBackgroundSync } from '../../services/syncService';
@@ -335,113 +332,99 @@ const AddAccountModal: React.FC<{
   };
 
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      <KeyboardAvoidingView
-        style={styles.overlay}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      >
-        <TouchableOpacity style={styles.backdrop} activeOpacity={1} onPress={onClose} />
-        <View style={styles.modalContainer}>
-          <View style={styles.handle} />
-          <View style={styles.modalHeader}>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.title}>Add Account</Text>
-              <Text style={styles.subtitle}>
-                Create a clean home for each bank, wallet, or cash balance.
-              </Text>
-            </View>
-            <TouchableOpacity style={styles.closeBtn} onPress={onClose}>
-              <Ionicons name="close" size={20} color={colors.textSecondary} />
-            </TouchableOpacity>
-          </View>
-
-          <ScrollView
-            showsVerticalScrollIndicator={false}
-            contentContainerStyle={styles.formContent}
-            keyboardShouldPersistTaps="handled"
-          >
-            <Text style={styles.label}>Account Type</Text>
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              style={{ marginBottom: SPACING.lg }}
-              keyboardShouldPersistTaps="handled"
-            >
-              {ACCOUNT_TYPES.map((item) => (
-                <TouchableOpacity
-                  key={item.key}
-                  onPress={() => setType(item.key)}
-                  style={[
-                    styles.typeChip,
-                    type === item.key && {
-                      backgroundColor: item.color,
-                      borderColor: item.color,
-                    },
-                  ]}
-                >
-                  <Ionicons
-                    name={item.icon as IoniconsName}
-                    size={16}
-                    color={type === item.key ? '#fff' : colors.textMuted}
-                  />
-                  <Text style={[styles.typeLabel, type === item.key && { color: '#fff' }]}>
-                    {item.label}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
-
-            <TextInput
-              value={name}
-              onChangeText={setName}
-              placeholder="Account name (e.g. ICICI Savings)"
-              placeholderTextColor={colors.textMuted}
-              style={styles.input}
-            />
-            <TextInput
-              value={balance}
-              onChangeText={setBalance}
-              keyboardType="numeric"
-              placeholder="Opening balance (₹)"
-              placeholderTextColor={colors.textMuted}
-              style={styles.input}
-            />
-
-            <Text style={styles.label}>Theme Color</Text>
-            <View style={styles.colorRow}>
-              {ACCOUNT_COLORS.map((value) => (
-                <TouchableOpacity
-                  key={value}
-                  onPress={() => setColor(value)}
-                  style={[
-                    styles.colorDot,
-                    {
-                      backgroundColor: value,
-                      borderWidth: color === value ? 3 : 0,
-                      borderColor: colors.bgCard,
-                      shadowColor: value,
-                      shadowOpacity: color === value ? 0.3 : 0,
-                      shadowRadius: 4,
-                      elevation: color === value ? 4 : 0,
-                    },
-                  ]}
-                />
-              ))}
-            </View>
-          </ScrollView>
-
-          <View style={styles.actions}>
-            <Button title="Cancel" onPress={onClose} variant="ghost" style={{ flex: 1 }} />
-            <Button
-              title="Add Account"
-              onPress={handleSave}
-              loading={loading}
-              style={{ flex: 1 }}
-            />
-          </View>
+    <CustomModal visible={visible} onClose={onClose} hideCloseBtn>
+      <View style={styles.modalHeader}>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.title}>Add Account</Text>
+          <Text style={styles.subtitle}>
+            Create a clean home for each bank, wallet, or cash balance.
+          </Text>
         </View>
-      </KeyboardAvoidingView>
-    </Modal>
+        <TouchableOpacity style={styles.closeBtn} onPress={onClose}>
+          <Ionicons name="close" size={20} color={colors.textSecondary} />
+        </TouchableOpacity>
+      </View>
+
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.formContent}
+        keyboardShouldPersistTaps="handled"
+      >
+        <Text style={styles.label}>Account Type</Text>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={{ marginBottom: SPACING.lg }}
+          keyboardShouldPersistTaps="handled"
+        >
+          {ACCOUNT_TYPES.map((item) => (
+            <TouchableOpacity
+              key={item.key}
+              onPress={() => setType(item.key)}
+              style={[
+                styles.typeChip,
+                type === item.key && {
+                  backgroundColor: item.color,
+                  borderColor: item.color,
+                },
+              ]}
+            >
+              <Ionicons
+                name={item.icon as IoniconsName}
+                size={16}
+                color={type === item.key ? '#fff' : colors.textMuted}
+              />
+              <Text style={[styles.typeLabel, type === item.key && { color: '#fff' }]}>
+                {item.label}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
+
+        <TextInput
+          value={name}
+          onChangeText={setName}
+          placeholder="Account name (e.g. ICICI Savings)"
+          placeholderTextColor={colors.textMuted}
+          style={styles.input}
+        />
+        <TextInput
+          value={balance}
+          onChangeText={setBalance}
+          keyboardType="numeric"
+          placeholder="Opening balance (₹)"
+          placeholderTextColor={colors.textMuted}
+          style={styles.input}
+        />
+
+        <Text style={styles.label}>Theme Color</Text>
+        <View style={styles.colorRow}>
+          {ACCOUNT_COLORS.map((value) => (
+            <TouchableOpacity
+              key={value}
+              onPress={() => setColor(value)}
+              style={[
+                styles.colorDot,
+                {
+                  backgroundColor: value,
+                  borderWidth: color === value ? 3 : 0,
+                  borderColor: colors.bgCard,
+                  shadowColor: value,
+                  shadowOpacity: color === value ? 0.3 : 0,
+                  shadowRadius: 4,
+                  elevation: color === value ? 4 : 0,
+                },
+              ]}
+            />
+          ))}
+        </View>
+      </ScrollView>
+
+      <View style={styles.actions}>
+        <Button title="Cancel" onPress={onClose} variant="ghost" style={{ flex: 1 }} />
+        <Button title="Add Account" onPress={handleSave} loading={loading} style={{ flex: 1 }} />
+      </View>
+    </CustomModal>
   );
 };
 
@@ -449,33 +432,6 @@ const AddAccountModal: React.FC<{
 
 function createModalStyles(colors: ThemeColors) {
   return StyleSheet.create({
-    overlay: {
-      flex: 1,
-      justifyContent: 'center',
-      padding: SPACING.md,
-    },
-    backdrop: {
-      ...StyleSheet.absoluteFillObject,
-      backgroundColor: 'rgba(0,0,0,0.6)',
-    },
-    modalContainer: {
-      backgroundColor: colors.bgCard,
-      borderRadius: RADIUS.xl,
-      padding: SPACING.lg,
-      borderWidth: 1,
-      borderColor: colors.border,
-      maxHeight: Platform.OS === 'ios' ? '85%' : '90%',
-      // Center the modal on screen to avoid keyboard blocking bottom area
-      alignSelf: 'stretch',
-    },
-    handle: {
-      width: 40,
-      height: 4,
-      backgroundColor: colors.border,
-      borderRadius: 2,
-      alignSelf: 'center',
-      marginBottom: SPACING.md,
-    },
     modalHeader: {
       flexDirection: 'row',
       justifyContent: 'space-between',

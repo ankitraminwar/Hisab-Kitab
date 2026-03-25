@@ -60,6 +60,7 @@ export const RADIUS = {
   md: 12,
   lg: 16,
   xl: 24,
+  xxl: 32,
   full: 9999,
 } as const;
 
@@ -135,6 +136,7 @@ export const SYNCABLE_TABLES = [
   'split_friends',
   'user_profile',
   'payment_methods',
+  'notes',
 ] as const;
 
 export type SyncableTable = (typeof SYNCABLE_TABLES)[number];

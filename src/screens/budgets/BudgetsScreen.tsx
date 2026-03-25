@@ -2,9 +2,6 @@ import { Ionicons } from '@expo/vector-icons';
 import { format } from 'date-fns';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  KeyboardAvoidingView,
-  Modal,
-  Platform,
   RefreshControl,
   ScrollView,
   StyleSheet,
@@ -15,7 +12,14 @@ import {
 } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Button, Card, EmptyState, ProgressBar, SectionHeader } from '../../components/common';
+import {
+  Button,
+  Card,
+  EmptyState,
+  ProgressBar,
+  SectionHeader,
+  CustomModal,
+} from '../../components/common';
 import { useTheme, type ThemeColors } from '../../hooks/useTheme';
 import { BudgetService, CategoryService } from '../../services/dataService';
 import { triggerBackgroundSync } from '../../services/syncService';
@@ -290,69 +294,57 @@ const AddBudgetModal = ({
   };
 
   return (
-    <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
-      <KeyboardAvoidingView
-        style={{ flex: 1 }}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      >
-        <TouchableOpacity style={styles.overlay} activeOpacity={1} onPress={onClose}>
-          <TouchableOpacity style={styles.sheet} activeOpacity={1} onPress={() => {}}>
-            <View style={styles.handle} />
-            <Text style={styles.title}>New Budget</Text>
+    <CustomModal visible={visible} onClose={onClose} hideCloseBtn>
+      <Text style={styles.title}>New Budget</Text>
 
-            <Text style={styles.label}>Select Category</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.categories}>
-              {availableCategories.map((cat) => (
-                <TouchableOpacity
-                  key={cat.id}
-                  onPress={() => setCategoryId(cat.id)}
-                  style={[
-                    styles.categoryChip,
-                    categoryId === cat.id && {
-                      backgroundColor: cat.color + '20',
-                      borderColor: cat.color,
-                    },
-                  ]}
-                >
-                  <Ionicons
-                    name={cat.icon as never}
-                    size={16}
-                    color={categoryId === cat.id ? cat.color : colors.textMuted}
-                  />
-                  <Text
-                    style={[styles.categoryChipText, categoryId === cat.id && { color: cat.color }]}
-                  >
-                    {cat.name}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
-
-            <Text style={styles.label}>Monthly Limit</Text>
-            <TextInput
-              style={styles.input}
-              keyboardType="numeric"
-              value={amount}
-              onChangeText={setAmount}
-              placeholder="0.00"
-              placeholderTextColor={colors.textMuted}
-              keyboardAppearance={isDark ? 'dark' : 'light'}
+      <Text style={styles.label}>Select Category</Text>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.categories}>
+        {availableCategories.map((cat) => (
+          <TouchableOpacity
+            key={cat.id}
+            onPress={() => setCategoryId(cat.id)}
+            style={[
+              styles.categoryChip,
+              categoryId === cat.id && {
+                backgroundColor: cat.color + '20',
+                borderColor: cat.color,
+              },
+            ]}
+          >
+            <Ionicons
+              name={cat.icon as never}
+              size={16}
+              color={categoryId === cat.id ? cat.color : colors.textMuted}
             />
-
-            <View style={styles.actions}>
-              <Button title="Cancel" variant="secondary" onPress={onClose} style={styles.flex1} />
-              <Button
-                title="Save"
-                onPress={() => void handleSave()}
-                loading={loading}
-                style={styles.flex1}
-                disabled={!categoryId || !amount}
-              />
-            </View>
+            <Text style={[styles.categoryChipText, categoryId === cat.id && { color: cat.color }]}>
+              {cat.name}
+            </Text>
           </TouchableOpacity>
-        </TouchableOpacity>
-      </KeyboardAvoidingView>
-    </Modal>
+        ))}
+      </ScrollView>
+
+      <Text style={styles.label}>Monthly Limit</Text>
+      <TextInput
+        style={styles.input}
+        keyboardType="numeric"
+        value={amount}
+        onChangeText={setAmount}
+        placeholder="0.00"
+        placeholderTextColor={colors.textMuted}
+        keyboardAppearance={isDark ? 'dark' : 'light'}
+      />
+
+      <View style={styles.actions}>
+        <Button title="Cancel" variant="secondary" onPress={onClose} style={styles.flex1} />
+        <Button
+          title="Save"
+          onPress={() => void handleSave()}
+          loading={loading}
+          style={styles.flex1}
+          disabled={!categoryId || !amount}
+        />
+      </View>
+    </CustomModal>
   );
 };
 
@@ -391,43 +383,33 @@ const EditBudgetModal = ({
   };
 
   return (
-    <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
-      <KeyboardAvoidingView
-        style={{ flex: 1 }}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      >
-        <TouchableOpacity style={styles.overlay} activeOpacity={1} onPress={onClose}>
-          <TouchableOpacity style={styles.sheet} activeOpacity={1} onPress={() => {}}>
-            <View style={styles.handle} />
-            <Text style={styles.title}>Edit Budget</Text>
-            <Text style={styles.subtitle}>{category?.name}</Text>
+    <CustomModal visible={visible} onClose={onClose} hideCloseBtn>
+      <Text style={styles.title}>Edit Budget</Text>
+      <Text style={styles.subtitle}>{category?.name}</Text>
 
-            <Text style={styles.label}>Monthly Limit</Text>
-            <TextInput
-              style={styles.input}
-              keyboardType="numeric"
-              value={amount}
-              onChangeText={setAmount}
-            />
+      <Text style={styles.label}>Monthly Limit</Text>
+      <TextInput
+        style={styles.input}
+        keyboardType="numeric"
+        value={amount}
+        onChangeText={setAmount}
+      />
 
-            <View style={styles.actions}>
-              <Button
-                title="Delete"
-                variant="danger"
-                onPress={() => void handleDelete()}
-                style={styles.flex1}
-              />
-              <Button
-                title="Update"
-                onPress={() => void handleSave()}
-                loading={loading}
-                style={styles.flex1}
-              />
-            </View>
-          </TouchableOpacity>
-        </TouchableOpacity>
-      </KeyboardAvoidingView>
-    </Modal>
+      <View style={styles.actions}>
+        <Button
+          title="Delete"
+          variant="danger"
+          onPress={() => void handleDelete()}
+          style={styles.flex1}
+        />
+        <Button
+          title="Update"
+          onPress={() => void handleSave()}
+          loading={loading}
+          style={styles.flex1}
+        />
+      </View>
+    </CustomModal>
   );
 };
 
@@ -460,25 +442,6 @@ const cardStyles = StyleSheet.create({
 
 const modalStyles = (colors: ThemeColors) =>
   StyleSheet.create({
-    overlay: {
-      flex: 1,
-      backgroundColor: 'rgba(0,0,0,0.5)',
-      justifyContent: 'flex-end',
-    },
-    sheet: {
-      backgroundColor: colors.bg,
-      borderTopLeftRadius: RADIUS.lg,
-      borderTopRightRadius: RADIUS.lg,
-      padding: SPACING.lg,
-    },
-    handle: {
-      width: 40,
-      height: 4,
-      backgroundColor: colors.border,
-      borderRadius: 2,
-      alignSelf: 'center',
-      marginBottom: SPACING.md,
-    },
     title: {
       ...TYPOGRAPHY.h3,
       color: colors.textPrimary,

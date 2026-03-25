@@ -270,8 +270,11 @@ export default function RootLayout() {
   if (initializing) {
     return (
       <View style={styles.lockContainer}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: SPACING.xl }}>
+          <Text style={[styles.title, { fontSize: 32 }]}>Hisab Kitab</Text>
+          <Ionicons name="wallet" size={32} color={colors.primary} style={{ marginLeft: 12 }} />
+        </View>
         <ActivityIndicator size="large" color={colors.primary} />
-        <Text style={styles.loadingText}>Loading Hisab Kitab...</Text>
         {slowLoad && (
           <Text style={styles.loadingSubtext}>Taking longer than usual. Please wait...</Text>
         )}

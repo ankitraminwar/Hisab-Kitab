@@ -80,6 +80,9 @@ const tableLocalToRemote: Partial<Record<SyncableTable, Record<string, string>>>
   payment_methods: {
     isCustom: 'is_custom',
   },
+  notes: {
+    isPinned: 'is_pinned',
+  },
 };
 
 const invert = (mapping: Record<string, string>) =>
@@ -98,6 +101,7 @@ const toBooleanIfNeeded = (key: string, value: unknown) => {
       'isCustom',
       'isRecurring',
       'isCompleted',
+      'isPinned',
       'notificationsEnabled',
       'biometricEnabled',
     ].includes(key)

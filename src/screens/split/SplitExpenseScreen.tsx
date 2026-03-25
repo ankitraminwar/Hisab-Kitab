@@ -253,7 +253,13 @@ export default function SplitExpenseScreen() {
         title: 'Success',
         message: 'Expense split successfully!',
         type: 'success',
-        onClose: () => router.replace('/splits' as Href),
+        onClose: () => {
+          if (router.canGoBack()) {
+            router.back();
+          } else {
+            router.replace('/splits' as Href);
+          }
+        },
       });
     } catch {
       setPopupConfig({

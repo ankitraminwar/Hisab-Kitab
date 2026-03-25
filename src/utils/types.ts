@@ -205,6 +205,16 @@ export interface UserProfile extends SyncMetadata {
   updatedAt: string;
 }
 
+export interface Note extends SyncMetadata {
+  id: string;
+  title: string;
+  content: string;
+  color: string;
+  isPinned: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface NotificationPreferences {
   enabled: boolean;
   dailyReminder: boolean;

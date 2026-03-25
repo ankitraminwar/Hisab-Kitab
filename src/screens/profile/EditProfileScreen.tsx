@@ -7,11 +7,12 @@ import {
 } from 'expo-file-system/legacy';
 import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
-import React, { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   Image,
-  KeyboardAvoidingView,
+  Keyboard,
   Platform,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -44,6 +45,23 @@ export default function EditProfileScreen() {
     message: string;
     type: 'success' | 'error' | 'info';
   }>({ visible: false, title: '', message: '', type: 'info' });
+
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
+
+  useEffect(() => {
+    const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+
+    const showSub = Keyboard.addListener(showEvent, (e) =>
+      setKeyboardHeight(e.endCoordinates.height),
+    );
+    const hideSub = Keyboard.addListener(hideEvent, () => setKeyboardHeight(0));
+
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, []);
 
   const handlePickImage = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -111,11 +129,12 @@ export default function EditProfileScreen() {
     <SafeAreaView style={styles.container} edges={['top']}>
       <ScreenHeader title="Edit Profile" />
 
-      <KeyboardAvoidingView
-        style={styles.keyboardView}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      >
-        <View style={styles.content}>
+      <View style={[styles.keyboardView, { paddingBottom: keyboardHeight }]}>
+        <ScrollView
+          contentContainerStyle={styles.content}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+        >
           <View style={styles.avatarSection}>
             <View style={styles.avatar}>
               {avatarUri ? (
@@ -183,8 +202,8 @@ export default function EditProfileScreen() {
           >
             <Text style={styles.saveText}>{isSaving ? 'Saving...' : 'Save Changes'}</Text>
           </TouchableOpacity>
-        </View>
-      </KeyboardAvoidingView>
+        </ScrollView>
+      </View>
       <CustomPopup
         visible={popupConfig.visible}
         title={popupConfig.title}

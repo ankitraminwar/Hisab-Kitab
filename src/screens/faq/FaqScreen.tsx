@@ -1,7 +1,8 @@
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import React, { useMemo, useState } from 'react';
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import Animated, { FadeInDown } from 'react-native-reanimated';
+import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ScreenHeader } from '../../components/common/ScreenHeader';
 import { useTheme, type ThemeColors } from '../../hooks/useTheme';
@@ -171,30 +172,28 @@ const FaqItemCard: React.FC<{
 };
 
 export default function FaqScreen() {
-  const { colors } = useTheme();
+  const { colors, isDark } = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <ScreenHeader title="FAQ & Help" />
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
-        <Animated.View entering={FadeInDown.duration(400)}>
-          <View
-            style={[
-              styles.heroCard,
-              { backgroundColor: colors.bgCard, borderColor: colors.border },
-            ]}
+        <Animated.View entering={FadeInUp.duration(600)}>
+          <LinearGradient
+            colors={isDark ? ['#4C1D95', '#1E1B4B'] : ['#8B5CF6', '#6D28D9']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.heroCard}
           >
-            <View style={[styles.heroIconWrap, { backgroundColor: colors.primary + '15' }]}>
-              <Ionicons name="help-circle" size={34} color={colors.primary} />
+            <View style={[styles.heroIconWrap, { backgroundColor: 'rgba(255,255,255,0.15)' }]}>
+              <Ionicons name="help-circle" size={34} color="#FFF" />
             </View>
-            <Text style={[styles.heroTitle, { color: colors.textPrimary }]}>
-              Understand the app faster
-            </Text>
-            <Text style={[styles.heroSubtitle, { color: colors.textSecondary }]}>
+            <Text style={[styles.heroTitle, { color: '#FFF' }]}>Understand the app faster</Text>
+            <Text style={[styles.heroSubtitle, { color: 'rgba(255,255,255,0.8)' }]}>
               Start with the basic flows below, then open the questions for more detail.
             </Text>
-          </View>
+          </LinearGradient>
         </Animated.View>
 
         <Animated.View entering={FadeInDown.duration(400).delay(80)}>
