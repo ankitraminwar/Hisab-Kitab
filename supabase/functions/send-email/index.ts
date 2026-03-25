@@ -1,5 +1,10 @@
 import { Resend } from 'npm:resend@4.1.2';
 
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+};
+
 const resendApiKey = Deno.env.get('RESEND_API_KEY');
 const resendFromEmail = Deno.env.get('RESEND_FROM_EMAIL');
 const resendFromName = Deno.env.get('RESEND_FROM_NAME') ?? 'Hisab Kitab';
@@ -380,8 +385,12 @@ const template = ({
 `;
 
 Deno.serve(async (request) => {
+  if (request.method === 'OPTIONS') {
+    return new Response('ok', { headers: corsHeaders });
+  }
+
   if (request.method !== 'POST') {
-    return new Response('Method not allowed', { status: 405 });
+    return new Response('Method not allowed', { status: 405, headers: corsHeaders });
   }
 
   if (!resendApiKey || !resend) {
@@ -390,7 +399,7 @@ Deno.serve(async (request) => {
         error:
           'Missing RESEND_API_KEY secret. Set it in Supabase Dashboard -> Edge Functions -> Secrets.',
       },
-      { status: 500 },
+      { status: 500, headers: corsHeaders },
     );
   }
 
@@ -400,7 +409,7 @@ Deno.serve(async (request) => {
         error:
           'Missing RESEND_FROM_EMAIL secret. Set it to a verified Resend sender address before sending emails.',
       },
-      { status: 500 },
+      { status: 500, headers: corsHeaders },
     );
   }
 
@@ -437,7 +446,7 @@ Deno.serve(async (request) => {
         error:
           'Missing required fields. Expected: to, subject, title, previewText, intro, monthLabel, reportRange, summary, ctaLabel, ctaUrl.',
       },
-      { status: 400 },
+      { status: 400, headers: corsHeaders },
     );
   }
 
@@ -462,8 +471,8 @@ Deno.serve(async (request) => {
 
   if (error) {
     console.error('Resend send failed', error);
-    return Response.json({ error }, { status: 500 });
+    return Response.json({ error }, { status: 500, headers: corsHeaders });
   }
 
-  return Response.json({ ok: true });
+  return Response.json({ ok: true }, { headers: corsHeaders });
 });
