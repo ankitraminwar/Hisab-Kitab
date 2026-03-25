@@ -24,6 +24,7 @@ import { useAppStore } from '../../store/appStore';
 import { RADIUS, SPACING, TYPOGRAPHY, formatCurrency } from '../../utils/constants';
 import type {
   SplitExpense,
+  SplitFriend,
   SplitMember as SplitMemberType,
   SplitStatus,
   Transaction,
@@ -64,6 +65,8 @@ export default function SplitExpenseScreen() {
     { id: 'you', name: 'You', role: 'owner', amount: 0 },
   ]);
   const [friendSearch, setFriendSearch] = useState('');
+  const [allFriends, setAllFriends] = useState<SplitFriend[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null);
   const [showTransactionModal, setShowTransactionModal] = useState(false);
@@ -81,6 +84,20 @@ export default function SplitExpenseScreen() {
   const hasLoadedDetailRef = useRef(false);
 
   const totalExpense = selectedTransaction?.amount || 0;
+
+  useEffect(() => {
+    void SplitService.getFriends().then(setAllFriends);
+  }, [dataRevision]);
+
+  const filteredFriends = useMemo(() => {
+    if (!friendSearch.trim()) return [];
+    const lowerSearch = friendSearch.toLowerCase();
+    return allFriends.filter(
+      (f) =>
+        f.name.toLowerCase().includes(lowerSearch) &&
+        !members.some((m) => m.dbId === f.id || m.name === f.name),
+    );
+  }, [allFriends, friendSearch, members]);
 
   // ── Load existing split ──────────────────────────────────────────────────
   const loadExistingSplit = useCallback(
@@ -222,6 +239,7 @@ export default function SplitExpenseScreen() {
           notes: selectedTransaction.notes,
         },
         otherMembers.map((m) => ({
+          friendId: m.dbId,
           name: m.name,
           shareAmount: m.amount,
           sharePercent: splitMethod === 'percent' ? m.sharePercent : undefined,
@@ -235,7 +253,13 @@ export default function SplitExpenseScreen() {
         title: 'Success',
         message: 'Expense split successfully!',
         type: 'success',
-        onClose: () => router.replace('/splits' as Href),
+        onClose: () => {
+          if (router.canGoBack()) {
+            router.back();
+          } else {
+            router.replace('/splits' as Href);
+          }
+        },
       });
     } catch {
       setPopupConfig({
@@ -293,7 +317,7 @@ export default function SplitExpenseScreen() {
     }
   };
 
-  const handleAddFriend = () => {
+  const handleAddNewFriend = async () => {
     if (!friendSearch.trim()) {
       setPopupConfig({
         visible: true,
@@ -303,14 +327,42 @@ export default function SplitExpenseScreen() {
       });
       return;
     }
+    setSaving(true);
+    try {
+      const friend = await SplitService.saveFriend(friendSearch.trim());
+      const newFriend: LocalMember = {
+        id: Date.now().toString(),
+        name: friend.name,
+        role: 'member',
+        amount: 0,
+        dbId: friend.id,
+      };
+      setMembers([...members, newFriend]);
+      setFriendSearch('');
+      setIsSearching(false);
+    } catch {
+      setPopupConfig({
+        visible: true,
+        title: 'Error',
+        message: 'Failed to add friend.',
+        type: 'error',
+      });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleAddExistingFriend = (friend: SplitFriend) => {
     const newFriend: LocalMember = {
       id: Date.now().toString(),
-      name: friendSearch.trim(),
+      name: friend.name,
       role: 'member',
       amount: 0,
+      dbId: friend.id,
     };
     setMembers([...members, newFriend]);
     setFriendSearch('');
+    setIsSearching(false);
   };
 
   const handleRemoveFriend = (friendId: string) => {
@@ -556,26 +608,59 @@ export default function SplitExpenseScreen() {
           </Animated.View>
 
           {/* Select Friends */}
-          <Animated.View entering={FadeInDown.duration(400).delay(100)}>
+          <Animated.View entering={FadeInDown.duration(400).delay(100)} style={{ zIndex: 10 }}>
             <Text style={styles.sectionLabel}>ADD FRIENDS</Text>
             <View style={styles.searchBox}>
               <Ionicons name="search" size={18} color={colors.textMuted} />
               <TextInput
                 ref={friendSearchRef}
                 value={friendSearch}
-                onChangeText={setFriendSearch}
-                placeholder="Enter friend's name and press Add"
+                onChangeText={(t) => {
+                  setFriendSearch(t);
+                  setIsSearching(true);
+                }}
+                placeholder="Search or enter new friend"
                 placeholderTextColor={colors.textMuted}
                 style={styles.searchInput}
-                onSubmitEditing={handleAddFriend}
+                onSubmitEditing={handleAddNewFriend}
                 returnKeyType="done"
+                onFocus={() => setIsSearching(true)}
               />
               {friendSearch.trim() !== '' && (
-                <TouchableOpacity onPress={handleAddFriend}>
+                <TouchableOpacity onPress={handleAddNewFriend}>
                   <Ionicons name="add-circle" size={24} color={colors.primary} />
                 </TouchableOpacity>
               )}
             </View>
+
+            {isSearching && friendSearch.trim() !== '' && (
+              <View
+                style={[
+                  styles.friendsDropdown,
+                  { backgroundColor: colors.bgElevated, borderColor: colors.border },
+                ]}
+              >
+                {filteredFriends.map((f) => (
+                  <TouchableOpacity
+                    key={f.id}
+                    style={styles.friendDropdownItem}
+                    onPress={() => handleAddExistingFriend(f)}
+                  >
+                    <Ionicons name="person" size={16} color={colors.primary} />
+                    <Text style={{ color: colors.textPrimary, marginLeft: 8, fontWeight: '600' }}>
+                      {f.name}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+                <TouchableOpacity style={styles.friendDropdownItem} onPress={handleAddNewFriend}>
+                  <Ionicons name="add" size={16} color={colors.primary} />
+                  <Text style={{ color: colors.primary, marginLeft: 8, fontWeight: '700' }}>
+                    Add &quot;{friendSearch.trim()}&quot; as new friend
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            )}
+
             <View style={styles.chipRow}>
               {members.map((m) => (
                 <View
@@ -921,6 +1006,23 @@ function createStyles(colors: ThemeColors) {
       textTransform: 'uppercase',
       marginBottom: SPACING.sm,
     },
+    friendsDropdown: {
+      position: 'absolute',
+      top: 60,
+      left: 0,
+      right: 0,
+      borderRadius: RADIUS.lg,
+      borderWidth: 1,
+      zIndex: 100,
+      padding: 4,
+    },
+    friendDropdownItem: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      padding: 12,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: 'rgba(150,150,150,0.2)',
+    },
     searchBox: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -1205,27 +1307,18 @@ function createStyles(colors: ThemeColors) {
 
     // Modal
     modalOverlay: {
-      position: 'absolute',
-      top: 0,
-      right: 0,
-      bottom: 0,
-      left: 0,
-      backgroundColor: 'rgba(0,0,0,0.6)',
-      justifyContent: 'flex-end',
-      zIndex: 1000,
-      elevation: 1000,
+      flex: 1,
+      justifyContent: 'center',
+      padding: SPACING.md,
+    },
+    modalBackdrop: {
+      ...StyleSheet.absoluteFillObject,
+      backgroundColor: 'rgba(0,0,0,0.5)',
     },
     modalContent: {
-      overflow: 'hidden',
-      borderTopLeftRadius: RADIUS.xl,
-      borderTopRightRadius: RADIUS.xl,
-      padding: SPACING.lg,
-      maxHeight: '80%',
-      shadowColor: '#000',
-      shadowOffset: { width: 0, height: -6 },
-      shadowOpacity: 0.2,
-      shadowRadius: 16,
-      elevation: 16,
+      borderRadius: RADIUS.xl,
+      maxHeight: Platform.OS === 'ios' ? '85%' : '90%',
+      alignSelf: 'stretch',
     },
     modalHeader: {
       flexDirection: 'row',

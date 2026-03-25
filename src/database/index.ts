@@ -197,6 +197,7 @@ const transactionalTables = [
   `CREATE TABLE IF NOT EXISTS split_members (
     id TEXT PRIMARY KEY,
     split_expense_id TEXT NOT NULL,
+    friendId TEXT,
     name TEXT NOT NULL,
     share_amount REAL NOT NULL,
     share_percent REAL,
@@ -206,12 +207,29 @@ const transactionalTables = [
     ${baseSyncColumns},
     FOREIGN KEY (split_expense_id) REFERENCES split_expenses(id) ON DELETE CASCADE
   )`,
+  `CREATE TABLE IF NOT EXISTS split_friends (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    createdAt TEXT NOT NULL,
+    updatedAt TEXT NOT NULL,
+    ${baseSyncColumns}
+  )`,
   `CREATE TABLE IF NOT EXISTS payment_methods (
     id TEXT PRIMARY KEY,
     name TEXT NOT NULL,
     icon TEXT NOT NULL DEFAULT 'card',
     color TEXT NOT NULL DEFAULT '#8B5CF6',
     isCustom INTEGER DEFAULT 0,
+    createdAt TEXT NOT NULL,
+    updatedAt TEXT NOT NULL,
+    ${baseSyncColumns}
+  )`,
+  `CREATE TABLE IF NOT EXISTS notes (
+    id TEXT PRIMARY KEY,
+    title TEXT NOT NULL,
+    content TEXT NOT NULL,
+    color TEXT DEFAULT '#7C3AED',
+    isPinned INTEGER DEFAULT 0,
     createdAt TEXT NOT NULL,
     updatedAt TEXT NOT NULL,
     ${baseSyncColumns}
@@ -234,6 +252,8 @@ const indexes = [
   `CREATE INDEX IF NOT EXISTS idx_sync_queue_retryCount ON sync_queue(retryCount, updatedAt)`,
   `CREATE INDEX IF NOT EXISTS idx_split_expenses_transaction ON split_expenses(transaction_id)`,
   `CREATE INDEX IF NOT EXISTS idx_split_members_split_id ON split_members(split_expense_id)`,
+  `CREATE INDEX IF NOT EXISTS idx_split_members_friend_id ON split_members(friendId)`,
+  `CREATE INDEX IF NOT EXISTS idx_split_friends_name ON split_friends(name)`,
   `CREATE INDEX IF NOT EXISTS idx_transactions_type_date_category ON transactions(type, date DESC, categoryId)`,
   `CREATE INDEX IF NOT EXISTS idx_transactions_tags ON transactions(tags)`,
   `CREATE INDEX IF NOT EXISTS idx_transactions_dashboard ON transactions(date DESC, type)`,
@@ -424,6 +444,7 @@ const localTablesToClear = [
   'payment_methods',
   'sync_queue',
   'sync_state',
+  'notes',
 ] as const;
 
 export const getDatabase = (): SQLite.SQLiteDatabase => {
@@ -666,6 +687,7 @@ export const hasLocalUserData = async (userId: string | null): Promise<boolean> 
     'recurring_templates',
     'split_expenses',
     'split_members',
+    'notes',
   ] as const;
 
   for (const table of userScopedTables) {

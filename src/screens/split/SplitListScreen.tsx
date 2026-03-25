@@ -10,7 +10,7 @@ import { useTheme, type ThemeColors } from '../../hooks/useTheme';
 import { SplitService } from '../../services/splitService';
 import { useAppStore } from '../../store/appStore';
 import { RADIUS, SPACING, TYPOGRAPHY, formatCurrency } from '../../utils/constants';
-import type { SplitExpense, SplitMember } from '../../utils/types';
+import type { SplitExpense, SplitMember, SplitFriend } from '../../utils/types';
 
 interface SplitItem {
   expense: SplitExpense;
@@ -26,11 +26,17 @@ export default function SplitListScreen() {
   const dataRevision = useAppStore((s) => s.dataRevision);
 
   const [splits, setSplits] = useState<SplitItem[]>([]);
+  const [friendBalances, setFriendBalances] = useState<
+    { friend: SplitFriend; totalPending: number }[]
+  >([]);
+  const [activeTab, setActiveTab] = useState<'splits' | 'friends'>('splits');
   const [refreshing, setRefreshing] = useState(false);
 
   const loadSplits = useCallback(async () => {
     const data = await SplitService.getAll();
     setSplits(data);
+    const balances = await SplitService.getFriendBalances();
+    setFriendBalances(balances);
   }, []);
 
   useEffect(() => {
@@ -68,6 +74,25 @@ export default function SplitListScreen() {
         <View style={{ width: 40 }} />
       </View>
 
+      <View style={styles.tabContainer}>
+        <TouchableOpacity
+          style={[styles.tabBtn, activeTab === 'splits' && { backgroundColor: colors.primary }]}
+          onPress={() => setActiveTab('splits')}
+        >
+          <Text style={[styles.tabText, activeTab === 'splits' && { color: '#fff' }]}>
+            By Split
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.tabBtn, activeTab === 'friends' && { backgroundColor: colors.primary }]}
+          onPress={() => setActiveTab('friends')}
+        >
+          <Text style={[styles.tabText, activeTab === 'friends' && { color: '#fff' }]}>
+            By Friend
+          </Text>
+        </TouchableOpacity>
+      </View>
+
       <ScrollView
         contentContainerStyle={styles.scroll}
         showsVerticalScrollIndicator={false}
@@ -79,49 +104,75 @@ export default function SplitListScreen() {
           />
         }
       >
-        {/* Summary Cards */}
-        <Animated.View entering={FadeInDown.duration(400)} style={styles.summaryRow}>
-          <View style={[styles.summaryCard, { borderColor: colors.warning + '30' }]}>
-            <Text style={[styles.summaryLabel, { color: colors.warning }]}>Pending</Text>
-            <Text style={[styles.summaryValue, { color: colors.textPrimary }]}>
-              {formatCurrency(totalOwed)}
-            </Text>
-            <Text style={styles.summaryCount}>
-              {splits.filter((s) => s.members.some((m) => m.status === 'pending')).length} splits
-            </Text>
-          </View>
-          <View style={[styles.summaryCard, { borderColor: colors.income + '30' }]}>
-            <Text style={[styles.summaryLabel, { color: colors.income }]}>Collected</Text>
-            <Text style={[styles.summaryValue, { color: colors.textPrimary }]}>
-              {formatCurrency(totalCollected)}
-            </Text>
-            <Text style={styles.summaryCount}>
-              {splits.filter((s) => s.members.every((m) => m.status === 'paid')).length} settled
-            </Text>
-          </View>
-        </Animated.View>
+        {activeTab === 'splits' ? (
+          <View>
+            {/* Summary Cards */}
+            <Animated.View entering={FadeInDown.duration(400)} style={styles.summaryRow}>
+              <View style={[styles.summaryCard, { borderColor: colors.warning + '30' }]}>
+                <Text style={[styles.summaryLabel, { color: colors.warning }]}>Pending</Text>
+                <Text style={[styles.summaryValue, { color: colors.textPrimary }]}>
+                  {formatCurrency(totalOwed)}
+                </Text>
+                <Text style={styles.summaryCount}>
+                  {splits.filter((s) => s.members.some((m) => m.status === 'pending')).length}{' '}
+                  splits
+                </Text>
+              </View>
+              <View style={[styles.summaryCard, { borderColor: colors.income + '30' }]}>
+                <Text style={[styles.summaryLabel, { color: colors.income }]}>Collected</Text>
+                <Text style={[styles.summaryValue, { color: colors.textPrimary }]}>
+                  {formatCurrency(totalCollected)}
+                </Text>
+                <Text style={styles.summaryCount}>
+                  {splits.filter((s) => s.members.every((m) => m.status === 'paid')).length} settled
+                </Text>
+              </View>
+            </Animated.View>
 
-        {/* Split List */}
-        {splits.length === 0 ? (
-          <EmptyState
-            icon="people-outline"
-            title="No splits yet"
-            subtitle="Split an expense with friends by tapping the + button"
-          />
+            {/* Split List */}
+            {splits.length === 0 ? (
+              <EmptyState
+                icon="people-outline"
+                title="No splits yet"
+                subtitle="Split an expense with friends by tapping the + button"
+              />
+            ) : (
+              splits.map((item, idx) => (
+                <SplitCard
+                  key={item.expense.id}
+                  item={item}
+                  colors={colors}
+                  styles={styles}
+                  delay={idx * 60}
+                  onPress={() => router.push(`/split-expense/${item.expense.id}`)}
+                />
+              ))
+            )}
+            <View style={{ height: 100 }} />
+          </View>
         ) : (
-          splits.map((item, idx) => (
-            <SplitCard
-              key={item.expense.id}
-              item={item}
-              colors={colors}
-              styles={styles}
-              delay={idx * 60}
-              onPress={() => router.push(`/split-expense/${item.expense.id}`)}
-            />
-          ))
+          <View>
+            {friendBalances.length === 0 ? (
+              <EmptyState
+                icon="person-add-outline"
+                title="No friends yet"
+                subtitle="Share an expense with friends to add them to your balances"
+              />
+            ) : (
+              friendBalances.map((item, idx) => (
+                <FriendCard
+                  key={item.friend.id}
+                  item={item}
+                  colors={colors}
+                  styles={styles}
+                  delay={idx * 60}
+                  onPress={() => router.push(`/split-expense/friend-detail/${item.friend.id}`)}
+                />
+              ))
+            )}
+            <View style={{ height: 100 }} />
+          </View>
         )}
-
-        <View style={{ height: 100 }} />
       </ScrollView>
 
       <FAB onPress={() => router.push('/split-expense/new')} />
@@ -265,6 +316,48 @@ const SplitCard: React.FC<{
   );
 };
 
+// ─── Friend Card ──────────────────────────────────────────────────────────────
+const FriendCard: React.FC<{
+  item: { friend: SplitFriend; totalPending: number };
+  colors: ThemeColors;
+  styles: ReturnType<typeof createStyles>;
+  delay: number;
+  onPress: () => void;
+}> = ({ item, colors, styles, delay, onPress }) => {
+  const { friend, totalPending } = item;
+  const isSettled = totalPending <= 0;
+
+  return (
+    <Animated.View entering={FadeInDown.duration(400).delay(100 + delay)}>
+      <TouchableOpacity style={styles.friendCard} onPress={onPress} activeOpacity={0.7}>
+        <View style={styles.friendCardInner}>
+          <View style={[styles.friendAvatar, { backgroundColor: colors.primary + '15' }]}>
+            <Text style={[styles.friendInitials, { color: colors.primary }]}>
+              {friend.name.charAt(0).toUpperCase()}
+            </Text>
+          </View>
+          <View style={styles.friendInfo}>
+            <Text style={styles.friendName}>{friend.name}</Text>
+            {isSettled ? (
+              <Text style={[styles.friendStatus, { color: colors.textMuted }]}>Settled up</Text>
+            ) : (
+              <Text style={[styles.friendStatus, { color: colors.warning }]}>Owes you</Text>
+            )}
+          </View>
+          <Text
+            style={[
+              styles.friendAmount,
+              { color: isSettled ? colors.textMuted : colors.textPrimary },
+            ]}
+          >
+            {formatCurrency(totalPending)}
+          </Text>
+        </View>
+      </TouchableOpacity>
+    </Animated.View>
+  );
+};
+
 // ─── Styles ───────────────────────────────────────────────────────────────────
 function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
@@ -310,6 +403,73 @@ function createStyles(colors: ThemeColors) {
       ...TYPOGRAPHY.caption,
       color: colors.textMuted,
       marginTop: 2,
+    },
+
+    // Tabs
+    tabContainer: {
+      flexDirection: 'row',
+      paddingHorizontal: SPACING.md,
+      paddingVertical: SPACING.sm,
+      gap: SPACING.sm,
+    },
+    tabBtn: {
+      flex: 1,
+      paddingVertical: 10,
+      alignItems: 'center',
+      borderRadius: RADIUS.md,
+      backgroundColor: colors.bgElevated,
+    },
+    tabText: {
+      ...TYPOGRAPHY.body,
+      fontWeight: '600',
+      color: colors.textSecondary,
+    },
+    sectionTitle: {
+      ...TYPOGRAPHY.h3,
+      fontWeight: '700',
+    },
+
+    // Friend Card
+    friendCard: {
+      backgroundColor: colors.bgCard,
+      borderRadius: RADIUS.lg,
+      padding: SPACING.md,
+      borderWidth: 1,
+      borderColor: colors.border,
+      marginBottom: SPACING.sm,
+    },
+    friendCardInner: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 12,
+    },
+    friendAvatar: {
+      width: 44,
+      height: 44,
+      borderRadius: 22,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    friendInitials: {
+      fontSize: 18,
+      fontWeight: '800',
+    },
+    friendInfo: {
+      flex: 1,
+    },
+    friendName: {
+      ...TYPOGRAPHY.bodyMedium,
+      color: colors.textPrimary,
+      fontWeight: '700',
+    },
+    friendStatus: {
+      fontSize: 12,
+      fontWeight: '600',
+      marginTop: 2,
+    },
+    friendAmount: {
+      ...TYPOGRAPHY.h3,
+      fontWeight: '700',
     },
 
     // Split card

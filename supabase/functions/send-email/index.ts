@@ -9,15 +9,11 @@ const resend = resendApiKey ? new Resend(resendApiKey) : null;
 
 type Summary = {
   totalBalance: string;
-  savingsRate: string;
-  totalSaved: string;
-  accountCount: string;
-};
-
-type Stats = {
   income: string;
   expenses: string;
-  net: string;
+  savings: string;
+  savingsRate: string;
+  transactionCount: string;
 };
 
 type BreakdownItem = {
@@ -27,11 +23,19 @@ type BreakdownItem = {
   color?: string;
 };
 
-type TopSpendingItem = {
+type BudgetPerformanceItem = {
+  name: string;
+  limit: string;
+  spent: string;
+  statusLabel: string;
+  statusTone: 'good' | 'warn' | 'danger';
+};
+
+type RecentTransactionItem = {
   title: string;
   subtitle: string;
   amount: string;
-  categoryName: string;
+  tone: 'income' | 'expense' | 'neutral';
 };
 
 const escapeHtml = (value: string) =>
@@ -42,190 +46,90 @@ const escapeHtml = (value: string) =>
     .replaceAll('"', '&quot;')
     .replaceAll("'", '&#39;');
 
-const hexToRgba = (hex: string, alpha: string) => {
-  const normalized = hex.replace('#', '');
-  const full =
-    normalized.length === 3
-      ? normalized
-          .split('')
-          .map((c) => c + c)
-          .join('')
-      : normalized;
-  if (!/^[0-9a-fA-F]{6}$/.test(full)) return `rgba(29,78,216,${alpha})`;
-  const int = Number.parseInt(full, 16);
-  const r = (int >> 16) & 255;
-  const g = (int >> 8) & 255;
-  const b = int & 255;
-  return `rgba(${r},${g},${b},${alpha})`;
-};
-
 const renderLogo = () => {
   if (logoUrl) {
     return `
       <img
         src="${escapeHtml(logoUrl)}"
         alt="Hisab Kitab"
-        width="44"
-        height="44"
-        style="display:block;width:44px;height:44px;border-radius:14px;border:0;outline:none;text-decoration:none;"
+        width="46"
+        height="46"
+        style="display:block;width:46px;height:46px;border-radius:14px;border:0;outline:none;text-decoration:none;"
       />
     `;
   }
 
   return `
-    <div style="width:44px;height:44px;border-radius:14px;background:linear-gradient(135deg,#10b981,#1d4ed8);text-align:center;line-height:44px;font-size:20px;font-weight:800;color:#ffffff;">
-      H
+    <div style="width:46px;height:46px;border-radius:14px;background:linear-gradient(135deg,#7c3aed,#10b981);text-align:center;line-height:46px;font-size:20px;font-weight:800;color:#ffffff;">
+      HK
     </div>
   `;
 };
 
-const renderHero = (summary: Summary) => `
-  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin-top:24px;">
-    <tr>
-      <td style="background:#ffffff;border:1px solid #e2e8f0;border-radius:24px;padding:28px;">
-        <div style="font-size:12px;line-height:18px;color:#64748b;text-transform:uppercase;letter-spacing:0.12em;font-weight:700;">
-          Total Balance
-        </div>
-        <div style="margin-top:8px;font-size:36px;line-height:42px;font-weight:800;color:#0f172a;">
-          ${escapeHtml(summary.totalBalance)}
-        </div>
-        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin-top:20px;">
-          <tr>
-            <td width="50%" valign="top" style="padding-right:8px;">
-              <div style="background:#eefbf5;border:1px solid #cceedd;border-radius:18px;padding:16px;">
-                <div style="font-size:11px;line-height:16px;color:#047857;text-transform:uppercase;letter-spacing:0.1em;font-weight:700;">Savings Rate</div>
-                <div style="margin-top:6px;font-size:24px;line-height:30px;font-weight:800;color:#064e3b;">${escapeHtml(summary.savingsRate)}</div>
-              </div>
-            </td>
-            <td width="50%" valign="top" style="padding-left:8px;">
-              <div style="background:#eef2ff;border:1px solid #c7d2fe;border-radius:18px;padding:16px;">
-                <div style="font-size:11px;line-height:16px;color:#4338ca;text-transform:uppercase;letter-spacing:0.1em;font-weight:700;">Total Saved</div>
-                <div style="margin-top:6px;font-size:24px;line-height:30px;font-weight:800;color:#312e81;">${escapeHtml(summary.totalSaved)}</div>
-              </div>
-            </td>
-          </tr>
-        </table>
-      </td>
-    </tr>
-  </table>
-`;
+const statusColors = (tone: 'good' | 'warn' | 'danger') => {
+  if (tone === 'danger') {
+    return { bg: '#FFE4E6', text: '#BE123C' };
+  }
 
-const renderStats = (stats: Stats, summary: Summary) => `
-  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin-top:18px;">
-    <tr>
-      <td width="33.33%" valign="top" style="padding-right:8px;">
-        <div style="background:#ecfdf5;border:1px solid #bbf7d0;border-radius:18px;padding:18px 16px;">
-          <div style="font-size:11px;line-height:16px;color:#047857;text-transform:uppercase;letter-spacing:0.1em;font-weight:700;">Income</div>
-          <div style="margin-top:8px;font-size:22px;line-height:28px;font-weight:800;color:#064e3b;">${escapeHtml(stats.income)}</div>
-        </div>
-      </td>
-      <td width="33.33%" valign="top" style="padding-left:4px;padding-right:4px;">
-        <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:18px;padding:18px 16px;">
-          <div style="font-size:11px;line-height:16px;color:#475569;text-transform:uppercase;letter-spacing:0.1em;font-weight:700;">Expenses</div>
-          <div style="margin-top:8px;font-size:22px;line-height:28px;font-weight:800;color:#0f172a;">${escapeHtml(stats.expenses)}</div>
-        </div>
-      </td>
-      <td width="33.33%" valign="top" style="padding-left:8px;">
-        <div style="background:#eef2ff;border:1px solid #c7d2fe;border-radius:18px;padding:18px 16px;">
-          <div style="font-size:11px;line-height:16px;color:#4338ca;text-transform:uppercase;letter-spacing:0.1em;font-weight:700;">Accounts</div>
-          <div style="margin-top:8px;font-size:22px;line-height:28px;font-weight:800;color:#312e81;">${escapeHtml(summary.accountCount)}</div>
-        </div>
-      </td>
-    </tr>
-  </table>
-  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin-top:18px;">
-    <tr>
-      <td style="background:#0f172a;border-radius:20px;padding:18px 20px;text-align:center;">
-        <div style="font-size:11px;line-height:16px;color:#94a3b8;text-transform:uppercase;letter-spacing:0.1em;font-weight:700;">Net Result</div>
-        <div style="margin-top:8px;font-size:24px;line-height:30px;font-weight:800;color:#ffffff;">${escapeHtml(stats.net)}</div>
-      </td>
-    </tr>
-  </table>
-`;
+  if (tone === 'warn') {
+    return { bg: '#FEF3C7', text: '#B45309' };
+  }
 
-const renderBreakdown = (items: BreakdownItem[], monthShort: string) => {
-  const bars = items.length
-    ? items
-        .map((item) => {
-          const color = item.color || '#1d4ed8';
-          return `
-            <tr>
-              <td valign="middle" style="padding:8px 0;">
-                <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
-                  <tr>
-                    <td valign="middle" style="width:14px;">
-                      <div style="width:10px;height:10px;border-radius:999px;background:${escapeHtml(color)};"></div>
-                    </td>
-                    <td valign="middle" style="font-size:14px;line-height:20px;color:#475569;font-weight:600;">
-                      ${escapeHtml(item.name)}
-                    </td>
-                    <td valign="middle" align="right" style="font-size:14px;line-height:20px;color:#0f172a;font-weight:800;">
-                      ${item.percentage}%
-                    </td>
-                  </tr>
-                </table>
-              </td>
-            </tr>
-          `;
-        })
-        .join('')
-    : `
-      <tr>
-        <td style="padding-top:10px;font-size:14px;line-height:22px;color:#64748b;">
-          No spending distribution available for this month.
+  return { bg: '#DCFCE7', text: '#15803D' };
+};
+
+const amountColor = (tone: 'income' | 'expense' | 'neutral') => {
+  if (tone === 'income') {
+    return '#059669';
+  }
+
+  if (tone === 'expense') {
+    return '#E11D48';
+  }
+
+  return '#7C3AED';
+};
+
+const renderSummaryCards = (summary: Summary) => {
+  const cards = [
+    { label: 'Total Balance', value: summary.totalBalance, accent: '#7C3AED' },
+    { label: 'Income', value: summary.income, accent: '#059669' },
+    { label: 'Expenses', value: summary.expenses, accent: '#E11D48' },
+    { label: 'Savings', value: summary.savings, accent: '#059669' },
+  ].map(
+    (card) => `
+        <td width="50%" valign="top" style="padding:8px;">
+          <div style="background:#ffffff;border:1px solid #e5e7eb;border-radius:18px;padding:18px;">
+            <div style="font-size:11px;line-height:16px;color:#64748b;text-transform:uppercase;letter-spacing:0.1em;font-weight:700;">
+              ${escapeHtml(card.label)}
+            </div>
+            <div style="margin-top:10px;font-size:24px;line-height:30px;color:${card.accent};font-weight:800;">
+              ${escapeHtml(card.value)}
+            </div>
+          </div>
         </td>
-      </tr>
-    `;
-
-  const chips = items.length
-    ? items
-        .map((item) => {
-          const color = item.color || '#1d4ed8';
-          return `
-            <tr>
-              <td style="padding:10px 0;border-bottom:1px solid #f1f5f9;">
-                <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
-                  <tr>
-                    <td style="font-size:14px;line-height:20px;color:#475569;font-weight:600;">
-                      <span style="display:inline-block;width:10px;height:10px;border-radius:999px;background:${escapeHtml(color)};margin-right:8px;"></span>
-                      ${escapeHtml(item.name)}
-                    </td>
-                    <td align="right" style="font-size:14px;line-height:20px;color:#0f172a;font-weight:800;">
-                      ${escapeHtml(item.amount)}
-                    </td>
-                  </tr>
-                </table>
-              </td>
-            </tr>
-          `;
-        })
-        .join('')
-    : '';
+      `,
+  );
 
   return `
-    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin-top:24px;">
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin-top:18px;">
+      <tr>${cards.slice(0, 2).join('')}</tr>
+      <tr>${cards.slice(2).join('')}</tr>
+    </table>
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin-top:16px;">
       <tr>
-        <td style="background:#ffffff;border:1px solid #e2e8f0;border-radius:24px;padding:24px;">
-          <div style="font-size:20px;line-height:26px;color:#0f172a;font-weight:800;">Spending Distribution</div>
-          <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin-top:18px;">
+        <td style="background:#0f172a;border-radius:18px;padding:18px 20px;">
+          <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
             <tr>
-              <td width="38%" valign="top" align="center" style="padding-right:14px;">
-                <div style="width:130px;height:130px;border-radius:999px;background:conic-gradient(#1d4ed8 0% 45%, #34d399 45% 70%, #818cf8 70% 85%, #f59e0b 85% 100%);margin:0 auto;position:relative;">
-                  <div style="position:relative;top:15px;left:15px;width:100px;height:100px;border-radius:999px;background:#ffffff;text-align:center;">
-                    <div style="padding-top:28px;font-size:11px;line-height:16px;color:#94a3b8;font-weight:700;text-transform:uppercase;">${escapeHtml(monthShort)}</div>
-                    <div style="font-size:18px;line-height:24px;color:#0f172a;font-weight:800;">100%</div>
-                  </div>
-                </div>
+              <td>
+                <div style="font-size:11px;line-height:16px;color:#94a3b8;text-transform:uppercase;letter-spacing:0.1em;font-weight:700;">Savings Rate</div>
+                <div style="margin-top:8px;font-size:22px;line-height:28px;color:#ffffff;font-weight:800;">${escapeHtml(summary.savingsRate)}</div>
               </td>
-              <td width="62%" valign="top">
-                <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
-                  ${bars}
-                </table>
+              <td align="right">
+                <div style="font-size:11px;line-height:16px;color:#94a3b8;text-transform:uppercase;letter-spacing:0.1em;font-weight:700;">Transactions</div>
+                <div style="margin-top:8px;font-size:22px;line-height:28px;color:#ffffff;font-weight:800;">${escapeHtml(summary.transactionCount)}</div>
               </td>
             </tr>
-          </table>
-          <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin-top:16px;">
-            ${chips}
           </table>
         </td>
       </tr>
@@ -233,27 +137,70 @@ const renderBreakdown = (items: BreakdownItem[], monthShort: string) => {
   `;
 };
 
-const renderTopSpending = (items: TopSpendingItem[]) => {
+const renderBreakdown = (items: BreakdownItem[]) => {
   const rows = items.length
     ? items
-        .map((item, index) => {
-          const bg = index === 0 ? '#f8fafc' : '#ffffff';
-          return `
+        .map(
+          (item) => `
             <tr>
-              <td style="padding:16px 0;border-bottom:${index === items.length - 1 ? '0' : '1px solid #f1f5f9'};">
+              <td style="padding:12px 0;border-bottom:1px solid #f1f5f9;">
                 <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
                   <tr>
-                    <td valign="middle" style="width:48px;">
-                      <div style="width:40px;height:40px;border-radius:14px;background:${bg};border:1px solid #e2e8f0;text-align:center;line-height:40px;font-size:16px;font-weight:800;color:#475569;">
-                        ${index + 1}
-                      </div>
+                    <td>
+                      <span style="display:inline-block;width:10px;height:10px;border-radius:999px;background:${escapeHtml(item.color || '#7C3AED')};margin-right:8px;"></span>
+                      <span style="font-size:14px;line-height:20px;color:#0f172a;font-weight:700;">${escapeHtml(item.name)}</span>
                     </td>
-                    <td valign="middle" style="padding-left:12px;">
-                      <div style="font-size:15px;line-height:21px;color:#0f172a;font-weight:800;">${escapeHtml(item.title)}</div>
-                      <div style="font-size:12px;line-height:18px;color:#64748b;">${escapeHtml(item.subtitle)} • ${escapeHtml(item.categoryName)}</div>
+                    <td align="right" style="font-size:14px;line-height:20px;color:#64748b;">
+                      ${escapeHtml(item.amount)} - ${item.percentage.toFixed(1)}%
                     </td>
-                    <td valign="middle" align="right" style="font-size:15px;line-height:21px;color:#0f172a;font-weight:800;">
-                      ${escapeHtml(item.amount)}
+                  </tr>
+                </table>
+              </td>
+            </tr>
+          `,
+        )
+        .join('')
+    : `
+      <tr>
+        <td style="padding-top:8px;font-size:14px;line-height:22px;color:#64748b;">
+          No spending categories were recorded for this month.
+        </td>
+      </tr>
+    `;
+
+  return `
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin-top:24px;">
+      <tr>
+        <td style="background:#ffffff;border:1px solid #e5e7eb;border-radius:22px;padding:22px;">
+          <div style="font-size:20px;line-height:26px;color:#0f172a;font-weight:800;">Top Spending Categories</div>
+          <div style="margin-top:6px;font-size:13px;line-height:20px;color:#64748b;">The biggest expense buckets from your monthly report.</div>
+          <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin-top:14px;">
+            ${rows}
+          </table>
+        </td>
+      </tr>
+    </table>
+  `;
+};
+
+const renderBudgetPerformance = (items: BudgetPerformanceItem[]) => {
+  const rows = items.length
+    ? items
+        .map((item) => {
+          const tone = statusColors(item.statusTone);
+          return `
+            <tr>
+              <td style="padding:12px 0;border-bottom:1px solid #f1f5f9;">
+                <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
+                  <tr>
+                    <td>
+                      <div style="font-size:14px;line-height:20px;color:#0f172a;font-weight:700;">${escapeHtml(item.name)}</div>
+                      <div style="margin-top:4px;font-size:12px;line-height:18px;color:#64748b;">Budget ${escapeHtml(item.limit)} - Spent ${escapeHtml(item.spent)}</div>
+                    </td>
+                    <td align="right" valign="middle">
+                      <span style="display:inline-block;padding:7px 10px;border-radius:999px;background:${tone.bg};color:${tone.text};font-size:11px;line-height:16px;font-weight:800;">
+                        ${escapeHtml(item.statusLabel)}
+                      </span>
                     </td>
                   </tr>
                 </table>
@@ -264,8 +211,8 @@ const renderTopSpending = (items: TopSpendingItem[]) => {
         .join('')
     : `
       <tr>
-        <td style="padding-top:12px;font-size:14px;line-height:22px;color:#64748b;">
-          No expense entries recorded this month.
+        <td style="padding-top:8px;font-size:14px;line-height:22px;color:#64748b;">
+          No category budgets were created for this month.
         </td>
       </tr>
     `;
@@ -273,16 +220,56 @@ const renderTopSpending = (items: TopSpendingItem[]) => {
   return `
     <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin-top:24px;">
       <tr>
-        <td style="background:#ffffff;border:1px solid #e2e8f0;border-radius:24px;padding:24px;">
-          <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
+        <td style="background:#ffffff;border:1px solid #e5e7eb;border-radius:22px;padding:22px;">
+          <div style="font-size:20px;line-height:26px;color:#0f172a;font-weight:800;">Budget Performance</div>
+          <div style="margin-top:6px;font-size:13px;line-height:20px;color:#64748b;">A quick view of how your category budgets tracked against spending.</div>
+          <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin-top:14px;">
+            ${rows}
+          </table>
+        </td>
+      </tr>
+    </table>
+  `;
+};
+
+const renderRecentTransactions = (items: RecentTransactionItem[]) => {
+  const rows = items.length
+    ? items
+        .map(
+          (item) => `
             <tr>
-              <td style="font-size:20px;line-height:26px;color:#0f172a;font-weight:800;">Top Spending</td>
-              <td align="right" style="font-size:11px;line-height:16px;color:#1d4ed8;font-weight:700;text-transform:uppercase;letter-spacing:0.1em;">
-                Most Impact
+              <td style="padding:12px 0;border-bottom:1px solid #f1f5f9;">
+                <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
+                  <tr>
+                    <td>
+                      <div style="font-size:14px;line-height:20px;color:#0f172a;font-weight:700;">${escapeHtml(item.title)}</div>
+                      <div style="margin-top:4px;font-size:12px;line-height:18px;color:#64748b;">${escapeHtml(item.subtitle)}</div>
+                    </td>
+                    <td align="right" valign="middle" style="font-size:14px;line-height:20px;color:${amountColor(item.tone)};font-weight:800;">
+                      ${escapeHtml(item.amount)}
+                    </td>
+                  </tr>
+                </table>
               </td>
             </tr>
-          </table>
-          <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin-top:10px;">
+          `,
+        )
+        .join('')
+    : `
+      <tr>
+        <td style="padding-top:8px;font-size:14px;line-height:22px;color:#64748b;">
+          No transactions were recorded in this report period.
+        </td>
+      </tr>
+    `;
+
+  return `
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin-top:24px;">
+      <tr>
+        <td style="background:#ffffff;border:1px solid #e5e7eb;border-radius:22px;padding:22px;">
+          <div style="font-size:20px;line-height:26px;color:#0f172a;font-weight:800;">Recent Transactions</div>
+          <div style="margin-top:6px;font-size:13px;line-height:20px;color:#64748b;">Recent activity from the same monthly statement you can preview in the app.</div>
+          <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin-top:14px;">
             ${rows}
           </table>
         </td>
@@ -296,11 +283,11 @@ const template = ({
   previewText,
   intro,
   monthLabel,
-  monthShort,
+  reportRange,
   summary,
-  stats,
   spendingBreakdown,
-  topSpending,
+  budgetPerformance,
+  recentTransactions,
   ctaLabel,
   ctaUrl,
 }: {
@@ -308,11 +295,11 @@ const template = ({
   previewText: string;
   intro: string;
   monthLabel: string;
-  monthShort: string;
+  reportRange: string;
   summary: Summary;
-  stats: Stats;
   spendingBreakdown: BreakdownItem[];
-  topSpending: TopSpendingItem[];
+  budgetPerformance: BudgetPerformanceItem[];
+  recentTransactions: RecentTransactionItem[];
   ctaLabel: string;
   ctaUrl: string;
 }) => `
@@ -327,61 +314,61 @@ const template = ({
       <div style="display:none;max-height:0;overflow:hidden;opacity:0;">
         ${escapeHtml(previewText)}
       </div>
-      <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#f8fafc;margin:0;padding:0;">
+      <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#f8fafc;">
         <tr>
           <td align="center" style="padding:24px 12px 40px;">
             <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:680px;margin:0 auto;">
               <tr>
-                <td style="padding:0 8px;">
-                  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#f8fafc;border-bottom:1px solid #e2e8f0;">
+                <td style="background:linear-gradient(135deg,#ffffff,#f4f1fb);border:1px solid #e5e7eb;border-radius:28px;padding:28px;">
+                  <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
                     <tr>
-                      <td style="padding:14px 0;">
-                        <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
-                          <tr>
-                            <td valign="middle" style="width:56px;">${renderLogo()}</td>
-                            <td valign="middle" style="padding-left:10px;">
-                              <div style="font-size:22px;line-height:28px;font-weight:800;color:#047857;">Hisab Kitab</div>
-                              <div style="font-size:12px;line-height:18px;color:#64748b;">Smart monthly finance summary</div>
-                            </td>
-                            <td valign="middle" align="right">
-                              <div style="display:inline-block;padding:7px 12px;border-radius:999px;background:#ecfdf5;color:#047857;font-size:11px;line-height:16px;font-weight:700;text-transform:uppercase;letter-spacing:0.1em;">
-                                ${escapeHtml(monthLabel)}
-                              </div>
-                            </td>
-                          </tr>
-                        </table>
+                      <td valign="middle" style="width:58px;">${renderLogo()}</td>
+                      <td valign="middle" style="padding-left:12px;">
+                        <div style="font-size:12px;line-height:18px;color:#64748b;text-transform:uppercase;letter-spacing:0.12em;font-weight:700;">Personal Finance Report</div>
+                        <div style="margin-top:4px;font-size:24px;line-height:30px;font-weight:800;color:#0f172a;">Hisab Kitab</div>
+                      </td>
+                      <td valign="middle" align="right">
+                        <div style="display:inline-block;padding:8px 12px;border-radius:999px;background:#ede9fe;color:#6d28d9;font-size:11px;line-height:16px;font-weight:800;text-transform:uppercase;letter-spacing:0.1em;">
+                          ${escapeHtml(monthLabel)}
+                        </div>
                       </td>
                     </tr>
                   </table>
-                  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin-top:26px;">
-                    <tr>
-                      <td>
-                        <div style="font-size:30px;line-height:36px;font-weight:800;color:#0f172a;">${escapeHtml(title)}</div>
-                        <div style="margin-top:8px;font-size:15px;line-height:24px;color:#64748b;">${escapeHtml(intro)}</div>
-                      </td>
-                    </tr>
-                  </table>
-                  ${renderHero(summary)}
-                  ${renderStats(stats, summary)}
-                  ${renderBreakdown(spendingBreakdown, monthShort)}
-                  ${renderTopSpending(topSpending)}
-                  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin-top:28px;">
-                    <tr>
-                      <td align="center">
-                        <a href="${escapeHtml(ctaUrl)}" style="display:inline-block;background:#6c63ff;color:#ffffff;text-decoration:none;padding:16px 28px;border-radius:16px;font-size:15px;line-height:22px;font-weight:800;box-shadow:0 10px 24px ${hexToRgba('#6c63ff', '0.22')};">
-                          ${escapeHtml(ctaLabel)}
-                        </a>
-                      </td>
-                    </tr>
-                  </table>
-                  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin-top:32px;border-top:1px solid #e2e8f0;">
-                    <tr>
-                      <td align="center" style="padding-top:24px;">
-                        <div style="font-size:12px;line-height:18px;color:#94a3b8;">You are receiving this email because you requested a monthly summary inside Hisab Kitab.</div>
-                        <div style="margin-top:10px;font-size:12px;line-height:18px;color:#94a3b8;">© 2026 Hisab Kitab. All rights reserved.</div>
-                      </td>
-                    </tr>
-                  </table>
+
+                  <div style="margin-top:22px;font-size:32px;line-height:38px;font-weight:800;color:#0f172a;">
+                    ${escapeHtml(title)}
+                  </div>
+                  <div style="margin-top:8px;font-size:14px;line-height:22px;color:#64748b;">
+                    ${escapeHtml(intro)}
+                  </div>
+                  <div style="margin-top:10px;font-size:13px;line-height:20px;color:#64748b;">
+                    Reporting period: ${escapeHtml(reportRange)}
+                  </div>
+
+                  ${renderSummaryCards(summary)}
+                </td>
+              </tr>
+
+              <tr><td>${renderBreakdown(spendingBreakdown)}</td></tr>
+              <tr><td>${renderBudgetPerformance(budgetPerformance)}</td></tr>
+              <tr><td>${renderRecentTransactions(recentTransactions)}</td></tr>
+
+              <tr>
+                <td align="center" style="padding-top:28px;">
+                  <a href="${escapeHtml(ctaUrl)}" style="display:inline-block;background:#7c3aed;color:#ffffff;text-decoration:none;padding:16px 28px;border-radius:16px;font-size:15px;line-height:22px;font-weight:800;">
+                    ${escapeHtml(ctaLabel)}
+                  </a>
+                </td>
+              </tr>
+
+              <tr>
+                <td align="center" style="padding-top:28px;border-top:1px solid #e5e7eb;">
+                  <div style="font-size:12px;line-height:18px;color:#94a3b8;">
+                    You are receiving this email because you requested a monthly report inside Hisab Kitab.
+                  </div>
+                  <div style="margin-top:10px;font-size:12px;line-height:18px;color:#94a3b8;">
+                    © 2026 Hisab Kitab. All rights reserved.
+                  </div>
                 </td>
               </tr>
             </table>
@@ -424,11 +411,11 @@ Deno.serve(async (request) => {
     previewText,
     intro,
     monthLabel,
-    monthShort,
+    reportRange,
     summary,
-    stats,
     spendingBreakdown,
-    topSpending,
+    budgetPerformance,
+    recentTransactions,
     ctaLabel,
     ctaUrl,
   } = await request.json();
@@ -440,16 +427,15 @@ Deno.serve(async (request) => {
     !previewText ||
     !intro ||
     !monthLabel ||
-    !monthShort ||
+    !reportRange ||
     !summary ||
-    !stats ||
     !ctaLabel ||
     !ctaUrl
   ) {
     return Response.json(
       {
         error:
-          'Missing required fields. Expected: to, subject, title, previewText, intro, monthLabel, monthShort, summary, stats, ctaLabel, ctaUrl.',
+          'Missing required fields. Expected: to, subject, title, previewText, intro, monthLabel, reportRange, summary, ctaLabel, ctaUrl.',
       },
       { status: 400 },
     );
@@ -464,11 +450,11 @@ Deno.serve(async (request) => {
       previewText,
       intro,
       monthLabel,
-      monthShort,
+      reportRange,
       summary,
-      stats,
       spendingBreakdown: Array.isArray(spendingBreakdown) ? spendingBreakdown : [],
-      topSpending: Array.isArray(topSpending) ? topSpending : [],
+      budgetPerformance: Array.isArray(budgetPerformance) ? budgetPerformance : [],
+      recentTransactions: Array.isArray(recentTransactions) ? recentTransactions : [],
       ctaLabel,
       ctaUrl,
     }),

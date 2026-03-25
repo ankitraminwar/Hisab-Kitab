@@ -234,10 +234,22 @@ create table if not exists public.split_members (
   id text primary key,
   user_id uuid references auth.users(id) on delete cascade,
   split_expense_id text not null,
+  friend_id text,
   name text not null,
   share_amount double precision not null,
   share_percent double precision,
   status text not null default 'pending' check (status in ('pending', 'paid', 'dismissed')),
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now()),
+  sync_status text not null default 'synced' check (sync_status in ('synced', 'pending', 'failed')),
+  last_synced_at timestamptz,
+  deleted_at timestamptz
+);
+
+create table if not exists public.split_friends (
+  id text primary key,
+  user_id uuid references auth.users(id) on delete cascade,
+  name text not null,
   created_at timestamptz not null default timezone('utc', now()),
   updated_at timestamptz not null default timezone('utc', now()),
   sync_status text not null default 'synced' check (sync_status in ('synced', 'pending', 'failed')),
@@ -284,7 +296,10 @@ create unique index if not exists idx_budgets_user_category_month_year
 create index if not exists idx_split_expenses_user on public.split_expenses (user_id, updated_at desc);
 create index if not exists idx_split_expenses_transaction on public.split_expenses (transaction_id);
 create index if not exists idx_split_members_split_id on public.split_members (split_expense_id);
+create index if not exists idx_split_members_friend_id on public.split_members (friend_id);
 create index if not exists idx_split_members_user on public.split_members (user_id, updated_at desc);
+create index if not exists idx_split_friends_user on public.split_friends (user_id, updated_at desc);
+create index if not exists idx_split_friends_name on public.split_friends (name);
 create index if not exists idx_payment_methods_user on public.payment_methods (user_id, updated_at desc);
 
 -- ============================================================
@@ -313,6 +328,8 @@ drop trigger if exists set_split_expenses_updated_at on public.split_expenses;
 create trigger set_split_expenses_updated_at before update on public.split_expenses for each row execute function public.set_updated_at();
 drop trigger if exists set_split_members_updated_at on public.split_members;
 create trigger set_split_members_updated_at before update on public.split_members for each row execute function public.set_updated_at();
+drop trigger if exists set_split_friends_updated_at on public.split_friends;
+create trigger set_split_friends_updated_at before update on public.split_friends for each row execute function public.set_updated_at();
 drop trigger if exists set_payment_methods_updated_at on public.payment_methods;
 create trigger set_payment_methods_updated_at before update on public.payment_methods for each row execute function public.set_updated_at();
 drop trigger if exists on_auth_user_created on auth.users;
@@ -368,6 +385,7 @@ alter table public.net_worth_history enable row level security;
 alter table public.user_profile enable row level security;
 alter table public.split_expenses enable row level security;
 alter table public.split_members enable row level security;
+alter table public.split_friends enable row level security;
 alter table public.payment_methods enable row level security;
 
 drop policy if exists "own_accounts" on public.accounts;
@@ -381,6 +399,7 @@ drop policy if exists "own_net_worth_history" on public.net_worth_history;
 drop policy if exists "own_user_profile" on public.user_profile;
 drop policy if exists "own_split_expenses" on public.split_expenses;
 drop policy if exists "own_split_members" on public.split_members;
+drop policy if exists "own_split_friends" on public.split_friends;
 drop policy if exists "own_payment_methods" on public.payment_methods;
 
 create policy "own_accounts" on public.accounts for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
@@ -394,6 +413,7 @@ create policy "own_net_worth_history" on public.net_worth_history for all using 
 create policy "own_user_profile" on public.user_profile for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
 create policy "own_split_expenses" on public.split_expenses for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
 create policy "own_split_members" on public.split_members for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+create policy "own_split_friends" on public.split_friends for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
 create policy "own_payment_methods" on public.payment_methods for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
 
 -- ============================================================

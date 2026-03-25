@@ -550,6 +550,7 @@ When modifying:
 5. Add `user_id`, `sync_status`, `last_synced_at`, `deleted_at` columns for sync support.
 6. Add the corresponding column mappings in `src/services/syncTransform.ts`.
 7. Add the table to `SYNCABLE_TABLES` in `src/utils/constants.ts`.
+8. If creating individual migration files (e.g., in `supabase/migrations/`), they MUST include an `-- UP` section for applying changes and a `-- DOWN` section for reverting them.
 
 ---
 

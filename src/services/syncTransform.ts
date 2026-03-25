@@ -72,11 +72,16 @@ const tableLocalToRemote: Partial<Record<SyncableTable, Record<string, string>>>
   },
   split_members: {
     splitExpenseId: 'split_expense_id',
+    friendId: 'friend_id',
     shareAmount: 'share_amount',
     sharePercent: 'share_percent',
   },
+  split_friends: {},
   payment_methods: {
     isCustom: 'is_custom',
+  },
+  notes: {
+    isPinned: 'is_pinned',
   },
 };
 
@@ -96,6 +101,7 @@ const toBooleanIfNeeded = (key: string, value: unknown) => {
       'isCustom',
       'isRecurring',
       'isCompleted',
+      'isPinned',
       'notificationsEnabled',
       'biometricEnabled',
     ].includes(key)

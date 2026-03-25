@@ -1,9 +1,13 @@
 import { Ionicons } from '@expo/vector-icons';
+import * as Haptics from 'expo-haptics';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter, type Href } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
+  Dimensions,
+  NativeScrollEvent,
+  NativeSyntheticEvent,
   RefreshControl,
   ScrollView,
   StyleSheet,
@@ -14,12 +18,15 @@ import {
 import Animated, {
   Easing,
   FadeInDown,
+  FadeInRight,
+  FadeOutUp,
   useAnimatedProps,
   useSharedValue,
   withTiming,
 } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Svg, { Circle } from 'react-native-svg';
+
 import { Card, EmptyState, ProgressBar, SectionHeader } from '../../components/common';
 import TransactionItem from '../../components/TransactionItem';
 import { useTheme, type ThemeColors } from '../../hooks/useTheme';
@@ -29,6 +36,26 @@ import { TransactionService } from '../../services/transactionService';
 import { useAppStore } from '../../store/appStore';
 import { RADIUS, SPACING, TYPOGRAPHY, formatCompact, formatCurrency } from '../../utils/constants';
 import type { Budget } from '../../utils/types';
+
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
+
+const GREETINGS = [
+  'Namaste 🇮🇳',
+  'Hello 🇺🇸',
+  'Howdy 🤠',
+  'Hola 🇪🇸',
+  'Bonjour 🇫🇷',
+  'Ciao 🇮🇹',
+  'Vanakkam 🙏',
+  'Namaskaram 🙏',
+  'Konnichiwa 🇯🇵',
+  'Annyeong 🇰🇷',
+  'Ni Hao 🇨🇳',
+  'Welcome Back',
+  'Good to see you',
+  'Let’s get started',
+  'Ready to go?',
+];
 
 // ─── AnimatedCircle ────────────────────────────────────────────────────────────
 const AnimatedCircle = Animated.createAnimatedComponent(Circle);
@@ -54,7 +81,7 @@ const DonutSliceAnimated: React.FC<{
 
   useEffect(() => {
     progress.value = withTiming(1, {
-      duration: 900,
+      duration: 1200,
       easing: Easing.out(Easing.cubic),
     });
   }, [progress]);
@@ -85,21 +112,23 @@ const DonutChart: React.FC<{
   centerLabel?: string;
   centerSublabel?: string;
   colors: { textPrimary: string; textMuted: string; bgElevated: string };
-}> = ({ slices, size = 200, strokeWidth = 20, centerLabel, centerSublabel, colors }) => {
+  isBalanceHidden: boolean;
+}> = ({
+  slices,
+  size = 200,
+  strokeWidth = 22,
+  centerLabel,
+  centerSublabel,
+  colors,
+  isBalanceHidden,
+}) => {
   const radius = (size - strokeWidth) / 2;
   const circumference = 2 * Math.PI * radius;
   const total = slices.reduce((sum, s) => sum + s.value, 0);
   let cumulativeOffset = 0;
 
   return (
-    <View
-      style={{
-        width: size,
-        height: size,
-        alignItems: 'center',
-        justifyContent: 'center',
-      }}
-    >
+    <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
       <Svg width={size} height={size} style={{ transform: [{ rotate: '-90deg' }] }}>
         <Circle
           cx={size / 2}
@@ -132,24 +161,18 @@ const DonutChart: React.FC<{
       <View style={StyleSheet.absoluteFill as object}>
         <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
           {centerLabel && (
-            <Text
-              style={{
-                fontSize: 22,
-                fontWeight: '800',
-                color: colors.textPrimary,
-              }}
-            >
-              {centerLabel}
+            <Text style={{ fontSize: 24, fontWeight: '800', color: colors.textPrimary }}>
+              {isBalanceHidden ? '••••' : centerLabel}
             </Text>
           )}
           {centerSublabel && (
             <Text
               style={{
                 fontSize: 10,
-                fontWeight: '600',
+                fontWeight: '700',
                 color: colors.textMuted,
                 textTransform: 'uppercase',
-                marginTop: 2,
+                marginTop: 4,
               }}
             >
               {centerSublabel}
@@ -165,19 +188,21 @@ const DonutChart: React.FC<{
 const BudgetAlertCard: React.FC<{
   budget: Budget;
   colors: ReturnType<typeof useTheme>['colors'];
-}> = ({ budget, colors }) => {
+  isBalanceHidden: boolean;
+}> = ({ budget, colors, isBalanceHidden }) => {
   const progress = budget.limitAmount > 0 ? budget.spent / budget.limitAmount : 0;
   const remaining = Math.max(0, budget.limitAmount - budget.spent);
   const pct = Math.round(progress * 100);
   const isOver = pct >= 100;
 
   return (
-    <View
+    <TouchableOpacity
+      activeOpacity={0.8}
       style={{
-        backgroundColor: (isOver ? colors.expense : colors.warning) + '10',
+        backgroundColor: (isOver ? colors.expense : colors.warning) + '15',
         borderLeftWidth: 4,
         borderLeftColor: isOver ? colors.expense : colors.warning,
-        borderRadius: RADIUS.sm,
+        borderRadius: RADIUS.md,
         padding: SPACING.md,
         flexDirection: 'row',
         alignItems: 'center',
@@ -185,54 +210,48 @@ const BudgetAlertCard: React.FC<{
         marginBottom: SPACING.sm,
       }}
     >
-      <Ionicons name="warning" size={22} color={isOver ? colors.expense : colors.warning} />
+      <View
+        style={{
+          width: 36,
+          height: 36,
+          borderRadius: 18,
+          backgroundColor: (isOver ? colors.expense : colors.warning) + '25',
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}
+      >
+        <Ionicons name="warning" size={20} color={isOver ? colors.expense : colors.warning} />
+      </View>
       <View style={{ flex: 1 }}>
         <Text
           style={{
             ...TYPOGRAPHY.bodyMedium,
             color: isOver ? colors.expense : colors.warning,
-            fontWeight: '700',
+            fontWeight: '800',
           }}
         >
-          {isOver ? 'Over Budget!' : 'Budget Alert'}
+          {isOver ? 'Over Budget!' : 'Budget Warning'}
         </Text>
-        <Text
-          style={{
-            ...TYPOGRAPHY.caption,
-            color: colors.textSecondary,
-            marginTop: 2,
-          }}
-        >
-          {budget.categoryName ?? 'Category'} — {pct}% used.
-          {!isOver && ` ${formatCurrency(remaining)} left.`}
+        <Text style={{ ...TYPOGRAPHY.caption, color: colors.textSecondary, marginTop: 2 }}>
+          {budget.categoryName ?? 'Category'} — {pct}% used
         </Text>
       </View>
-      <View
-        style={{
-          width: 64,
-          height: 6,
-          backgroundColor: (isOver ? colors.expense : colors.warning) + '30',
-          borderRadius: RADIUS.full,
-          overflow: 'hidden',
-        }}
-      >
-        <View
-          style={{
-            height: '100%',
-            width: `${Math.min(pct, 100)}%`,
-            backgroundColor: isOver ? colors.expense : colors.warning,
-            borderRadius: RADIUS.full,
-          }}
-        />
+      <View style={{ alignItems: 'flex-end' }}>
+        <Text style={{ ...TYPOGRAPHY.bodyMedium, color: colors.textPrimary, fontWeight: '700' }}>
+          {isBalanceHidden ? '••••' : formatCurrency(remaining)}
+        </Text>
+        <Text style={{ ...TYPOGRAPHY.caption, color: colors.textMuted }}>
+          {isOver ? 'excess' : 'left'}
+        </Text>
       </View>
-    </View>
+    </TouchableOpacity>
   );
 };
 
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 export default function DashboardScreen() {
   const router = useRouter();
-  const { colors } = useTheme();
+  const { colors, isDark } = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const dashboardStats = useAppStore((s) => s.dashboardStats);
   const setDashboardStats = useAppStore((s) => s.setDashboardStats);
@@ -244,11 +263,25 @@ export default function DashboardScreen() {
   const dataRevision = useAppStore((s) => s.dataRevision);
   const userProfile = useAppStore((s) => s.userProfile);
   const syncInProgress = useAppStore((s) => s.syncInProgress);
+
   const [refreshing, setRefreshing] = useState(false);
   const [spendingSlices, setSpendingSlices] = useState<DonutSlice[]>([]);
   const [totalSpent, setTotalSpent] = useState(0);
+  const [isBalanceHidden, setIsBalanceHidden] = useState(false);
+
+  const [greetingIndex, setGreetingIndex] = useState(0);
+  const [canScrollLeft, setCanScrollLeft] = useState(false);
+  const [canScrollRight, setCanScrollRight] = useState(true);
 
   const CHART_COLORS = colors.chart;
+
+  // Animate the greetings every 3 seconds seamlessly
+  useEffect(() => {
+    const t = setInterval(() => {
+      setGreetingIndex((prev) => (prev + 1) % GREETINGS.length);
+    }, 3000);
+    return () => clearInterval(t);
+  }, []);
 
   const loadData = useCallback(async () => {
     const now = new Date();
@@ -281,7 +314,6 @@ export default function DashboardScreen() {
       netWorth: nw.netWorth,
     });
 
-    // Build spending distribution using SQL-backed category breakdown
     const dateFrom = `${year}-${month}-01`;
     const lastDay = new Date(year, Number(month), 0).getDate();
     const dateTo = `${year}-${month}-${String(lastDay).padStart(2, '0')}`;
@@ -304,21 +336,65 @@ export default function DashboardScreen() {
   }, [dataRevision, loadData]);
 
   const onRefresh = async () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setRefreshing(true);
     await triggerBackgroundSync('pull-to-refresh');
     await loadData();
     setRefreshing(false);
   };
 
-  // All over-70% budget alerts
-  const alertBudgets = budgets.filter((b) => b.limitAmount > 0 && b.spent / b.limitAmount >= 0.7);
+  const toggleHideBalance = () => {
+    Haptics.selectionAsync();
+    setIsBalanceHidden(!isBalanceHidden);
+  };
 
+  const handleQuickScroll = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+    const { contentOffset, layoutMeasurement, contentSize } = event.nativeEvent;
+    const isEndReached = contentOffset.x + layoutMeasurement.width >= contentSize.width - 20;
+    const isStartReached = contentOffset.x <= 10;
+
+    setCanScrollLeft(!isStartReached);
+    setCanScrollRight(!isEndReached);
+  };
+
+  const alertBudgets = budgets.filter((b) => b.limitAmount > 0 && b.spent / b.limitAmount >= 0.7);
   const savingsAmount = dashboardStats.totalIncome - dashboardStats.totalExpenses;
   const savingsProgress =
     dashboardStats.totalIncome > 0
       ? Math.max(0, Math.min(1, savingsAmount / dashboardStats.totalIncome))
       : 0;
   const displayName = userProfile?.name ?? 'there';
+
+  const formatSecured = (val: number, isCompact = false) => {
+    if (isBalanceHidden) return '••••••';
+    return isCompact ? formatCompact(val) : formatCurrency(val);
+  };
+
+  const QUICKS = [
+    {
+      id: 'notes',
+      title: 'Notes',
+      icon: 'document-text' as const,
+      color: '#3B82F6',
+      path: '/notes',
+    },
+    { id: 'splits', title: 'Splits', icon: 'people' as const, color: '#8B5CF6', path: '/splits' },
+    {
+      id: 'sms',
+      title: 'SMS Scan',
+      icon: 'chatbubbles' as const,
+      color: '#10B981',
+      path: '/sms-import',
+    },
+    {
+      id: 'reports',
+      title: 'Reports',
+      icon: 'pie-chart' as const,
+      color: '#F59E0B',
+      path: '/reports',
+    },
+    { id: 'goals', title: 'Goals', icon: 'flag' as const, color: '#F43F5E', path: '/(tabs)/goals' },
+  ];
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -333,65 +409,93 @@ export default function DashboardScreen() {
         }
         contentContainerStyle={styles.scroll}
       >
-        {/* Header */}
-        <Animated.View entering={FadeInDown.duration(400)} style={styles.header}>
-          <View style={styles.headerLeft}>
-            <View style={styles.logoIcon}>
+        {/* Header Section */}
+        <Animated.View entering={FadeInDown.duration(400)} style={[styles.header, { flex: 1 }]}>
+          <View style={[styles.headerLeft, { flex: 1 }]}>
+            <View style={styles.avatarWrap}>
               <Ionicons name="wallet" size={20} color={colors.primary} />
             </View>
-            <View>
-              <Text style={styles.appName}>Hisab Kitab</Text>
-              <Text style={styles.welcomeText}>Welcome, {displayName}</Text>
+            <View style={{ flex: 1, paddingRight: 10 }}>
+              {/* Animated Greeting Container */}
+              <View style={{ height: 20 }}>
+                <Animated.Text
+                  key={GREETINGS[greetingIndex]}
+                  entering={FadeInDown.duration(800)}
+                  exiting={FadeOutUp.duration(800)}
+                  style={[styles.welcomeText, { position: 'absolute' }]}
+                >
+                  {GREETINGS[greetingIndex]}
+                </Animated.Text>
+              </View>
+              <Text style={styles.appName} numberOfLines={1}>
+                {displayName}
+              </Text>
             </View>
           </View>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-            {syncInProgress && <ActivityIndicator size="small" color={colors.primary} />}
-            <TouchableOpacity
-              onPress={() => router.push('/notifications')}
-              style={styles.bellButton}
-            >
-              <Ionicons name="notifications-outline" size={22} color={colors.textSecondary} />
+          <View style={[styles.headerActions, { flexShrink: 0 }]}>
+            {syncInProgress && (
+              <ActivityIndicator size="small" color={colors.primary} style={{ marginRight: 8 }} />
+            )}
+            <TouchableOpacity onPress={toggleHideBalance} style={styles.iconBtn}>
+              <Ionicons
+                name={isBalanceHidden ? 'eye-off' : 'eye'}
+                size={22}
+                color={colors.textSecondary}
+              />
+            </TouchableOpacity>
+            <TouchableOpacity onPress={() => router.push('/notifications')} style={styles.iconBtn}>
+              <Ionicons name="notifications" size={22} color={colors.textSecondary} />
             </TouchableOpacity>
           </View>
         </Animated.View>
 
-        {/* Hero Card — Net Balance + Income + Expense */}
-        <Animated.View entering={FadeInDown.duration(500).delay(100)} style={styles.heroWrapper}>
+        {/* Hero Card */}
+        <Animated.View entering={FadeInDown.duration(500).delay(100)}>
           <TouchableOpacity activeOpacity={0.9} onPress={() => router.push('/accounts' as Href)}>
             <LinearGradient
-              colors={['#8B5CF6', '#6D28D9']}
+              colors={isDark ? ['#6D28D9', '#4C1D95'] : ['#8B5CF6', '#6D28D9']}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
               style={styles.heroCard}
             >
-              {/* Decorative blobs */}
-              <View style={styles.heroBlob1} />
-              <View style={styles.heroBlob2} />
+              {/* Complex Glassy Blobs */}
+              <View
+                style={[
+                  styles.heroBlob,
+                  { right: -40, top: -40, width: 160, height: 160, borderRadius: 80 },
+                ]}
+              />
+              <View
+                style={[
+                  styles.heroBlob,
+                  { left: -30, bottom: -40, width: 120, height: 120, borderRadius: 60 },
+                ]}
+              />
 
-              <Text style={styles.heroLabel}>Net Balance</Text>
-              <Text style={styles.heroAmount}>{formatCurrency(dashboardStats.totalBalance)}</Text>
+              <Text style={styles.heroLabel}>Total Net Balance</Text>
+              <Text style={styles.heroAmount}>{formatSecured(dashboardStats.totalBalance)}</Text>
 
-              <View style={styles.heroStatsRow}>
+              <View style={styles.heroStatsContainer}>
                 <View style={styles.heroStatItem}>
-                  <View style={styles.heroStatIcon}>
-                    <Ionicons name="arrow-down" size={12} color="#10B981" />
+                  <View style={[styles.heroStatIcon, { backgroundColor: 'rgba(16,185,129,0.25)' }]}>
+                    <Ionicons name="arrow-down" size={14} color="#34D399" />
                   </View>
                   <View>
                     <Text style={styles.heroStatLabel}>Income</Text>
                     <Text style={styles.heroStatValue}>
-                      {formatCompact(dashboardStats.totalIncome)}
+                      {formatSecured(dashboardStats.totalIncome, true)}
                     </Text>
                   </View>
                 </View>
                 <View style={styles.heroStatDivider} />
                 <View style={styles.heroStatItem}>
-                  <View style={[styles.heroStatIcon, { backgroundColor: 'rgba(244,63,94,0.2)' }]}>
-                    <Ionicons name="arrow-up" size={12} color="#F43F5E" />
+                  <View style={[styles.heroStatIcon, { backgroundColor: 'rgba(244,63,94,0.25)' }]}>
+                    <Ionicons name="arrow-up" size={14} color="#FB7185" />
                   </View>
                   <View>
                     <Text style={styles.heroStatLabel}>Expense</Text>
                     <Text style={styles.heroStatValue}>
-                      {formatCompact(dashboardStats.totalExpenses)}
+                      {formatSecured(dashboardStats.totalExpenses, true)}
                     </Text>
                   </View>
                 </View>
@@ -400,26 +504,95 @@ export default function DashboardScreen() {
           </TouchableOpacity>
         </Animated.View>
 
-        {/* Savings Progress Card */}
-        <Animated.View entering={FadeInDown.duration(500).delay(200)}>
-          <TouchableOpacity
-            style={styles.savingsCard}
-            activeOpacity={0.8}
-            onPress={() => router.push('/reports')}
-          >
-            <View style={styles.savingsHeader}>
-              <Text style={styles.savingsLabel}>MONTHLY SAVINGS</Text>
-              <Text style={styles.savingsRate}>{dashboardStats.savingsRate.toFixed(1)}%</Text>
+        {/* Quick Actions (Horizontal Scroll) */}
+        <Animated.View
+          entering={FadeInRight.duration(500).delay(200)}
+          style={{ marginVertical: SPACING.md }}
+        >
+          <Text style={[styles.sectionTitle, { marginLeft: SPACING.xs }]}>Quick Actions</Text>
+          <View>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              onScroll={handleQuickScroll}
+              scrollEventThrottle={16}
+              contentContainerStyle={{
+                paddingHorizontal: SPACING.xs,
+                paddingBottom: SPACING.md,
+                gap: SPACING.md,
+              }}
+            >
+              {QUICKS.map((q, idx) => (
+                <TouchableOpacity
+                  key={q.id}
+                  style={[styles.quickTile, { backgroundColor: colors.bgCard }]}
+                  onPress={() => {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    router.push(q.path as Href);
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <View style={[styles.quickTileIconWrap, { backgroundColor: q.color + '15' }]}>
+                    <Ionicons name={q.icon} size={28} color={q.color} />
+                  </View>
+                  <Text style={styles.quickTileText}>{q.title}</Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+
+            {/* Scroll Indicators */}
+            {canScrollLeft && (
+              <View style={[styles.scrollIndicator, { left: 0 }]}>
+                <Ionicons name="chevron-back" size={16} color={colors.textSecondary} />
+              </View>
+            )}
+            {canScrollRight && (
+              <View style={[styles.scrollIndicator, { right: 0 }]}>
+                <Ionicons name="chevron-forward" size={16} color={colors.textSecondary} />
+              </View>
+            )}
+          </View>
+        </Animated.View>
+
+        {/* Savings Card */}
+        <Animated.View entering={FadeInDown.duration(500).delay(250)}>
+          <Card style={styles.savingsCard} onPress={() => router.push('/reports')}>
+            <View
+              style={{
+                flexDirection: 'row',
+                justifyContent: 'space-between',
+                alignItems: 'flex-end',
+                marginBottom: 16,
+              }}
+            >
+              <View>
+                <Text style={styles.savingsLabel}>MONTHLY SAVINGS</Text>
+                <Text style={styles.savingsAmount}>{formatSecured(savingsAmount)}</Text>
+              </View>
+              <View
+                style={[
+                  styles.savingsBadge,
+                  { backgroundColor: (savingsAmount >= 0 ? colors.income : colors.expense) + '15' },
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.savingsRate,
+                    { color: savingsAmount >= 0 ? colors.income : colors.expense },
+                  ]}
+                >
+                  {dashboardStats.savingsRate.toFixed(1)}%
+                </Text>
+              </View>
             </View>
-            <Text style={styles.savingsAmount}>{formatCurrency(savingsAmount)}</Text>
             <ProgressBar
               progress={savingsProgress}
               color={savingsAmount >= 0 ? colors.income : colors.expense}
             />
             <Text style={styles.savingsSub}>
-              of {formatCurrency(dashboardStats.totalIncome)} income
+              from {formatSecured(dashboardStats.totalIncome)} total income
             </Text>
-          </TouchableOpacity>
+          </Card>
         </Animated.View>
 
         {/* Budget Alerts */}
@@ -428,65 +601,23 @@ export default function DashboardScreen() {
             <TouchableOpacity onPress={() => router.push('/(tabs)/budgets')} activeOpacity={0.7}>
               <Text style={styles.sectionTitle}>Budget Alerts</Text>
               {alertBudgets.map((b) => (
-                <BudgetAlertCard key={b.id} budget={b} colors={colors} />
+                <BudgetAlertCard
+                  key={b.id}
+                  budget={b}
+                  colors={colors}
+                  isBalanceHidden={isBalanceHidden}
+                />
               ))}
             </TouchableOpacity>
           </Animated.View>
         )}
-
-        {/* Quick Actions */}
-        <Animated.View entering={FadeInDown.duration(500).delay(320)}>
-          <Text style={styles.sectionTitle}>Quick Actions</Text>
-          <View style={styles.quickActionsRow}>
-            <TouchableOpacity
-              style={styles.quickActionCard}
-              onPress={() => router.push('/splits' as Href)}
-              activeOpacity={0.7}
-            >
-              <View style={[styles.quickActionIcon, { backgroundColor: colors.primary + '18' }]}>
-                <Ionicons name="people-outline" size={22} color={colors.primary} />
-              </View>
-              <Text style={styles.quickActionLabel}>Split{'\n'}Expense</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.quickActionCard}
-              onPress={() => router.push('/sms-import')}
-              activeOpacity={0.7}
-            >
-              <View style={[styles.quickActionIcon, { backgroundColor: colors.income + '18' }]}>
-                <Ionicons name="chatbubble-ellipses-outline" size={22} color={colors.income} />
-              </View>
-              <Text style={styles.quickActionLabel}>SMS{'\n'}Import</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.quickActionCard}
-              onPress={() => router.push('/reports')}
-              activeOpacity={0.7}
-            >
-              <View style={[styles.quickActionIcon, { backgroundColor: colors.warning + '18' }]}>
-                <Ionicons name="bar-chart-outline" size={22} color={colors.warning} />
-              </View>
-              <Text style={styles.quickActionLabel}>Reports</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.quickActionCard}
-              onPress={() => router.push('/(tabs)/goals')}
-              activeOpacity={0.7}
-            >
-              <View style={[styles.quickActionIcon, { backgroundColor: colors.expense + '18' }]}>
-                <Ionicons name="flag-outline" size={22} color={colors.expense} />
-              </View>
-              <Text style={styles.quickActionLabel}>Goals</Text>
-            </TouchableOpacity>
-          </View>
-        </Animated.View>
 
         {/* Spending Distribution */}
         <Animated.View entering={FadeInDown.duration(500).delay(350)}>
           <View style={styles.sectionRow}>
             <Text style={styles.sectionTitle}>Spending Distribution</Text>
             <TouchableOpacity onPress={() => router.push('/reports')}>
-              <Text style={styles.sectionAction}>Details</Text>
+              <Text style={styles.sectionAction}>View Full Report</Text>
             </TouchableOpacity>
           </View>
           <Card style={styles.donutCard}>
@@ -499,11 +630,23 @@ export default function DashboardScreen() {
               centerLabel={formatCompact(totalSpent)}
               centerSublabel="Total Spent"
               colors={colors}
+              isBalanceHidden={isBalanceHidden}
             />
             <View style={styles.legendGrid}>
               {spendingSlices.map((slice, idx) => (
                 <View key={idx} style={styles.legendItem}>
-                  <View style={[styles.legendDot, { backgroundColor: slice.color }]} />
+                  <View
+                    style={[
+                      styles.legendDot,
+                      {
+                        backgroundColor: slice.color,
+                        shadowColor: slice.color,
+                        shadowOffset: { width: 0, height: 2 },
+                        shadowOpacity: 0.5,
+                        shadowRadius: 3,
+                      },
+                    ]}
+                  />
                   <Text style={styles.legendText}>{slice.label}</Text>
                 </View>
               ))}
@@ -520,31 +663,28 @@ export default function DashboardScreen() {
           />
           {recentTransactions.length === 0 ? (
             <EmptyState
-              icon="receipt-outline"
+              icon="receipt"
               title="No transactions yet"
               subtitle="Tap + to add your first transaction"
             />
           ) : (
             <View style={styles.txList}>
               {recentTransactions.slice(0, 5).map((tx, idx) => (
-                <Animated.View
-                  key={tx.id}
-                  entering={FadeInDown.duration(400)?.delay(420 + idx * 60)}
-                >
+                <View key={tx.id}>
                   <TransactionItem
-                    item={tx}
-                    onPress={() => router?.push(`/transactions/${tx?.id}`)}
+                    item={{ ...tx, amount: isBalanceHidden ? 0 : tx.amount }}
+                    onPress={() => router.push(`/transactions/${tx.id}`)}
                   />
-                  {idx < Math?.min(recentTransactions?.length, 5) - 1 && (
+                  {idx < Math.min(recentTransactions.length, 5) - 1 && (
                     <View style={styles.divider} />
                   )}
-                </Animated.View>
+                </View>
               ))}
             </View>
           )}
         </Animated.View>
 
-        <View style={{ height: 100 }} />
+        <View style={{ height: 120 }} />
       </ScrollView>
     </SafeAreaView>
   );
@@ -554,155 +694,129 @@ export default function DashboardScreen() {
 const createStyles = (colors: ThemeColors) =>
   StyleSheet.create({
     container: { flex: 1, backgroundColor: colors.bg },
-    scroll: { paddingHorizontal: SPACING.md, paddingTop: SPACING.sm },
+    scroll: { paddingHorizontal: SPACING.lg, paddingTop: SPACING.md },
 
     // Header
     header: {
       flexDirection: 'row',
       justifyContent: 'space-between',
       alignItems: 'center',
-      marginBottom: SPACING.lg,
+      marginBottom: SPACING.xl,
     },
-    headerLeft: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-    logoIcon: {
-      width: 40,
-      height: 40,
-      borderRadius: 12,
+    headerLeft: { flexDirection: 'row', alignItems: 'center', gap: 14 },
+    avatarWrap: {
+      width: 44,
+      height: 44,
+      borderRadius: 22,
       backgroundColor: colors.primary + '15',
       alignItems: 'center',
       justifyContent: 'center',
     },
-    appName: { ...TYPOGRAPHY.h3, color: colors.textPrimary, fontWeight: '800' },
     welcomeText: { ...TYPOGRAPHY.caption, color: colors.textMuted },
-    bellButton: {
-      width: 40,
-      height: 40,
-      borderRadius: 20,
+    appName: { ...TYPOGRAPHY.h3, color: colors.textPrimary, fontWeight: '800' },
+    headerActions: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+    iconBtn: {
+      padding: 8,
+      backgroundColor: colors.bgElevated,
+      borderRadius: RADIUS.full,
       alignItems: 'center',
       justifyContent: 'center',
     },
 
     // Hero
-    heroWrapper: {
-      marginBottom: SPACING.md,
-      borderRadius: RADIUS.xl,
-      overflow: 'hidden',
-      shadowColor: 'rgba(139,92,246,0.15)',
-      shadowOffset: { width: 0, height: 8 },
-      shadowOpacity: 1,
-      shadowRadius: 24,
-      elevation: 8,
-    },
     heroCard: {
-      padding: SPACING.lg,
+      padding: SPACING.xl,
       borderRadius: RADIUS.xl,
       overflow: 'hidden',
+      elevation: 12,
+      shadowColor: colors.primary,
+      shadowOffset: { width: 0, height: 8 },
+      shadowOpacity: 0.25,
+      shadowRadius: 16,
     },
-    heroBlob1: {
-      position: 'absolute',
-      right: -30,
-      top: -30,
-      width: 140,
-      height: 140,
-      borderRadius: 70,
-      backgroundColor: 'rgba(255,255,255,0.08)',
-    },
-    heroBlob2: {
-      position: 'absolute',
-      left: -20,
-      bottom: -20,
-      width: 100,
-      height: 100,
-      borderRadius: 50,
-      backgroundColor: 'rgba(255,255,255,0.05)',
-    },
-    heroLabel: {
-      ...TYPOGRAPHY.bodyMedium,
-      color: 'rgba(255,255,255,0.75)',
-      fontWeight: '500',
-    },
+    heroBlob: { position: 'absolute', backgroundColor: 'rgba(255,255,255,0.07)' },
+    heroLabel: { ...TYPOGRAPHY.label, color: 'rgba(255,255,255,0.7)', letterSpacing: 1 },
     heroAmount: {
-      fontSize: 38,
-      fontWeight: '800',
+      fontSize: 42,
+      fontWeight: '900',
       color: '#fff',
       letterSpacing: -1.5,
-      marginTop: 4,
-      marginBottom: SPACING.lg,
+      marginVertical: SPACING.md,
     },
-    heroStatsRow: {
+    heroStatsContainer: {
       flexDirection: 'row',
       alignItems: 'center',
-      backgroundColor: 'rgba(0,0,0,0.15)',
-      borderRadius: RADIUS.md,
+      backgroundColor: 'rgba(0,0,0,0.2)',
+      borderRadius: RADIUS.lg,
       padding: SPACING.md,
+      backdropFilter: 'blur(10px)',
     },
-    heroStatItem: {
-      flex: 1,
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 10,
-    },
+    heroStatItem: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 12 },
     heroStatIcon: {
-      width: 28,
-      height: 28,
-      borderRadius: 14,
-      backgroundColor: 'rgba(16,185,129,0.2)',
+      width: 32,
+      height: 32,
+      borderRadius: 16,
       alignItems: 'center',
       justifyContent: 'center',
     },
     heroStatLabel: {
       fontSize: 11,
       fontWeight: '600',
-      color: 'rgba(255,255,255,0.65)',
-    },
-    heroStatValue: {
-      fontSize: 16,
-      fontWeight: '800',
-      color: '#fff',
-      marginTop: 1,
-    },
-    heroStatDivider: {
-      width: 1,
-      height: 36,
-      backgroundColor: 'rgba(255,255,255,0.2)',
-      marginHorizontal: SPACING.sm,
-    },
-
-    // Savings
-    savingsCard: {
-      backgroundColor: colors.bgCard,
-      borderRadius: RADIUS.lg,
-      padding: SPACING.md,
-      borderWidth: 1,
-      borderColor: colors.border,
-      marginBottom: SPACING.md,
-    },
-    savingsHeader: {
-      flexDirection: 'row',
-      justifyContent: 'space-between',
-      alignItems: 'center',
-      marginBottom: 4,
-    },
-    savingsLabel: {
-      ...TYPOGRAPHY.label,
-      color: colors.textMuted,
+      color: 'rgba(255,255,255,0.6)',
       textTransform: 'uppercase',
     },
-    savingsRate: {
+    heroStatValue: { fontSize: 16, fontWeight: '800', color: '#fff', marginTop: 2 },
+    heroStatDivider: {
+      width: 1,
+      height: 40,
+      backgroundColor: 'rgba(255,255,255,0.15)',
+      marginHorizontal: SPACING.md,
+    },
+
+    // Quick Actions
+    quickTile: {
+      width: 90,
+      height: 105,
+      borderRadius: RADIUS.xl,
+      padding: SPACING.md,
+      alignItems: 'center',
+      justifyContent: 'center',
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.05,
+      shadowRadius: 6,
+      elevation: 2,
+      borderWidth: 1,
+      borderColor: colors.borderLight,
+    },
+    quickTileIconWrap: {
+      width: 46,
+      height: 46,
+      borderRadius: 23,
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginBottom: 10,
+    },
+    quickTileText: {
       ...TYPOGRAPHY.caption,
-      color: colors.income,
       fontWeight: '700',
-    },
-    savingsAmount: {
-      ...TYPOGRAPHY.h3,
       color: colors.textPrimary,
-      fontWeight: '800',
-      marginBottom: SPACING.sm,
+      textAlign: 'center',
     },
-    savingsSub: {
-      ...TYPOGRAPHY.caption,
-      color: colors.textMuted,
-      marginTop: 6,
+    scrollIndicator: {
+      position: 'absolute',
+      top: 40,
+      width: 20,
+      height: 20,
+      borderRadius: 10,
+      backgroundColor: colors.bgCard,
+      alignItems: 'center',
+      justifyContent: 'center',
+      opacity: 0.8,
+      shadowColor: '#000',
+      shadowOpacity: 0.1,
+      shadowRadius: 4,
+      elevation: 2,
     },
 
     // Sections
@@ -710,8 +824,7 @@ const createStyles = (colors: ThemeColors) =>
       flexDirection: 'row',
       justifyContent: 'space-between',
       alignItems: 'center',
-      marginBottom: SPACING.sm,
-      marginTop: SPACING.sm,
+      marginBottom: SPACING.md,
     },
     sectionTitle: {
       ...TYPOGRAPHY.h3,
@@ -719,78 +832,54 @@ const createStyles = (colors: ThemeColors) =>
       fontWeight: '800',
       marginBottom: SPACING.sm,
     },
-    sectionAction: {
-      ...TYPOGRAPHY.caption,
-      color: colors.primary,
-      fontWeight: '700',
-    },
+    sectionAction: { ...TYPOGRAPHY.bodyMedium, color: colors.primary, fontWeight: '700' },
 
-    // Quick Actions
-    quickActionsRow: {
-      flexDirection: 'row',
-      gap: SPACING.sm,
-      marginBottom: SPACING.lg,
+    // Savings
+    savingsCard: {
+      padding: SPACING.xl,
+      marginBottom: SPACING.xl,
+      shadowColor: '#000',
+      shadowOpacity: 0.05,
+      shadowRadius: 10,
+      elevation: 4,
     },
-    quickActionCard: {
-      flex: 1,
-      backgroundColor: colors.bgCard,
-      borderRadius: RADIUS.lg,
-      paddingVertical: SPACING.md,
-      alignItems: 'center',
-      borderWidth: 1,
-      borderColor: colors.border,
-      gap: 8,
-    },
-    quickActionIcon: {
-      width: 42,
-      height: 42,
-      borderRadius: 12,
-      alignItems: 'center',
-      justifyContent: 'center',
-    },
-    quickActionLabel: {
-      fontSize: 11,
-      fontWeight: '700',
-      color: colors.textSecondary,
-      textAlign: 'center',
-    },
+    savingsLabel: { ...TYPOGRAPHY.label, color: colors.textMuted, marginBottom: 4 },
+    savingsAmount: { ...TYPOGRAPHY.h2, color: colors.textPrimary, fontWeight: '800' },
+    savingsBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: RADIUS.full },
+    savingsRate: { fontWeight: '800', fontSize: 14 },
+    savingsSub: { ...TYPOGRAPHY.caption, color: colors.textMuted, marginTop: 10 },
 
     // Donut chart card
     donutCard: {
       alignItems: 'center',
-      paddingVertical: SPACING.lg,
+      paddingVertical: SPACING.xl,
+      paddingHorizontal: SPACING.lg,
+      marginBottom: SPACING.xl,
+      shadowOpacity: 0.05,
+      shadowRadius: 10,
+      elevation: 4,
     },
     legendGrid: {
       flexDirection: 'row',
       flexWrap: 'wrap',
-      marginTop: SPACING.md,
-      gap: SPACING.md,
-      width: '100%',
+      marginTop: SPACING.xl,
+      gap: SPACING.lg,
+      justifyContent: 'center',
     },
-    legendItem: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 6,
-      width: '45%',
-    },
-    legendDot: { width: 8, height: 8, borderRadius: 4 },
-    legendText: {
-      ...TYPOGRAPHY.caption,
-      color: colors.textSecondary,
-      fontWeight: '500',
-    },
+    legendItem: { flexDirection: 'row', alignItems: 'center', gap: 8, minWidth: '40%' },
+    legendDot: { width: 10, height: 10, borderRadius: 5 },
+    legendText: { ...TYPOGRAPHY.bodyMedium, color: colors.textSecondary, fontWeight: '600' },
 
     // Recent Transactions
     txList: {
       backgroundColor: colors.bgCard,
-      borderRadius: RADIUS.lg,
+      borderRadius: RADIUS.xl,
       borderWidth: 1,
-      borderColor: colors.border,
+      borderColor: colors.borderLight,
       overflow: 'hidden',
+      shadowOpacity: 0.03,
+      shadowRadius: 10,
+      elevation: 2,
     },
-    divider: {
-      height: 1,
-      backgroundColor: colors.border,
-      marginHorizontal: SPACING.md,
-    },
+    divider: { height: 1, backgroundColor: colors.borderLight, marginHorizontal: SPACING.lg },
   });

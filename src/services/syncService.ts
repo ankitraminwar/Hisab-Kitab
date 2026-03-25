@@ -279,6 +279,7 @@ class SyncService {
     accounts: 0,
     categories: 0,
     payment_methods: 0,
+    split_friends: 0,
     goals: 0,
     assets: 0,
     liabilities: 0,
@@ -489,7 +490,16 @@ class SyncService {
    * Tier 2-3: depend on tier 1 (splits → transactions)
    */
   private static readonly PULL_TIERS: SyncableTable[][] = [
-    ['user_profile', 'accounts', 'categories', 'payment_methods', 'goals', 'assets', 'liabilities'],
+    [
+      'user_profile',
+      'accounts',
+      'categories',
+      'payment_methods',
+      'split_friends',
+      'goals',
+      'assets',
+      'liabilities',
+    ],
     ['transactions', 'budgets', 'net_worth_history'],
     ['split_expenses'],
     ['split_members'],

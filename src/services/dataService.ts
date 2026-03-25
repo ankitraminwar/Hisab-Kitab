@@ -651,6 +651,9 @@ export const DataService = {
       'assets',
       'liabilities',
       'net_worth_history',
+      'notes',
+      'split_expenses',
+      'split_members',
     ];
 
     const result: Record<string, unknown[]> = {};
@@ -675,6 +678,9 @@ export const DataService = {
       'assets',
       'liabilities',
       'net_worth_history',
+      'notes',
+      'split_expenses',
+      'split_members',
     ];
 
     let imported = 0;

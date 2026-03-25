@@ -147,10 +147,18 @@ export interface SplitExpense extends SyncMetadata {
 export interface SplitMember extends SyncMetadata {
   id: string;
   splitExpenseId: string;
+  friendId?: string;
   name: string;
   shareAmount: number;
   sharePercent?: number;
   status: SplitStatus;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface SplitFriend extends SyncMetadata {
+  id: string;
+  name: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -193,6 +201,16 @@ export interface UserProfile extends SyncMetadata {
   notificationsEnabled: boolean;
   biometricEnabled: boolean;
   avatar?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface Note extends SyncMetadata {
+  id: string;
+  title: string;
+  content: string;
+  color: string;
+  isPinned: boolean;
   createdAt: string;
   updatedAt: string;
 }

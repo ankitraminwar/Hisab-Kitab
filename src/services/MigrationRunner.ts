@@ -19,6 +19,7 @@ const DOMAIN_TABLES = [
   'net_worth_history',
   'split_expenses',
   'split_members',
+  'split_friends',
   'payment_methods',
 ] as const;
 
@@ -78,6 +79,29 @@ const migrations: Migration[] = [
       const columns = await getTableColumns(db, 'user_profile');
       if (!columns.has('avatar')) {
         await db.execAsync(`ALTER TABLE user_profile ADD COLUMN avatar TEXT;`);
+      }
+    },
+  },
+  {
+    version: 3,
+    name: 'add_split_friends_and_split_member_friend_id',
+    run: async (db) => {
+      await db.execAsync(`
+        CREATE TABLE IF NOT EXISTS split_friends (
+          id TEXT PRIMARY KEY,
+          name TEXT NOT NULL,
+          createdAt TEXT NOT NULL,
+          updatedAt TEXT NOT NULL,
+          userId TEXT,
+          syncStatus TEXT NOT NULL DEFAULT 'pending',
+          lastSyncedAt TEXT,
+          deletedAt TEXT
+        );
+      `);
+
+      const splitMemberColumns = await getTableColumns(db, 'split_members');
+      if (!splitMemberColumns.has('friendId')) {
+        await db.execAsync(`ALTER TABLE split_members ADD COLUMN friendId TEXT;`);
       }
     },
   },

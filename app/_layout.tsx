@@ -251,6 +251,8 @@ export default function RootLayout() {
       router.replace('/(tabs)/transactions');
     } else if (path === '/budgets') {
       router.replace('/(tabs)/budgets');
+    } else if (path === '/reports') {
+      router.replace('/(tabs)/reports');
     }
   }, [deepLinkUrl, initializing, router]);
 
@@ -268,8 +270,11 @@ export default function RootLayout() {
   if (initializing) {
     return (
       <View style={styles.lockContainer}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: SPACING.xl }}>
+          <Text style={[styles.title, { fontSize: 32 }]}>Hisab Kitab</Text>
+          <Ionicons name="wallet" size={32} color={colors.primary} style={{ marginLeft: 12 }} />
+        </View>
         <ActivityIndicator size="large" color={colors.primary} />
-        <Text style={styles.loadingText}>Loading Hisab Kitab...</Text>
         {slowLoad && (
           <Text style={styles.loadingSubtext}>Taking longer than usual. Please wait...</Text>
         )}
@@ -322,6 +327,13 @@ export default function RootLayout() {
               }}
             />
             <Stack.Screen name="accounts/index" options={{ animation: 'slide_from_right' }} />
+            <Stack.Screen
+              name="reports/preview"
+              options={{
+                presentation: 'modal',
+                animation: 'slide_from_bottom',
+              }}
+            />
             <Stack.Screen name="settings/index" options={{ animation: 'slide_from_right' }} />
             <Stack.Screen
               name="sms-import"

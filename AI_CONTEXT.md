@@ -93,7 +93,8 @@ src/
       TransactionsScreen.tsx
     split/
       SplitExpenseScreen.tsx      # Handles both create (isNewSplit) and view modes
-      SplitListScreen.tsx
+      SplitListScreen.tsx         # Displays "By Split" and "By Friend" tabs
+      FriendDetailScreen.tsx      # Timeline of shared transactions & Settle Up action
     budgets/BudgetsScreen.tsx
     goals/GoalsScreen.tsx
     reports/
@@ -144,7 +145,7 @@ stitch_designs/                  # Reference UI mockups (PNG) — light + dark p
 
 ## SQLite Tables
 
-`accounts`, `categories`, `transactions`, `budgets`, `goals`, `assets`, `liabilities`, `net_worth_history`, `user_profile`, `recurring_templates`, `split_expenses`, `split_members`, `payment_methods`, `sync_queue`, `sync_state`
+`accounts`, `categories`, `transactions`, `budgets`, `goals`, `assets`, `liabilities`, `net_worth_history`, `user_profile`, `recurring_templates`, `split_expenses`, `split_friends`, `split_members`, `payment_methods`, `sync_queue`, `sync_state`
 
 ## Sync System
 
@@ -193,6 +194,7 @@ stitch_designs/                  # Reference UI mockups (PNG) — light + dark p
 | `/faq`                      | FaqScreen                      | Screen     |
 | `/split-expense/new`        | SplitExpenseScreen (create)    | Modal      |
 | `/split-expense/[id]`       | SplitExpenseScreen (detail)    | Modal      |
+| `/split-expense/friend-...` | FriendDetailScreen             | Screen     |
 | `/splits`                   | SplitListScreen                | Screen     |
 | `/accounts`                 | AccountsScreen                 | Screen     |
 | `/settings`                 | SettingsScreen                 | Screen     |
@@ -203,6 +205,7 @@ stitch_designs/                  # Reference UI mockups (PNG) — light + dark p
 | `/auth/reset-password`      | AuthScreen (reset)             | Screen     |
 | `/notifications`            | NotificationsScreen            | Screen     |
 | `/profile/edit`             | EditProfileScreen              | Screen     |
+| `/reports/preview`          | MonthlyReportPreviewScreen     | Modal      |
 
 ## Entry Points to Key Screens
 

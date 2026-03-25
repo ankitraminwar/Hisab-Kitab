@@ -8,14 +8,14 @@ Built with Expo 54, React Native 0.81.5, TypeScript, SQLite, and Supabase. Zero 
 
 - **Dashboard** — Animated hero card, donut chart for category breakdown, savings ring, budget progress, quick actions, recent transactions
 - **Transactions** — Add/edit income, expense & transfer with categories, accounts, payment methods, tags, notes, recurring support
-- **Split Expenses** — Split bills with friends (equal/exact/percent), track member payment status
+- **Split Expenses** — Google Pay-style sharing. Track balances friend-by-friend, view shared timelines, and settle debts with one tap.
 - **Budgets** — Monthly per-category budgets with progress bars and over-budget alerts
 - **Goals** — Savings goals with target amounts, deadlines, and fund tracking
 - **Reports** — Spending trend charts, category distribution, net worth tracker (assets vs liabilities)
 - **Net Worth** — Asset and liability management with history snapshots
 - **Notifications** — In-app budget-exceeded and goal-completion alerts
 - **SMS Import** — Auto-import bank/UPI transactions from SMS (Android native builds only)
-- **Accounts** — Manage bank, UPI, wallet, credit card, and investment accounts
+- **Accounts** — Manage bank, UPI, wallet, credit card, and investment accounts with a premium auto-scrolling glassmorphic carousel UI.
 - **Cloud Sync** — Bidirectional sync with Supabase (offline-first with sync queue)
 - **Email Reports** — Monthly summary email via Supabase Edge Function + Resend
 - **Dark/Light Theme** — Explicit or system-aware theming

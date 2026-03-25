@@ -13,9 +13,11 @@ import {
   View,
   ViewStyle,
 } from 'react-native';
+import { BlurView } from 'expo-blur';
 import Animated, {
   FadeIn,
   SlideInDown,
+  ZoomIn,
   useAnimatedStyle,
   withSpring,
 } from 'react-native-reanimated';
@@ -31,8 +33,8 @@ interface CardProps {
   glow?: boolean;
 }
 export const Card: React.FC<CardProps> = ({ children, style, onPress, glow }) => {
-  const { colors } = useTheme();
-  const styles = useMemo(() => createStyles(colors), [colors]);
+  const { colors, isDark } = useTheme();
+  const styles = useMemo(() => createStyles(colors, isDark), [colors, isDark]);
 
   const content = <View style={[styles.card, glow && styles.cardGlow, style]}>{children}</View>;
   if (onPress)
@@ -75,8 +77,8 @@ interface CategoryBadgeProps {
   size?: number;
 }
 export const CategoryBadge: React.FC<CategoryBadgeProps> = ({ icon, color, name, size = 40 }) => {
-  const { colors } = useTheme();
-  const styles = useMemo(() => createStyles(colors), [colors]);
+  const { colors, isDark } = useTheme();
+  const styles = useMemo(() => createStyles(colors, isDark), [colors, isDark]);
   return (
     <View style={styles.badgeContainer}>
       <View
@@ -110,8 +112,8 @@ interface ProgressBarProps {
   style?: ViewStyle;
 }
 export const ProgressBar: React.FC<ProgressBarProps> = ({ progress, color, height = 6, style }) => {
-  const { colors } = useTheme();
-  const styles = useMemo(() => createStyles(colors), [colors]);
+  const { colors, isDark } = useTheme();
+  const styles = useMemo(() => createStyles(colors, isDark), [colors, isDark]);
 
   const resolvedColor = color || colors.primary;
 
@@ -141,8 +143,8 @@ interface SectionHeaderProps {
   onAction?: () => void;
 }
 export const SectionHeader: React.FC<SectionHeaderProps> = ({ title, action, onAction }) => {
-  const { colors } = useTheme();
-  const styles = useMemo(() => createStyles(colors), [colors]);
+  const { colors, isDark } = useTheme();
+  const styles = useMemo(() => createStyles(colors, isDark), [colors, isDark]);
   return (
     <View style={styles.sectionHeader}>
       <Text style={styles.sectionTitle}>{title}</Text>
@@ -170,8 +172,8 @@ export const EmptyState: React.FC<EmptyStateProps> = ({
   action,
   onAction,
 }) => {
-  const { colors } = useTheme();
-  const styles = useMemo(() => createStyles(colors), [colors]);
+  const { colors, isDark } = useTheme();
+  const styles = useMemo(() => createStyles(colors, isDark), [colors, isDark]);
   return (
     <View style={styles.emptyState}>
       <View style={styles.emptyIcon}>
@@ -199,8 +201,8 @@ export const SearchBar: React.FC<SearchBarProps> = ({
   onChangeText,
   placeholder = 'Search...',
 }) => {
-  const { colors } = useTheme();
-  const styles = useMemo(() => createStyles(colors), [colors]);
+  const { colors, isDark } = useTheme();
+  const styles = useMemo(() => createStyles(colors, isDark), [colors, isDark]);
   return (
     <View style={styles.searchContainer}>
       <Ionicons name="search" size={18} color={colors.textMuted} style={styles.searchIcon} />
@@ -239,8 +241,8 @@ export const Button: React.FC<ButtonProps> = ({
   icon,
   style,
 }) => {
-  const { colors } = useTheme();
-  const styles = useMemo(() => createStyles(colors), [colors]);
+  const { colors, isDark } = useTheme();
+  const styles = useMemo(() => createStyles(colors, isDark), [colors, isDark]);
   const bgColor =
     variant === 'primary'
       ? colors.primary
@@ -300,8 +302,8 @@ interface FABProps {
   icon?: string;
 }
 export const FAB: React.FC<FABProps> = ({ onPress, icon = 'add' }) => {
-  const { colors } = useTheme();
-  const styles = useMemo(() => createStyles(colors), [colors]);
+  const { colors, isDark } = useTheme();
+  const styles = useMemo(() => createStyles(colors, isDark), [colors, isDark]);
   return (
     <TouchableOpacity
       style={styles.fab}
@@ -327,8 +329,8 @@ interface StatCardProps {
   change?: number;
 }
 export const StatCard: React.FC<StatCardProps> = ({ title, amount, type, icon, change }) => {
-  const { colors } = useTheme();
-  const styles = useMemo(() => createStyles(colors), [colors]);
+  const { colors, isDark } = useTheme();
+  const styles = useMemo(() => createStyles(colors, isDark), [colors, isDark]);
   return (
     <View style={styles.statCard}>
       <View style={styles.statHeader}>
@@ -391,8 +393,8 @@ export const CustomPopup: React.FC<CustomPopupProps> = ({
   onAction,
   actions,
 }) => {
-  const { colors } = useTheme();
-  const styles = useMemo(() => createStyles(colors), [colors]);
+  const { colors, isDark } = useTheme();
+  const styles = useMemo(() => createStyles(colors, isDark), [colors, isDark]);
 
   // Auto-dismiss success popups after 3 seconds
   useEffect(() => {
@@ -415,8 +417,16 @@ export const CustomPopup: React.FC<CustomPopupProps> = ({
 
   return (
     <Modal visible={visible} transparent animationType="none">
-      <Animated.View style={styles.popupOverlay} entering={FadeIn.duration(200)}>
-        <Animated.View style={styles.popupCard} entering={SlideInDown.duration(300).springify()}>
+      <View style={styles.popupOverlay}>
+        <View style={StyleSheet.absoluteFill}>
+          <Pressable style={StyleSheet.absoluteFill} onPress={onClose}>
+            <View
+              style={{ flex: 1, backgroundColor: isDark ? 'rgba(0,0,0,0.5)' : 'rgba(0,0,0,0.2)' }}
+            />
+          </Pressable>
+        </View>
+
+        <View style={styles.popupCard}>
           <View style={[styles.popupIconBg, { backgroundColor: iconColor + '20' }]}>
             <Ionicons name={iconName} size={32} color={iconColor} />
           </View>
@@ -444,8 +454,8 @@ export const CustomPopup: React.FC<CustomPopupProps> = ({
               variant={type === 'error' ? 'danger' : 'primary'}
             />
           )}
-        </Animated.View>
-      </Animated.View>
+        </View>
+      </View>
     </Modal>
   );
 };
@@ -588,7 +598,7 @@ export class ScreenErrorBoundary extends React.Component<ErrorBoundaryProps, Err
   }
 }
 
-function createStyles(colors: ThemeColors) {
+function createStyles(colors: ThemeColors, isDark: boolean) {
   return StyleSheet.create({
     card: {
       backgroundColor: colors.bgCard,
@@ -764,13 +774,13 @@ function createStyles(colors: ThemeColors) {
     },
     popupCard: {
       width: '100%',
-      backgroundColor: colors.bgCard,
-      borderRadius: RADIUS.lg,
+      backgroundColor: isDark ? 'rgba(40, 40, 45, 0.9)' : 'rgba(255, 255, 255, 0.95)',
+      borderRadius: RADIUS.xxl,
       padding: SPACING.xl,
       alignItems: 'center',
       borderWidth: 1,
-      borderColor: colors.border,
-      ...SHADOWS.primary,
+      borderColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)',
+      ...SHADOWS.lg,
     },
     popupIconBg: {
       width: 64,
@@ -795,3 +805,5 @@ function createStyles(colors: ThemeColors) {
     },
   });
 }
+
+export * from './CustomModal';
