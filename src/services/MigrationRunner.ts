@@ -105,6 +105,127 @@ const migrations: Migration[] = [
       }
     },
   },
+  {
+    version: 4,
+    name: 'normalize_split_column_casing',
+    run: async (db) => {
+      // 1. Rebuild split_expenses
+      await db.execAsync('ALTER TABLE split_expenses RENAME TO split_expenses_old;');
+      await db.execAsync(`
+        CREATE TABLE split_expenses (
+          id TEXT PRIMARY KEY,
+          transactionId TEXT NOT NULL,
+          paidByUserId TEXT NOT NULL,
+          totalAmount REAL NOT NULL,
+          splitMethod TEXT NOT NULL CHECK(splitMethod IN ('equal', 'exact', 'percent')),
+          notes TEXT,
+          createdAt TEXT NOT NULL,
+          updatedAt TEXT NOT NULL,
+          userId TEXT,
+          syncStatus TEXT NOT NULL DEFAULT 'pending' CHECK(syncStatus IN ('synced', 'pending', 'failed')),
+          lastSyncedAt TEXT,
+          deletedAt TEXT,
+          FOREIGN KEY (transactionId) REFERENCES transactions(id) ON DELETE CASCADE
+        );
+      `);
+      await db.execAsync(`
+        INSERT INTO split_expenses (
+          id, transactionId, paidByUserId, totalAmount, splitMethod, notes, 
+          createdAt, updatedAt, userId, syncStatus, lastSyncedAt, deletedAt
+        )
+        SELECT 
+          id, transaction_id, paid_by_user_id, total_amount, split_method, notes,
+          createdAt, updatedAt, userId, syncStatus, lastSyncedAt, deletedAt
+        FROM split_expenses_old;
+      `);
+      await db.execAsync('DROP TABLE split_expenses_old;');
+
+      // 2. Rebuild split_members
+      await db.execAsync('ALTER TABLE split_members RENAME TO split_members_old;');
+      await db.execAsync(`
+        CREATE TABLE split_members (
+          id TEXT PRIMARY KEY,
+          splitExpenseId TEXT NOT NULL,
+          friendId TEXT,
+          name TEXT NOT NULL,
+          shareAmount REAL NOT NULL,
+          sharePercent REAL,
+          status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending', 'paid', 'dismissed')),
+          createdAt TEXT NOT NULL,
+          updatedAt TEXT NOT NULL,
+          userId TEXT,
+          syncStatus TEXT NOT NULL DEFAULT 'pending' CHECK(syncStatus IN ('synced', 'pending', 'failed')),
+          lastSyncedAt TEXT,
+          deletedAt TEXT,
+          FOREIGN KEY (splitExpenseId) REFERENCES split_expenses(id) ON DELETE CASCADE
+        );
+      `);
+      await db.execAsync(`
+        INSERT INTO split_members (
+          id, splitExpenseId, friendId, name, shareAmount, sharePercent, status,
+          createdAt, updatedAt, userId, syncStatus, lastSyncedAt, deletedAt
+        )
+        SELECT 
+          id, split_expense_id, friendId, name, share_amount, share_percent, status,
+          createdAt, updatedAt, userId, syncStatus, lastSyncedAt, deletedAt
+        FROM split_members_old;
+      `);
+      await db.execAsync('DROP TABLE split_members_old;');
+
+      // 3. Recreate indexes
+      await db.execAsync(
+        'CREATE INDEX IF NOT EXISTS idx_split_expenses_transaction ON split_expenses(transactionId);',
+      );
+      await db.execAsync(
+        'CREATE INDEX IF NOT EXISTS idx_split_members_split_id ON split_members(splitExpenseId);',
+      );
+      await db.execAsync(
+        'CREATE INDEX IF NOT EXISTS idx_split_members_friend_id ON split_members(friendId);',
+      );
+    },
+  },
+  {
+    version: 5,
+    name: 'normalize_budget_column_casing',
+    run: async (db) => {
+      await db.execAsync('ALTER TABLE budgets RENAME TO budgets_old;');
+      await db.execAsync(`
+        CREATE TABLE budgets (
+          id TEXT PRIMARY KEY,
+          categoryId TEXT NOT NULL,
+          limitAmount REAL NOT NULL,
+          spent REAL NOT NULL DEFAULT 0,
+          month TEXT NOT NULL,
+          year INTEGER NOT NULL,
+          alertAt INTEGER DEFAULT 80,
+          createdAt TEXT NOT NULL,
+          updatedAt TEXT NOT NULL,
+          userId TEXT,
+          syncStatus TEXT NOT NULL DEFAULT 'pending' CHECK(syncStatus IN ('synced', 'pending', 'failed')),
+          lastSyncedAt TEXT,
+          deletedAt TEXT,
+          FOREIGN KEY (categoryId) REFERENCES categories(id)
+        );
+      `);
+      await db.execAsync(`
+        INSERT INTO budgets (
+          id, categoryId, limitAmount, spent, month, year, alertAt, 
+          createdAt, updatedAt, userId, syncStatus, lastSyncedAt, deletedAt
+        )
+        SELECT 
+          id, categoryId, limit_amount, spent, month, year, alertAt,
+          createdAt, updatedAt, userId, syncStatus, lastSyncedAt, deletedAt
+        FROM budgets_old;
+      `);
+      await db.execAsync('DROP TABLE budgets_old;');
+      await db.execAsync(
+        'CREATE INDEX IF NOT EXISTS idx_budgets_month_year ON budgets(month, year);',
+      );
+      await db.execAsync(
+        'CREATE UNIQUE INDEX IF NOT EXISTS idx_budgets_unique_cat_month ON budgets(categoryId, month, year) WHERE deletedAt IS NULL;',
+      );
+    },
+  },
 ];
 
 export const runMigrations = async (db: SQLite.SQLiteDatabase) => {

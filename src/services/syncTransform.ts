@@ -36,6 +36,7 @@ const tableLocalToRemote: Partial<Record<SyncableTable, Record<string, string>>>
   },
   budgets: {
     categoryId: 'category_id',
+    limitAmount: 'limit_amount',
     alertAt: 'alert_at',
   },
   goals: {
@@ -83,6 +84,13 @@ const tableLocalToRemote: Partial<Record<SyncableTable, Record<string, string>>>
   notes: {
     isPinned: 'is_pinned',
   },
+  recurring_templates: {
+    categoryId: 'category_id',
+    accountId: 'account_id',
+    isActive: 'is_active',
+    startDate: 'start_date',
+    nextDue: 'next_due',
+  },
 };
 
 const invert = (mapping: Record<string, string>) =>
@@ -101,6 +109,7 @@ const toBooleanIfNeeded = (key: string, value: unknown) => {
       'isCustom',
       'isRecurring',
       'isCompleted',
+      'isActive',
       'isPinned',
       'notificationsEnabled',
       'biometricEnabled',

@@ -5,9 +5,9 @@ import {
   fetchTableRows,
   getDatabase,
   getLastSyncTimestamp,
-  hasLocalUserData,
   getSyncableTables,
   getSyncState,
+  hasLocalUserData,
   incrementSyncRetry,
   listPendingSyncItems,
   markRecordSyncStatus,
@@ -75,6 +75,10 @@ class SyncService {
   stop() {
     this.unsubscribe?.();
     this.unsubscribe = undefined;
+    if (this.syncDebounceTimer) {
+      clearTimeout(this.syncDebounceTimer);
+      this.syncDebounceTimer = undefined;
+    }
   }
 
   resetSchemaFlag() {
@@ -363,7 +367,8 @@ class SyncService {
       if ('tags' in remoteData && typeof remoteData.tags === 'string') {
         try {
           remoteData.tags = JSON.parse(remoteData.tags as string);
-        } catch {
+        } catch (error) {
+          console.debug('Failed to parse tags JSON, defaulting to empty array', error);
           remoteData.tags = [];
         }
       }
@@ -398,7 +403,7 @@ class SyncService {
           }
         }
 
-        await softDeleteLocalRecord(table as never, recordId, deletedAt);
+        await softDeleteLocalRecord(table, recordId, deletedAt);
         await removeFromSyncQueue(item.id);
         return;
       }
@@ -434,7 +439,7 @@ class SyncService {
       const localDb = getDatabase();
       await localDb.execAsync('BEGIN');
       try {
-        await markRecordSyncStatus(table as never, recordId, 'synced', syncedAt);
+        await markRecordSyncStatus(table, recordId, 'synced', syncedAt);
         await removeFromSyncQueue(item.id);
         await localDb.execAsync('COMMIT');
       } catch (localErr) {

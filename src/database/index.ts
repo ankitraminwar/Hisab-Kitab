@@ -5,6 +5,7 @@ import type { SyncQueueItem, SyncStatus } from '../utils/types';
 
 let db: SQLite.SQLiteDatabase | null = null;
 let initialized = false;
+let initializingPromise: Promise<void> | null = null;
 
 const normalizeBindValue = (value: unknown): SQLite.SQLiteBindValue => {
   if (
@@ -77,7 +78,7 @@ const transactionalTables = [
   `CREATE TABLE IF NOT EXISTS budgets (
     id TEXT PRIMARY KEY,
     categoryId TEXT NOT NULL,
-    limit_amount REAL NOT NULL,
+    limitAmount REAL NOT NULL,
     spent REAL NOT NULL DEFAULT 0,
     month TEXT NOT NULL,
     year INTEGER NOT NULL,
@@ -184,28 +185,28 @@ const transactionalTables = [
   )`,
   `CREATE TABLE IF NOT EXISTS split_expenses (
     id TEXT PRIMARY KEY,
-    transaction_id TEXT NOT NULL,
-    paid_by_user_id TEXT NOT NULL,
-    total_amount REAL NOT NULL,
-    split_method TEXT NOT NULL CHECK(split_method IN ('equal', 'exact', 'percent')),
+    transactionId TEXT NOT NULL,
+    paidByUserId TEXT NOT NULL,
+    totalAmount REAL NOT NULL,
+    splitMethod TEXT NOT NULL CHECK(splitMethod IN ('equal', 'exact', 'percent')),
     notes TEXT,
     createdAt TEXT NOT NULL,
     updatedAt TEXT NOT NULL,
     ${baseSyncColumns},
-    FOREIGN KEY (transaction_id) REFERENCES transactions(id) ON DELETE CASCADE
+    FOREIGN KEY (transactionId) REFERENCES transactions(id) ON DELETE CASCADE
   )`,
   `CREATE TABLE IF NOT EXISTS split_members (
     id TEXT PRIMARY KEY,
-    split_expense_id TEXT NOT NULL,
+    splitExpenseId TEXT NOT NULL,
     friendId TEXT,
     name TEXT NOT NULL,
-    share_amount REAL NOT NULL,
-    share_percent REAL,
+    shareAmount REAL NOT NULL,
+    sharePercent REAL,
     status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending', 'paid', 'dismissed')),
     createdAt TEXT NOT NULL,
     updatedAt TEXT NOT NULL,
     ${baseSyncColumns},
-    FOREIGN KEY (split_expense_id) REFERENCES split_expenses(id) ON DELETE CASCADE
+    FOREIGN KEY (splitExpenseId) REFERENCES split_expenses(id) ON DELETE CASCADE
   )`,
   `CREATE TABLE IF NOT EXISTS split_friends (
     id TEXT PRIMARY KEY,
@@ -250,8 +251,8 @@ const indexes = [
   `CREATE UNIQUE INDEX IF NOT EXISTS idx_budgets_unique_cat_month ON budgets(categoryId, month, year) WHERE deletedAt IS NULL`,
   `CREATE INDEX IF NOT EXISTS idx_sync_queue_entity_record ON sync_queue(entity, recordId)`,
   `CREATE INDEX IF NOT EXISTS idx_sync_queue_retryCount ON sync_queue(retryCount, updatedAt)`,
-  `CREATE INDEX IF NOT EXISTS idx_split_expenses_transaction ON split_expenses(transaction_id)`,
-  `CREATE INDEX IF NOT EXISTS idx_split_members_split_id ON split_members(split_expense_id)`,
+  `CREATE INDEX IF NOT EXISTS idx_split_expenses_transaction ON split_expenses(transactionId)`,
+  `CREATE INDEX IF NOT EXISTS idx_split_members_split_id ON split_members(splitExpenseId)`,
   `CREATE INDEX IF NOT EXISTS idx_split_members_friend_id ON split_members(friendId)`,
   `CREATE INDEX IF NOT EXISTS idx_split_friends_name ON split_friends(name)`,
   `CREATE INDEX IF NOT EXISTS idx_transactions_type_date_category ON transactions(type, date DESC, categoryId)`,
@@ -441,6 +442,7 @@ const localTablesToClear = [
   'recurring_templates',
   'split_expenses',
   'split_members',
+  'split_friends',
   'payment_methods',
   'sync_queue',
   'sync_state',
@@ -459,24 +461,40 @@ export const initializeDatabase = async (): Promise<void> => {
     return;
   }
 
-  const database = getDatabase();
-  await database.execAsync(
-    'PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON; PRAGMA synchronous = NORMAL;',
-  );
-
-  for (const statement of transactionalTables) {
-    await database.execAsync(statement);
+  // If initialization is already in progress, wait for it
+  if (initializingPromise) {
+    await initializingPromise;
+    return;
   }
 
-  for (const statement of indexes) {
-    await database.execAsync(statement);
+  // Start initialization and store the promise
+  initializingPromise = (async () => {
+    const database = getDatabase();
+    await database.execAsync(
+      'PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON; PRAGMA synchronous = NORMAL;',
+    );
+
+    for (const statement of transactionalTables) {
+      await database.execAsync(statement);
+    }
+
+    for (const statement of indexes) {
+      await database.execAsync(statement);
+    }
+
+    await runMigrations(database);
+    await ensureSyncStateSchema(database);
+
+    await seedDefaultData(database);
+    initialized = true;
+  })();
+
+  try {
+    await initializingPromise;
+  } finally {
+    // Clear the promise so future calls can reinitialize if needed (e.g., after reset)
+    initializingPromise = null;
   }
-
-  await runMigrations(database);
-  await ensureSyncStateSchema(database);
-
-  await seedDefaultData(database);
-  initialized = true;
 };
 
 const ensureSyncStateSchema = async (database: SQLite.SQLiteDatabase) => {

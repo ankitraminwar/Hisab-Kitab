@@ -37,13 +37,9 @@ const createSyncMetadata = () => ({
   deletedAt: null,
 });
 
-type BudgetRow = Budget & {
-  limit_amount?: number | string;
-};
-
-const parseBudget = (row: BudgetRow): Budget => ({
+const parseBudget = (row: Budget): Budget => ({
   ...row,
-  limitAmount: Number(row.limitAmount ?? row.limit_amount) || 0,
+  limitAmount: Number(row.limitAmount) || 0,
   spent: Number(row.spent) || 0,
 });
 
@@ -252,7 +248,7 @@ export const CategoryService = {
 
 export const BudgetService = {
   async getForMonth(year: number, month: string): Promise<Budget[]> {
-    const rows = await getDatabase().getAllAsync<BudgetRow>(
+    const rows = await getDatabase().getAllAsync<Budget>(
       `SELECT b.*,
               c.name as categoryName,
               c.icon as categoryIcon,
@@ -298,7 +294,7 @@ export const BudgetService = {
 
     await getDatabase().runAsync(
       `INSERT INTO budgets
-        (id, categoryId, limit_amount, spent, month, year, alertAt, createdAt, updatedAt, userId, syncStatus, lastSyncedAt, deletedAt)
+        (id, categoryId, limitAmount, spent, month, year, alertAt, createdAt, updatedAt, userId, syncStatus, lastSyncedAt, deletedAt)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         budget.id,
@@ -322,7 +318,7 @@ export const BudgetService = {
   },
 
   async update(id: string, data: Partial<Pick<Budget, 'limitAmount' | 'alertAt'>>) {
-    const existingRow = await getDatabase().getFirstAsync<BudgetRow>(
+    const existingRow = await getDatabase().getFirstAsync<Budget>(
       'SELECT * FROM budgets WHERE id = ?',
       [id],
     );
@@ -342,7 +338,7 @@ export const BudgetService = {
 
     await getDatabase().runAsync(
       `UPDATE budgets
-       SET limit_amount = COALESCE(?, limit_amount), alertAt = COALESCE(?, alertAt), updatedAt = ?, syncStatus = 'pending'
+       SET limitAmount = COALESCE(?, limitAmount), alertAt = COALESCE(?, alertAt), updatedAt = ?, syncStatus = 'pending'
        WHERE id = ?`,
       [data.limitAmount ?? null, data.alertAt ?? null, updatedAt, id],
     );

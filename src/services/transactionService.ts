@@ -170,6 +170,7 @@ export const TransactionService = {
     >,
   ): Promise<Transaction> {
     const now = new Date().toISOString();
+    const db = getDatabase();
     const transaction: Transaction = {
       ...data,
       id: generateId(),
@@ -181,39 +182,47 @@ export const TransactionService = {
       deletedAt: null,
     };
 
-    await getDatabase().runAsync(
-      `INSERT INTO transactions
-        (id, amount, type, categoryId, accountId, toAccountId, merchant, notes, tags, date, paymentMethod, isRecurring, recurringId, createdAt, updatedAt, userId, syncStatus, lastSyncedAt, deletedAt)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [
-        transaction.id,
-        transaction.amount,
-        transaction.type,
-        transaction.categoryId,
-        transaction.accountId,
-        bindValue(transaction.toAccountId),
-        bindValue(transaction.merchant),
-        bindValue(transaction.notes),
-        JSON.stringify(transaction.tags ?? []),
-        transaction.date,
-        transaction.paymentMethod,
-        transaction.isRecurring ? 1 : 0,
-        bindValue(transaction.recurringId),
-        transaction.createdAt,
-        transaction.updatedAt,
-        bindValue(transaction.userId),
-        transaction.syncStatus,
-        bindValue(transaction.lastSyncedAt),
-        bindValue(transaction.deletedAt),
-      ],
-    );
+    await db.execAsync('BEGIN IMMEDIATE TRANSACTION');
+    try {
+      await db.runAsync(
+        `INSERT INTO transactions
+          (id, amount, type, categoryId, accountId, toAccountId, merchant, notes, tags, date, paymentMethod, isRecurring, recurringId, createdAt, updatedAt, userId, syncStatus, lastSyncedAt, deletedAt)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          transaction.id,
+          transaction.amount,
+          transaction.type,
+          transaction.categoryId,
+          transaction.accountId,
+          bindValue(transaction.toAccountId),
+          bindValue(transaction.merchant),
+          bindValue(transaction.notes),
+          JSON.stringify(transaction.tags ?? []),
+          transaction.date,
+          transaction.paymentMethod,
+          transaction.isRecurring ? 1 : 0,
+          bindValue(transaction.recurringId),
+          transaction.createdAt,
+          transaction.updatedAt,
+          bindValue(transaction.userId),
+          transaction.syncStatus,
+          bindValue(transaction.lastSyncedAt),
+          bindValue(transaction.deletedAt),
+        ],
+      );
 
-    await applyBalanceEffect(
-      transaction.type,
-      transaction.amount,
-      transaction.accountId,
-      transaction.toAccountId,
-    );
+      await applyBalanceEffect(
+        transaction.type,
+        transaction.amount,
+        transaction.accountId,
+        transaction.toAccountId,
+      );
+      await db.execAsync('COMMIT');
+    } catch (error) {
+      await db.execAsync('ROLLBACK');
+      throw error;
+    }
+
     await enqueueSync('transactions', transaction.id, 'upsert', {
       ...transaction,
       tags: JSON.stringify(transaction.tags ?? []),

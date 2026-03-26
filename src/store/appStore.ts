@@ -190,5 +190,8 @@ export const useAppStore = create<AppState>((...a) => ({
   ...createAuthSlice(...a),
   ...createUISlice(...a),
   ...createDataSlice(...a),
-  resetAppState: () => a[0]({ ...initialAuthState, ...initialUIState, ...initialDataState }),
+  resetAppState: () => {
+    clearTimeout(revisionTimer);
+    a[0]({ ...initialAuthState, ...initialUIState, ...initialDataState });
+  },
 }));

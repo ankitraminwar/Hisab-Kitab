@@ -58,8 +58,18 @@ errorUtils?.setGlobalHandler?.((error, isFatal) => {
 
 // Register Android widget task handler at module level
 if (Platform.OS === 'android') {
-  registerWidgetTaskHandler(widgetTaskHandler);
+  try {
+    registerWidgetTaskHandler(widgetTaskHandler);
+  } catch (error) {
+    console.warn('Failed to register widget task handler', error);
+  }
 }
+
+const ALLOWED_DEEP_LINK_PATHS: Record<string, string> = {
+  '/transactions': '/(tabs)/transactions',
+  '/budgets': '/(tabs)/budgets',
+  '/reports': '/(tabs)/reports',
+};
 
 export default function RootLayout() {
   const router = useRouter();
@@ -164,8 +174,8 @@ export default function RootLayout() {
         smsImportService.start();
 
         if (nextSession) {
-          void hydrateAuthenticatedSession(nextSession, 'app-start');
-          void smsImportService.run();
+          hydrateAuthenticatedSession(nextSession, 'app-start').catch(console.warn);
+          smsImportService.run().catch(console.warn);
         }
       } catch (error) {
         console.warn('Bootstrap failed, continuing in offline mode', error);
@@ -195,11 +205,11 @@ export default function RootLayout() {
       if (nextSession) {
         setLocked(useAppStore.getState().biometricsEnabled);
         smsImportService.start();
-        void smsImportService.run();
-        void hydrateAuthenticatedSession(
+        smsImportService.run().catch(console.warn);
+        hydrateAuthenticatedSession(
           nextSession,
           previousSession ? 'auth-state-change' : 'login-hydration',
-        );
+        ).catch(console.warn);
       }
     });
 
@@ -244,15 +254,15 @@ export default function RootLayout() {
 
   // Handle widget deep links that need tab route resolution
   const deepLinkUrl = Linking.useURL();
+
   useEffect(() => {
     if (!deepLinkUrl || initializing) return;
-    const path = deepLinkUrl.replace(/^hisabkitab:\/\//, '/');
-    if (path === '/transactions') {
-      router.replace('/(tabs)/transactions');
-    } else if (path === '/budgets') {
-      router.replace('/(tabs)/budgets');
-    } else if (path === '/reports') {
-      router.replace('/(tabs)/reports');
+    // Only process links matching the hisabkitab:// scheme
+    if (!deepLinkUrl.startsWith('hisabkitab://')) return;
+    const path = `/${deepLinkUrl.replace(/^hisabkitab:\/\//, '').split('?')[0]}`;
+    const target = ALLOWED_DEEP_LINK_PATHS[path];
+    if (target) {
+      router.replace(target as Parameters<typeof router.replace>[0]);
     }
   }, [deepLinkUrl, initializing, router]);
 
