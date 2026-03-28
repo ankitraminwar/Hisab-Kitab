@@ -13,6 +13,8 @@ import {
   type ViewStyle,
 } from 'react-native';
 
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+
 import { useTheme, type ThemeColors } from '../../hooks/useTheme';
 import { RADIUS, SPACING } from '../../utils/constants';
 
@@ -39,6 +41,7 @@ export function CustomModal({
 }: CustomModalProps) {
   const { colors } = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
+  const insets = useSafeAreaInsets();
 
   const [localVisible, setLocalVisible] = useState(visible);
   const [keyboardHeight, setKeyboardHeight] = useState(0);
@@ -77,7 +80,13 @@ export function CustomModal({
           <View style={[styles.backdrop]} />
         </Pressable>
 
-        <View style={[styles.sheet, fullHeight && { height: SCREEN_HEIGHT * 0.9 }]}>
+        <View
+          style={[
+            styles.sheet,
+            fullHeight && { height: SCREEN_HEIGHT * 0.9 },
+            { paddingBottom: Math.max(insets.bottom, SPACING.md) },
+          ]}
+        >
           <View style={styles.dragHandleContainer}>
             <View style={styles.dragHandle} />
           </View>
@@ -118,7 +127,6 @@ const createStyles = (colors: ThemeColors) =>
       borderTopLeftRadius: RADIUS.lg + 8,
       borderTopRightRadius: RADIUS.lg + 8,
       paddingTop: SPACING.md,
-      paddingBottom: Platform.OS === 'ios' ? 34 : SPACING.lg,
       maxHeight: SCREEN_HEIGHT * 0.9,
       shadowColor: '#000',
       shadowOffset: { width: 0, height: -2 },

@@ -2,7 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  PanResponder,
+  Dimensions,
   RefreshControl,
   ScrollView,
   StyleSheet,
@@ -19,6 +19,8 @@ import { SplitService } from '../../services/splitService';
 import { useAppStore } from '../../store/appStore';
 import { RADIUS, SPACING, TYPOGRAPHY, formatCurrency } from '../../utils/constants';
 import type { SplitExpense, SplitFriend, SplitMember } from '../../utils/types';
+
+const SCREEN_WIDTH = Dimensions.get('window').width;
 
 interface SplitItem {
   expense: SplitExpense;
@@ -40,20 +42,17 @@ export default function SplitListScreen() {
   const [activeTab, setActiveTab] = useState<'splits' | 'friends'>('splits');
   const [refreshing, setRefreshing] = useState(false);
 
-  const swipePanResponder = useRef(
-    PanResponder.create({
-      onStartShouldSetPanResponder: () => false,
-      onMoveShouldSetPanResponder: (_, gs) =>
-        Math.abs(gs.dx) > 15 && Math.abs(gs.dx) > Math.abs(gs.dy) * 1.8,
-      onPanResponderRelease: (_, gs) => {
-        if (gs.dx < -40) {
-          setActiveTab('friends');
-        } else if (gs.dx > 40) {
-          setActiveTab('splits');
-        }
-      },
-    }),
-  ).current;
+  const tabScrollRef = useRef<ScrollView>(null);
+
+  const handleTabPress = (tab: 'splits' | 'friends') => {
+    setActiveTab(tab);
+    tabScrollRef.current?.scrollTo({ x: tab === 'friends' ? SCREEN_WIDTH : 0, animated: true });
+  };
+
+  const handleMomentumScrollEnd = (e: { nativeEvent: { contentOffset: { x: number } } }) => {
+    const x = e.nativeEvent.contentOffset.x;
+    setActiveTab(x >= SCREEN_WIDTH / 2 ? 'friends' : 'splits');
+  };
 
   const loadSplits = useCallback(async () => {
     const data = await SplitService.getAll();
@@ -87,7 +86,7 @@ export default function SplitListScreen() {
   }, 0);
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']} {...swipePanResponder.panHandlers}>
+    <SafeAreaView style={styles.container} edges={['top']}>
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
@@ -100,7 +99,7 @@ export default function SplitListScreen() {
       <View style={styles.tabContainer}>
         <TouchableOpacity
           style={[styles.tabBtn, activeTab === 'splits' && { backgroundColor: colors.primary }]}
-          onPress={() => setActiveTab('splits')}
+          onPress={() => handleTabPress('splits')}
         >
           <Text style={[styles.tabText, activeTab === 'splits' && { color: '#fff' }]}>
             By Split
@@ -108,7 +107,7 @@ export default function SplitListScreen() {
         </TouchableOpacity>
         <TouchableOpacity
           style={[styles.tabBtn, activeTab === 'friends' && { backgroundColor: colors.primary }]}
-          onPress={() => setActiveTab('friends')}
+          onPress={() => handleTabPress('friends')}
         >
           <Text style={[styles.tabText, activeTab === 'friends' && { color: '#fff' }]}>
             By Friend
@@ -132,86 +131,106 @@ export default function SplitListScreen() {
         />
       </View>
 
+      {/* Horizontal paging scroll: each tab is one full-width page */}
       <ScrollView
-        contentContainerStyle={styles.scroll}
-        showsVerticalScrollIndicator={false}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={onRefresh}
-            tintColor={colors.primary}
-          />
-        }
+        ref={tabScrollRef}
+        horizontal
+        pagingEnabled
+        showsHorizontalScrollIndicator={false}
+        scrollEventThrottle={16}
+        onMomentumScrollEnd={handleMomentumScrollEnd}
+        style={{ flex: 1 }}
+        bounces={false}
       >
-        {activeTab === 'splits' ? (
-          <View>
-            {/* Summary Cards */}
-            <Animated.View entering={FadeInDown.duration(400)} style={styles.summaryRow}>
-              <View style={[styles.summaryCard, { borderColor: colors.warning + '30' }]}>
-                <Text style={[styles.summaryLabel, { color: colors.warning }]}>Pending</Text>
-                <Text style={[styles.summaryValue, { color: colors.textPrimary }]}>
-                  {formatCurrency(totalOwed)}
-                </Text>
-                <Text style={styles.summaryCount}>
-                  {splits.filter((s) => s.members.some((m) => m.status === 'pending')).length}{' '}
-                  splits
-                </Text>
-              </View>
-              <View style={[styles.summaryCard, { borderColor: colors.income + '30' }]}>
-                <Text style={[styles.summaryLabel, { color: colors.income }]}>Collected</Text>
-                <Text style={[styles.summaryValue, { color: colors.textPrimary }]}>
-                  {formatCurrency(totalCollected)}
-                </Text>
-                <Text style={styles.summaryCount}>
-                  {splits.filter((s) => s.members.every((m) => m.status === 'paid')).length} settled
-                </Text>
-              </View>
-            </Animated.View>
+        {/* Splits tab */}
+        <ScrollView
+          style={{ width: SCREEN_WIDTH }}
+          contentContainerStyle={styles.scroll}
+          showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              tintColor={colors.primary}
+            />
+          }
+        >
+          {/* Summary Cards */}
+          <Animated.View entering={FadeInDown.duration(400)} style={styles.summaryRow}>
+            <View style={[styles.summaryCard, { borderColor: colors.warning + '30' }]}>
+              <Text style={[styles.summaryLabel, { color: colors.warning }]}>Pending</Text>
+              <Text style={[styles.summaryValue, { color: colors.textPrimary }]}>
+                {formatCurrency(totalOwed)}
+              </Text>
+              <Text style={styles.summaryCount}>
+                {splits.filter((s) => s.members.some((m) => m.status === 'pending')).length} splits
+              </Text>
+            </View>
+            <View style={[styles.summaryCard, { borderColor: colors.income + '30' }]}>
+              <Text style={[styles.summaryLabel, { color: colors.income }]}>Collected</Text>
+              <Text style={[styles.summaryValue, { color: colors.textPrimary }]}>
+                {formatCurrency(totalCollected)}
+              </Text>
+              <Text style={styles.summaryCount}>
+                {splits.filter((s) => s.members.every((m) => m.status === 'paid')).length} settled
+              </Text>
+            </View>
+          </Animated.View>
 
-            {/* Split List */}
-            {splits.length === 0 ? (
-              <EmptyState
-                icon="people-outline"
-                title="No splits yet"
-                subtitle="Split an expense with friends by tapping the + button"
+          {splits.length === 0 ? (
+            <EmptyState
+              icon="people-outline"
+              title="No splits yet"
+              subtitle="Split an expense with friends by tapping the + button"
+            />
+          ) : (
+            splits.map((item, idx) => (
+              <SplitCard
+                key={item.expense.id}
+                item={item}
+                colors={colors}
+                styles={styles}
+                delay={idx * 60}
+                onPress={() => router.push(`/split-expense/${item.expense.id}`)}
               />
-            ) : (
-              splits.map((item, idx) => (
-                <SplitCard
-                  key={item.expense.id}
-                  item={item}
-                  colors={colors}
-                  styles={styles}
-                  delay={idx * 60}
-                  onPress={() => router.push(`/split-expense/${item.expense.id}`)}
-                />
-              ))
-            )}
-            <View style={{ height: 100 }} />
-          </View>
-        ) : (
-          <View>
-            {friendBalances.length === 0 ? (
-              <EmptyState
-                icon="person-add-outline"
-                title="No friends yet"
-                subtitle="Share an expense with friends to add them to your balances"
+            ))
+          )}
+          <View style={{ height: 100 }} />
+        </ScrollView>
+
+        {/* Friends tab */}
+        <ScrollView
+          style={{ width: SCREEN_WIDTH }}
+          contentContainerStyle={styles.scroll}
+          showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              tintColor={colors.primary}
+            />
+          }
+        >
+          {friendBalances.length === 0 ? (
+            <EmptyState
+              icon="person-add-outline"
+              title="No friends yet"
+              subtitle="Share an expense with friends to add them to your balances"
+            />
+          ) : (
+            friendBalances.map((item, idx) => (
+              <FriendCard
+                key={item.friend.id}
+                item={item}
+                colors={colors}
+                styles={styles}
+                delay={idx * 60}
+                onPress={() => router.push(`/split-expense/friend-detail/${item.friend.id}`)}
               />
-            ) : (
-              friendBalances.map((item, idx) => (
-                <FriendCard
-                  key={item.friend.id}
-                  item={item}
-                  colors={colors}
-                  styles={styles}
-                  delay={idx * 60}
-                  onPress={() => router.push(`/split-expense/friend-detail/${item.friend.id}`)}
-                />
-              ))
-            )}
-            <View style={{ height: 100 }} />
-          </View>
-        )}
+            ))
+          )}
+          <View style={{ height: 100 }} />
+        </ScrollView>
       </ScrollView>
 
       <FAB onPress={() => router.push('/split-expense/new')} />
