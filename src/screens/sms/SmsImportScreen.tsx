@@ -2,7 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Linking, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTheme, type ThemeColors } from '../../hooks/useTheme';
@@ -25,6 +25,7 @@ export default function SmsImportScreen() {
     message: string;
     type: 'success' | 'error' | 'info';
     onClose?: () => void;
+    onAction?: () => void;
   }>({ visible: false, title: '', message: '', type: 'info' });
 
   const scanSms = useCallback(async () => {
@@ -35,8 +36,10 @@ export default function SmsImportScreen() {
         setPopupConfig({
           visible: true,
           title: 'Permission Denied',
-          message: 'SMS permission is required to scan for transactions.',
+          message:
+            'SMS permission is required to scan for transactions. Please enable it in Settings.',
           type: 'error',
+          onAction: () => void Linking.openSettings(),
         });
         return;
       }
@@ -242,6 +245,7 @@ export default function SmsImportScreen() {
         title={popupConfig.title}
         message={popupConfig.message}
         type={popupConfig.type}
+        onAction={popupConfig.onAction}
         onClose={() => {
           setPopupConfig((prev) => ({ ...prev, visible: false }));
           if (popupConfig.onClose) {

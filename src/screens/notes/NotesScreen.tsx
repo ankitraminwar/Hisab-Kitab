@@ -1,15 +1,13 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useEffect, useMemo, useState } from 'react';
-import {
-  Alert,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
-} from 'react-native';
-import Animated, { FadeInDown, FadeInUp, Layout } from 'react-native-reanimated';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import Animated, {
+  FadeInDown,
+  FadeInUp,
+  useAnimatedStyle,
+  useSharedValue,
+  withSpring,
+} from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Button, CustomModal, EmptyState } from '../../components/common';
@@ -21,16 +19,144 @@ import { RADIUS, SPACING, TYPOGRAPHY } from '../../utils/constants';
 import type { Note } from '../../utils/types';
 
 const NOTE_COLORS = [
-  '#7C3AED', // Primary
-  '#06B6D4', // Cyan
-  '#10B981', // Emerald
-  '#F59E0B', // Amber
-  '#F43F5E', // Rose
-  '#8B5CF6', // Violet
-  '#EC4899', // Pink
-  '#64748B', // Slate
+  '#7C3AED',
+  '#06B6D4',
+  '#10B981',
+  '#F59E0B',
+  '#F43F5E',
+  '#8B5CF6',
+  '#EC4899',
+  '#64748B',
 ];
 
+const CARD_GAP = SPACING.md;
+
+// ─── Sticky Note Card ─────────────────────────────────────────────────────────
+const StickyNoteCard = ({
+  item,
+  isDark,
+  colors,
+  styles,
+  onPress,
+  onLongPress,
+}: {
+  item: Note;
+  isDark: boolean;
+  colors: ThemeColors;
+  styles: ReturnType<typeof createStyles>;
+  onPress: () => void;
+  onLongPress: () => void;
+}) => {
+  const scale = useSharedValue(1);
+
+  const animStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: scale.value }],
+  }));
+
+  const handlePressIn = () => {
+    scale.value = withSpring(0.96, { damping: 15 });
+  };
+  const handlePressOut = () => {
+    scale.value = withSpring(1, { damping: 15 });
+  };
+
+  const bgColor = isDark ? `${item.color}22` : `${item.color}18`;
+
+  return (
+    <Animated.View style={[animStyle, styles.noteCardWrapper]}>
+      <TouchableOpacity
+        onPress={onPress}
+        onLongPress={onLongPress}
+        onPressIn={handlePressIn}
+        onPressOut={handlePressOut}
+        activeOpacity={1}
+        delayLongPress={400}
+        style={[styles.noteCard, { backgroundColor: bgColor, borderColor: `${item.color}55` }]}
+      >
+        {/* Colored top accent bar */}
+        <View style={[styles.noteAccentBar, { backgroundColor: item.color }]} />
+
+        <View style={styles.noteHeader}>
+          <Text style={[styles.noteTitle, { color: colors.textPrimary }]} numberOfLines={2}>
+            {item.title || 'Untitled'}
+          </Text>
+          {item.isPinned && (
+            <Ionicons name="pin" size={13} color={item.color} style={styles.pinIcon} />
+          )}
+        </View>
+
+        {!!item.content && (
+          <Text style={[styles.noteContent, { color: colors.textPrimary }]} numberOfLines={7}>
+            {item.content}
+          </Text>
+        )}
+
+        <Text style={[styles.noteDate, { color: `${item.color}BB` }]}>
+          {new Date(item.updatedAt).toLocaleDateString(undefined, {
+            month: 'short',
+            day: 'numeric',
+          })}
+        </Text>
+      </TouchableOpacity>
+    </Animated.View>
+  );
+};
+
+// ─── Masonry 2-Column Grid ────────────────────────────────────────────────────
+const NoteGrid = ({
+  notes,
+  isDark,
+  colors,
+  styles,
+  onEdit,
+  onLongPress,
+}: {
+  notes: Note[];
+  isDark: boolean;
+  colors: ThemeColors;
+  styles: ReturnType<typeof createStyles>;
+  onEdit: (note: Note) => void;
+  onLongPress: (note: Note) => void;
+}) => {
+  if (notes.length === 0) return null;
+
+  const left: Note[] = [];
+  const right: Note[] = [];
+  notes.forEach((n, i) => (i % 2 === 0 ? left : right).push(n));
+
+  return (
+    <View style={styles.gridRow}>
+      <View style={styles.gridColumn}>
+        {left.map((item) => (
+          <StickyNoteCard
+            key={item.id}
+            item={item}
+            isDark={isDark}
+            colors={colors}
+            styles={styles}
+            onPress={() => onEdit(item)}
+            onLongPress={() => onLongPress(item)}
+          />
+        ))}
+      </View>
+      <View style={styles.gridColumn}>
+        {right.map((item) => (
+          <StickyNoteCard
+            key={item.id}
+            item={item}
+            isDark={isDark}
+            colors={colors}
+            styles={styles}
+            onPress={() => onEdit(item)}
+            onLongPress={() => onLongPress(item)}
+          />
+        ))}
+      </View>
+    </View>
+  );
+};
+
+// ─── Main Screen ──────────────────────────────────────────────────────────────
 export default function NotesScreen() {
   const { colors, isDark } = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
@@ -39,140 +165,113 @@ export default function NotesScreen() {
   const [notes, setNotes] = useState<Note[]>([]);
   const [showAdd, setShowAdd] = useState(false);
   const [editingNote, setEditingNote] = useState<Note | null>(null);
+  const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
+  const [longPressNote, setLongPressNote] = useState<Note | null>(null);
+  const [showPinMenu, setShowPinMenu] = useState(false);
 
   useEffect(() => {
-    loadNotes();
+    void loadNotes();
   }, [dataRevision]);
 
   const loadNotes = async () => {
     const data = await NoteService.getAll();
+    data.sort((a, b) => {
+      if (a.isPinned && !b.isPinned) return -1;
+      if (!a.isPinned && b.isPinned) return 1;
+      return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
+    });
     setNotes(data);
   };
 
   const pinnedNotes = notes.filter((n) => n.isPinned);
-  const otherNotes = notes.filter((n) => !n.isPinned);
+  const unpinnedNotes = notes.filter((n) => !n.isPinned);
 
   const handleEdit = (note: Note) => {
     setEditingNote(note);
     setShowAdd(true);
   };
 
-  const handleDelete = async (id: string) => {
-    Alert.alert('Delete Note', 'Are you sure you want to delete this note?', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Delete',
-        style: 'destructive',
-        onPress: async () => {
-          await NoteService.delete(id);
-          loadNotes();
-        },
-      },
-    ]);
+  const handleDelete = (id: string) => {
+    setDeleteTargetId(id);
   };
 
-  const handleTogglePin = async (note: Note) => {
+  // Long-press: quick-action sheet where pin/unpin moves card between sections
+  const handleLongPress = useCallback((note: Note) => {
+    setLongPressNote(note);
+    setShowPinMenu(true);
+  }, []);
+
+  const handleTogglePin = useCallback(async (note: Note) => {
     await NoteService.togglePin(note.id, note.isPinned);
-    loadNotes();
-  };
+    setShowPinMenu(false);
+    setLongPressNote(null);
+    void loadNotes();
+  }, []);
 
-  const renderNoteCard = (note: Note, index: number) => (
-    <Animated.View
-      key={note.id}
-      layout={Layout.springify().damping(14)}
-      entering={FadeInUp.delay(index * 100)
-        .springify()
-        .damping(14)}
-      style={[
-        styles.noteCard,
-        {
-          backgroundColor: isDark ? `${note.color}1A` : `${note.color}15`,
-          borderColor: isDark ? `${note.color}30` : `${note.color}40`,
-        },
-      ]}
-    >
-      <TouchableOpacity onPress={() => handleEdit(note)} style={{ flex: 1 }} activeOpacity={0.7}>
-        <View style={styles.noteHeader}>
-          <Text style={[styles.noteTitle, { color: colors.textPrimary }]} numberOfLines={2}>
-            {note.title || 'Untitled Note'}
-          </Text>
-          <TouchableOpacity
-            onPress={() => handleTogglePin(note)}
-            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-          >
-            <Ionicons
-              name={note.isPinned ? 'pin' : 'pin-outline'}
-              size={20}
-              color={note.isPinned ? note.color : colors.textMuted}
-            />
-          </TouchableOpacity>
-        </View>
-        <Text style={[styles.noteContent, { color: colors.textSecondary }]} numberOfLines={5}>
-          {note.content || 'No content...'}
-        </Text>
-        <View style={styles.noteFooter}>
-          <View style={[styles.colorIndicator, { backgroundColor: note.color }]} />
-          <Text style={styles.noteDate}>
-            {new Date(note.updatedAt).toLocaleDateString(undefined, {
-              month: 'short',
-              day: 'numeric',
-            })}
-          </Text>
-        </View>
-      </TouchableOpacity>
-    </Animated.View>
-  );
+  const closePinMenu = useCallback(() => {
+    setShowPinMenu(false);
+    setLongPressNote(null);
+  }, []);
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <ScreenHeader title="Notes" />
 
-      <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
-        {notes.length === 0 ? (
-          <Animated.View entering={FadeInDown.duration(400)}>
-            <EmptyState
-              icon="document-text-outline"
-              title="No notes yet"
-              subtitle="Jot down your financial thoughts, reminders, or ideas."
-              action="Create Note"
-              onAction={() => setShowAdd(true)}
-            />
-          </Animated.View>
-        ) : (
-          <View style={styles.grid}>
-            {pinnedNotes.length > 0 && (
-              <View style={styles.section}>
-                <Text style={styles.sectionTitle}>PINNED</Text>
-                <View style={styles.masonry}>
-                  <View style={styles.column}>
-                    {pinnedNotes.filter((_, i) => i % 2 === 0).map((n, i) => renderNoteCard(n, i))}
-                  </View>
-                  <View style={styles.column}>
-                    {pinnedNotes.filter((_, i) => i % 2 !== 0).map((n, i) => renderNoteCard(n, i))}
-                  </View>
-                </View>
+      {notes.length === 0 ? (
+        <Animated.View entering={FadeInDown.duration(300)} style={{ flex: 1, padding: SPACING.lg }}>
+          <EmptyState
+            icon="document-text-outline"
+            title="No notes yet"
+            subtitle="Jot down your financial thoughts, reminders, or ideas."
+            action="Create Note"
+            onAction={() => setShowAdd(true)}
+          />
+        </Animated.View>
+      ) : (
+        <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+          {/* ── PINNED section ── */}
+          {pinnedNotes.length > 0 && (
+            <Animated.View entering={FadeInUp.duration(250)}>
+              <View style={styles.sectionHeader}>
+                <Ionicons name="pin" size={13} color={colors.primary} />
+                <Text style={styles.sectionLabel}>PINNED</Text>
               </View>
-            )}
+              <NoteGrid
+                notes={pinnedNotes}
+                isDark={isDark}
+                colors={colors}
+                styles={styles}
+                onEdit={handleEdit}
+                onLongPress={handleLongPress}
+              />
+            </Animated.View>
+          )}
 
-            {otherNotes.length > 0 && (
-              <View style={styles.section}>
-                <Text style={styles.sectionTitle}>OTHERS</Text>
-                <View style={styles.masonry}>
-                  <View style={styles.column}>
-                    {otherNotes.filter((_, i) => i % 2 === 0).map((n, i) => renderNoteCard(n, i))}
-                  </View>
-                  <View style={styles.column}>
-                    {otherNotes.filter((_, i) => i % 2 !== 0).map((n, i) => renderNoteCard(n, i))}
-                  </View>
+          {/* ── ALL NOTES section ── */}
+          {unpinnedNotes.length > 0 && (
+            <Animated.View entering={FadeInUp.duration(300).delay(pinnedNotes.length > 0 ? 60 : 0)}>
+              {pinnedNotes.length > 0 && (
+                <View style={[styles.sectionHeader, { marginTop: SPACING.xl }]}>
+                  <Ionicons name="document-text-outline" size={13} color={colors.textMuted} />
+                  <Text style={[styles.sectionLabel, { color: colors.textMuted }]}>ALL NOTES</Text>
                 </View>
-              </View>
-            )}
-          </View>
-        )}
+              )}
+              <NoteGrid
+                notes={unpinnedNotes}
+                isDark={isDark}
+                colors={colors}
+                styles={styles}
+                onEdit={handleEdit}
+                onLongPress={handleLongPress}
+              />
+            </Animated.View>
+          )}
 
-        <View style={{ height: 100 }} />
-      </ScrollView>
+          <View style={{ height: 120 }} />
+        </ScrollView>
+      )}
 
+      {/* FAB */}
       <TouchableOpacity
         style={[styles.fab, { backgroundColor: colors.primary }]}
         onPress={() => {
@@ -181,9 +280,103 @@ export default function NotesScreen() {
         }}
         activeOpacity={0.8}
       >
-        <Ionicons name="add" size={28} color="#FFF" />
+        <Ionicons name="add" size={28} color={colors.textInverse} />
       </TouchableOpacity>
 
+      {/* Long-press quick actions — pin moves between sections */}
+      <CustomModal visible={showPinMenu} onClose={closePinMenu} hideCloseBtn>
+        <Text
+          style={{ ...TYPOGRAPHY.h3, color: colors.textPrimary, marginBottom: SPACING.md }}
+          numberOfLines={2}
+        >
+          {longPressNote?.title || 'Note'}
+        </Text>
+
+        <TouchableOpacity
+          onPress={() => {
+            if (longPressNote) void handleTogglePin(longPressNote);
+          }}
+          style={styles.menuItem}
+        >
+          <Ionicons
+            name={longPressNote?.isPinned ? 'pin-outline' : 'pin'}
+            size={22}
+            color={colors.primary}
+          />
+          <Text style={[styles.menuItemText, { color: colors.textPrimary }]}>
+            {longPressNote?.isPinned ? 'Unpin — move to All Notes' : 'Pin — move to top section'}
+          </Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          onPress={() => {
+            if (longPressNote) {
+              setShowPinMenu(false);
+              setEditingNote(longPressNote);
+              setLongPressNote(null);
+              setShowAdd(true);
+            }
+          }}
+          style={styles.menuItem}
+        >
+          <Ionicons name="pencil-outline" size={22} color={colors.textSecondary} />
+          <Text style={[styles.menuItemText, { color: colors.textPrimary }]}>Edit Note</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          onPress={() => {
+            if (longPressNote) {
+              const id = longPressNote.id;
+              setShowPinMenu(false);
+              setLongPressNote(null);
+              handleDelete(id);
+            }
+          }}
+          style={[styles.menuItem, { borderBottomWidth: 0 }]}
+        >
+          <Ionicons name="trash-outline" size={22} color={colors.expense} />
+          <Text style={[styles.menuItemText, { color: colors.expense }]}>Delete Note</Text>
+        </TouchableOpacity>
+
+        <Button
+          title="Cancel"
+          variant="secondary"
+          onPress={closePinMenu}
+          style={{ marginTop: SPACING.md }}
+        />
+      </CustomModal>
+
+      {/* Delete confirmation */}
+      <CustomModal visible={!!deleteTargetId} onClose={() => setDeleteTargetId(null)} hideCloseBtn>
+        <Text style={{ ...TYPOGRAPHY.h3, color: colors.textPrimary, marginBottom: SPACING.sm }}>
+          Delete Note
+        </Text>
+        <Text style={{ ...TYPOGRAPHY.body, color: colors.textSecondary, marginBottom: SPACING.lg }}>
+          Are you sure you want to delete this note?
+        </Text>
+        <View style={{ flexDirection: 'row', gap: SPACING.md }}>
+          <Button
+            title="Cancel"
+            variant="secondary"
+            onPress={() => setDeleteTargetId(null)}
+            style={{ flex: 1 }}
+          />
+          <Button
+            title="Delete"
+            onPress={() => {
+              if (deleteTargetId) {
+                void NoteService.delete(deleteTargetId).then(() => {
+                  setDeleteTargetId(null);
+                  void loadNotes();
+                });
+              }
+            }}
+            style={{ flex: 1, backgroundColor: colors.expense }}
+          />
+        </View>
+      </CustomModal>
+
+      {/* Note editor */}
       <NoteEditorModal
         visible={showAdd}
         note={editingNote}
@@ -192,7 +385,7 @@ export default function NotesScreen() {
           setEditingNote(null);
         }}
         onSave={() => {
-          loadNotes();
+          void loadNotes();
           setShowAdd(false);
           setEditingNote(null);
         }}
@@ -203,6 +396,7 @@ export default function NotesScreen() {
   );
 }
 
+// ─── Note Editor Modal ────────────────────────────────────────────────────────
 const NoteEditorModal = ({
   visible,
   note,
@@ -226,17 +420,16 @@ const NoteEditorModal = ({
 
   useEffect(() => {
     if (visible) {
-      setTitle(note?.title || '');
-      setContent(note?.content || '');
-      setColor(note?.color || NOTE_COLORS[0]);
-      setIsPinned(note?.isPinned || false);
+      setTitle(note?.title ?? '');
+      setContent(note?.content ?? '');
+      setColor(note?.color ?? NOTE_COLORS[0]);
+      setIsPinned(note?.isPinned ?? false);
     }
   }, [visible, note]);
 
   const handleSave = async () => {
     if (!title.trim() && !content.trim()) return;
     setLoading(true);
-
     try {
       if (note) {
         await NoteService.update(note.id, {
@@ -316,7 +509,7 @@ const NoteEditorModal = ({
         <TextInput
           style={{
             ...TYPOGRAPHY.body,
-            color: colors.textSecondary,
+            color: colors.textPrimary,
             minHeight: 120,
             textAlignVertical: 'top',
             marginBottom: SPACING.lg,
@@ -338,21 +531,19 @@ const NoteEditorModal = ({
               <TouchableOpacity
                 key={c}
                 onPress={() => setColor(c)}
-                style={[
-                  {
-                    width: 40,
-                    height: 40,
-                    borderRadius: 20,
-                    backgroundColor: c,
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    shadowColor: c,
-                    shadowOffset: { width: 0, height: 4 },
-                    shadowOpacity: color === c ? 0.3 : 0.1,
-                    shadowRadius: 8,
-                    elevation: color === c ? 6 : 2,
-                  },
-                ]}
+                style={{
+                  width: 40,
+                  height: 40,
+                  borderRadius: 20,
+                  backgroundColor: c,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  shadowColor: c,
+                  shadowOffset: { width: 0, height: 4 },
+                  shadowOpacity: color === c ? 0.4 : 0.1,
+                  shadowRadius: 8,
+                  elevation: color === c ? 6 : 2,
+                }}
               >
                 {color === c && <Ionicons name="checkmark" size={20} color="#FFF" />}
               </TouchableOpacity>
@@ -375,67 +566,105 @@ const NoteEditorModal = ({
   );
 };
 
+// ─── Styles ───────────────────────────────────────────────────────────────────
 const createStyles = (colors: ThemeColors) =>
   StyleSheet.create({
-    container: { flex: 1, backgroundColor: colors.bg },
-    scroll: { padding: SPACING.lg },
-    grid: { flex: 1 },
-    section: { marginBottom: SPACING.xxl },
-    sectionTitle: {
+    container: {
+      flex: 1,
+      backgroundColor: colors.bg,
+    },
+    scroll: {
+      padding: SPACING.md,
+    },
+    // 2-column masonry grid
+    gridRow: {
+      flexDirection: 'row',
+      gap: CARD_GAP,
+    },
+    gridColumn: {
+      flex: 1,
+    },
+    // Section header row
+    sectionHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: SPACING.xs,
+      marginBottom: SPACING.sm,
+    },
+    sectionLabel: {
       ...TYPOGRAPHY.label,
-      color: colors.textMuted,
-      marginBottom: SPACING.md,
-      marginLeft: 4,
+      color: colors.primary,
       letterSpacing: 1.5,
     },
-    masonry: { flexDirection: 'row', gap: SPACING.md },
-    column: { flex: 1, gap: SPACING.md },
+    // Sticky note card
+    noteCardWrapper: {
+      marginBottom: CARD_GAP,
+    },
     noteCard: {
-      padding: SPACING.lg,
-      borderRadius: RADIUS.xl,
+      borderRadius: RADIUS.lg,
       borderWidth: 1,
-      minHeight: 120,
+      paddingHorizontal: SPACING.md,
+      paddingTop: SPACING.md + 6, // room for accent bar
+      paddingBottom: SPACING.md,
+      minHeight: 130,
       shadowColor: '#000',
-      shadowOffset: { width: 0, height: 4 },
-      shadowOpacity: 0.05,
-      shadowRadius: 12,
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.1,
+      shadowRadius: 6,
+    },
+    noteAccentBar: {
+      position: 'absolute',
+      top: 0,
+      left: 0,
+      right: 0,
+      height: 5,
+      borderTopLeftRadius: RADIUS.lg,
+      borderTopRightRadius: RADIUS.lg,
     },
     noteHeader: {
       flexDirection: 'row',
-      justifyContent: 'space-between',
       alignItems: 'flex-start',
-      marginBottom: SPACING.sm,
+      marginBottom: SPACING.xs,
     },
     noteTitle: {
-      ...TYPOGRAPHY.h3,
-      fontWeight: '800',
+      ...TYPOGRAPHY.bodyMedium,
+      fontSize: 14,
+      fontWeight: '700',
       flex: 1,
-      marginRight: SPACING.sm,
-      lineHeight: 24,
+      lineHeight: 20,
+    },
+    pinIcon: {
+      marginLeft: 4,
+      marginTop: 3,
     },
     noteContent: {
-      ...TYPOGRAPHY.bodyMedium,
-      lineHeight: 22,
-      marginBottom: SPACING.lg,
-      opacity: 0.8,
-    },
-    noteFooter: {
-      flexDirection: 'row',
-      justifyContent: 'space-between',
-      alignItems: 'center',
-      marginTop: 'auto',
-    },
-    colorIndicator: {
-      width: 12,
-      height: 12,
-      borderRadius: 6,
+      ...TYPOGRAPHY.caption,
+      fontSize: 13,
+      lineHeight: 19,
+      marginBottom: SPACING.sm,
     },
     noteDate: {
       ...TYPOGRAPHY.caption,
       fontSize: 11,
-      color: colors.textMuted,
       fontWeight: '600',
+      textAlign: 'right',
+      marginTop: SPACING.xs,
     },
+    // Long-press quick-action menu
+    menuItem: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: SPACING.md,
+      paddingVertical: SPACING.md,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: colors.border,
+    },
+    menuItemText: {
+      ...TYPOGRAPHY.body,
+      fontWeight: '500',
+      flex: 1,
+    },
+    // FAB
     fab: {
       position: 'absolute',
       bottom: 32,

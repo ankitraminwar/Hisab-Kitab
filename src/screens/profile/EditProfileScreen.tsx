@@ -7,10 +7,10 @@ import {
 } from 'expo-file-system/legacy';
 import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import {
   Image,
-  Keyboard,
+  KeyboardAvoidingView,
   Platform,
   ScrollView,
   StyleSheet,
@@ -45,23 +45,6 @@ export default function EditProfileScreen() {
     message: string;
     type: 'success' | 'error' | 'info';
   }>({ visible: false, title: '', message: '', type: 'info' });
-
-  const [keyboardHeight, setKeyboardHeight] = useState(0);
-
-  useEffect(() => {
-    const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
-    const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
-
-    const showSub = Keyboard.addListener(showEvent, (e) =>
-      setKeyboardHeight(e.endCoordinates.height),
-    );
-    const hideSub = Keyboard.addListener(hideEvent, () => setKeyboardHeight(0));
-
-    return () => {
-      showSub.remove();
-      hideSub.remove();
-    };
-  }, []);
 
   const handlePickImage = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -129,7 +112,11 @@ export default function EditProfileScreen() {
     <SafeAreaView style={styles.container} edges={['top']}>
       <ScreenHeader title="Edit Profile" />
 
-      <View style={[styles.keyboardView, { paddingBottom: keyboardHeight }]}>
+      <KeyboardAvoidingView
+        style={styles.keyboardView}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
+      >
         <ScrollView
           contentContainerStyle={styles.content}
           showsVerticalScrollIndicator={false}
@@ -203,7 +190,7 @@ export default function EditProfileScreen() {
             <Text style={styles.saveText}>{isSaving ? 'Saving...' : 'Save Changes'}</Text>
           </TouchableOpacity>
         </ScrollView>
-      </View>
+      </KeyboardAvoidingView>
       <CustomPopup
         visible={popupConfig.visible}
         title={popupConfig.title}
@@ -225,7 +212,7 @@ const createStyles = (colors: ThemeColors) =>
       flex: 1,
     },
     content: {
-      flex: 1,
+      flexGrow: 1,
       padding: SPACING.lg,
     },
     avatarSection: {

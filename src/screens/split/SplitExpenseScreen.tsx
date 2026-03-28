@@ -2,8 +2,9 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useLocalSearchParams, useRouter, type Href } from 'expo-router';
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  Alert,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -295,26 +296,35 @@ export default function SplitExpenseScreen() {
   };
 
   // ── Delete split ─────────────────────────────────────────────────────────
-  const handleDelete = async () => {
+  const handleDelete = () => {
     if (!existingSplit) return;
-    try {
-      await SplitService.deleteSplit(existingSplit.id);
-      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      setPopupConfig({
-        visible: true,
-        title: 'Deleted',
-        message: 'Split expense removed.',
-        type: 'success',
-        onClose: () => router.back(),
-      });
-    } catch {
-      setPopupConfig({
-        visible: true,
-        title: 'Error',
-        message: 'Failed to delete split.',
-        type: 'error',
-      });
-    }
+    Alert.alert('Delete Split', 'Are you sure you want to delete this split expense?', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Delete',
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            await SplitService.deleteSplit(existingSplit.id);
+            void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+            setPopupConfig({
+              visible: true,
+              title: 'Deleted',
+              message: 'Split expense removed.',
+              type: 'success',
+              onClose: () => router.back(),
+            });
+          } catch {
+            setPopupConfig({
+              visible: true,
+              title: 'Error',
+              message: 'Failed to delete split.',
+              type: 'error',
+            });
+          }
+        },
+      },
+    ]);
   };
 
   const handleAddNewFriend = async () => {

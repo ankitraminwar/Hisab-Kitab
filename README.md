@@ -1,6 +1,6 @@
 # Hisab Kitab
 
-> v2.0.0 — Offline-first personal finance manager for Android & iOS
+> v1.0.0 — Offline-first personal finance manager for Android & iOS
 
 Built with Expo 54, React Native 0.81.5, TypeScript, SQLite, and Supabase. Zero TypeScript errors, zero ESLint warnings.
 
@@ -8,9 +8,10 @@ Built with Expo 54, React Native 0.81.5, TypeScript, SQLite, and Supabase. Zero 
 
 - **Dashboard** — Animated hero card, donut chart for category breakdown, savings ring, budget progress, quick actions, recent transactions
 - **Transactions** — Add/edit income, expense & transfer with categories, accounts, payment methods, tags, notes, recurring support
-- **Split Expenses** — Google Pay-style sharing. Track balances friend-by-friend, view shared timelines, and settle debts with one tap.
+- **Split Expenses** — Google Pay-style sharing. Track balances friend-by-friend with swipeable By Split / By Friend views, and settle debts with one tap.
 - **Budgets** — Monthly per-category budgets with progress bars and over-budget alerts
 - **Goals** — Savings goals with target amounts, deadlines, and fund tracking
+- **Notes** — Colour-coded rich-text notes for financial reminders, goals, and ideas
 - **Reports** — Spending trend charts, category distribution, net worth tracker (assets vs liabilities)
 - **Net Worth** — Asset and liability management with history snapshots
 - **Notifications** — In-app budget-exceeded and goal-completion alerts
@@ -23,6 +24,8 @@ Built with Expo 54, React Native 0.81.5, TypeScript, SQLite, and Supabase. Zero 
 - **Data Export** — CSV transactions, PDF transactions, full JSON backup
 - **Data Import** — Restore from JSON backup
 - **Android Widgets** — Home screen widgets: Expense Summary, Budget Health, Quick Add
+- **Analytics** — Firebase Analytics for screen views, user events, and engagement tracking
+- **Crashlytics** — Firebase Crashlytics for crash reporting and JS error tracking
 
 ## Stack
 
@@ -39,6 +42,7 @@ Built with Expo 54, React Native 0.81.5, TypeScript, SQLite, and Supabase. Zero 
 | Lists       | @shopify/flash-list 2.0.2                            |
 | Widgets     | react-native-android-widget ^0.20.1                  |
 | SMS parsing | react-native-get-sms-android ^2.1.0                  |
+| Analytics   | @react-native-firebase/analytics ^21.14.0            |
 | Linting     | ESLint ^9.0.0 + eslint-config-expo                   |
 | Formatting  | Prettier (pre-commit via husky + lint-staged)        |
 
@@ -107,3 +111,5 @@ yarn test         # Alias for typecheck
 - [AI_CONTEXT.md](./AI_CONTEXT.md) — AI agent reference (read this first for coding)
 - [ARCHITECTURE.md](./ARCHITECTURE.md) — Technical architecture details
 - [SUPABASE_SETUP.md](./SUPABASE_SETUP.md) — Backend setup guide
+- [PRODUCT_FEATURES.md](./PRODUCT_FEATURES.md) — Detailed product feature documentation
+- [DEPLOYMENT.md](./DEPLOYMENT.md) — EAS build & deployment guide

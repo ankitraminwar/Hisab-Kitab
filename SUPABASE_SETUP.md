@@ -21,12 +21,12 @@ Paste the following file into the Supabase SQL editor and run it:
 
 This single idempotent file creates:
 
-- All tables (accounts, categories, transactions, budgets, goals, assets, liabilities, net_worth_history, user_profile, split_expenses, split_members, payment_methods)
+- All tables (accounts, categories, transactions, budgets, goals, assets, liabilities, net_worth_history, user_profile, split_expenses, split_members, payment_methods, notes)
 - All indexes and triggers (including GIN index on `tags`, composite indexes for dashboard/filter queries)
-- RLS policies (per-user isolation via `auth.uid()`)
+- RLS policies (per-user isolation via `auth.uid()`; categories read policy allows default rows with `user_id IS NULL`)
 - `handle_new_user` trigger (auto-creates `user_profile` on new auth user with `theme_preference: 'system'`)
-- `dashboard_monthly_stats` materialized view (pre-aggregated monthly income/expenses/net per user, auto-refreshed via trigger)
-- `get_dashboard_stats(month)` RPC function for accessing dashboard aggregates
+- `dashboard_monthly_stats` materialized view (pre-aggregated monthly income/expenses/net per user, refreshed explicitly by client — no auto-refresh trigger)
+- `get_dashboard_stats(month)` RPC function (`security invoker`) for accessing dashboard aggregates
 - Backfill for existing auth users missing `user_profile`
 
 **Design decisions**:
@@ -35,6 +35,7 @@ This single idempotent file creates:
 - **`user_id → auth.users(id)`** FK is retained on all tables.
 - **`payment_method`** column on `transactions` has no CHECK constraint — accepts any string (SMS imports use varied values).
 - **`user_profile.avatar`** — `TEXT` column for profile photo URI.
+- **`notes.id`** — `TEXT` primary key (UUID string), not `uuid` type, consistent with all other entity IDs.
 
 Safe to run multiple times — triggers and policies are dropped and recreated.
 

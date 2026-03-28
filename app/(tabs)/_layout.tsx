@@ -1,8 +1,9 @@
+import { Ionicons } from '@expo/vector-icons';
+import { Tabs, useRouter } from 'expo-router';
 import React from 'react';
 import { Pressable, StyleSheet } from 'react-native';
-import { Tabs, useRouter } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
 import Animated, { useAnimatedStyle, useSharedValue, withSpring } from 'react-native-reanimated';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../../src/hooks/useTheme';
 
 const SPRING_CONFIG = { damping: 12, stiffness: 180 };
@@ -56,7 +57,8 @@ const CenterFAB: React.FC = () => {
 
 export default function TabsLayout() {
   const { colors } = useTheme();
-  const styles = React.useMemo(() => createStyles(colors), [colors]);
+  const { bottom } = useSafeAreaInsets();
+  const styles = React.useMemo(() => createStyles(colors, bottom), [colors, bottom]);
 
   return (
     <Tabs
@@ -168,13 +170,13 @@ const fabStyles = StyleSheet.create({
   },
 });
 
-const createStyles = (colors: { bgCard: string; border: string }) =>
+const createStyles = (colors: { bgCard: string; border: string }, bottomInset: number) =>
   StyleSheet.create({
     tabBar: {
       backgroundColor: colors.bgCard,
       borderTopColor: colors.border,
       borderTopWidth: 1,
-      height: 72,
-      paddingBottom: 8,
+      height: 60 + bottomInset,
+      paddingBottom: bottomInset > 0 ? bottomInset : 8,
     },
   });

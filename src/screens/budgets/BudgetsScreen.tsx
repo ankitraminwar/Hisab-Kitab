@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { format } from 'date-fns';
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   RefreshControl,
   ScrollView,
@@ -15,10 +15,10 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   Button,
   Card,
+  CustomModal,
   EmptyState,
   ProgressBar,
   SectionHeader,
-  CustomModal,
 } from '../../components/common';
 import { useTheme, type ThemeColors } from '../../hooks/useTheme';
 import { BudgetService, CategoryService } from '../../services/dataService';
@@ -285,7 +285,7 @@ const AddBudgetModal = ({
       year: Number(year),
       categoryId,
       limitAmount: Number(amount),
-      alertAt: Number(amount) * 0.8,
+      alertAt: 80,
     });
     setLoading(false);
     setAmount('');
@@ -365,6 +365,7 @@ const EditBudgetModal = ({
 }) => {
   const [amount, setAmount] = useState(String(budget.limitAmount));
   const [loading, setLoading] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const styles = useMemo(() => modalStyles(colors), [colors]);
 
   const handleSave = async () => {
@@ -383,32 +384,65 @@ const EditBudgetModal = ({
   };
 
   return (
-    <CustomModal visible={visible} onClose={onClose} hideCloseBtn>
-      <Text style={styles.title}>Edit Budget</Text>
-      <Text style={styles.subtitle}>{category?.name}</Text>
+    <CustomModal
+      visible={visible}
+      onClose={() => {
+        setConfirmDelete(false);
+        onClose();
+      }}
+      hideCloseBtn
+    >
+      {!confirmDelete ? (
+        <>
+          <Text style={styles.title}>Edit Budget</Text>
+          <Text style={styles.subtitle}>{category?.name}</Text>
 
-      <Text style={styles.label}>Monthly Limit</Text>
-      <TextInput
-        style={styles.input}
-        keyboardType="numeric"
-        value={amount}
-        onChangeText={setAmount}
-      />
+          <Text style={styles.label}>Monthly Limit</Text>
+          <TextInput
+            style={styles.input}
+            keyboardType="numeric"
+            value={amount}
+            onChangeText={setAmount}
+          />
 
-      <View style={styles.actions}>
-        <Button
-          title="Delete"
-          variant="danger"
-          onPress={() => void handleDelete()}
-          style={styles.flex1}
-        />
-        <Button
-          title="Update"
-          onPress={() => void handleSave()}
-          loading={loading}
-          style={styles.flex1}
-        />
-      </View>
+          <View style={styles.actions}>
+            <Button
+              title="Delete"
+              variant="danger"
+              onPress={() => setConfirmDelete(true)}
+              style={styles.flex1}
+            />
+            <Button
+              title="Update"
+              onPress={() => void handleSave()}
+              loading={loading}
+              style={styles.flex1}
+            />
+          </View>
+        </>
+      ) : (
+        <>
+          <Text style={styles.title}>Delete Budget</Text>
+          <Text style={styles.subtitle}>
+            Are you sure you want to delete the budget for {category?.name}?
+          </Text>
+          <View style={styles.actions}>
+            <Button
+              title="Cancel"
+              variant="secondary"
+              onPress={() => setConfirmDelete(false)}
+              style={styles.flex1}
+            />
+            <Button
+              title="Delete"
+              variant="danger"
+              onPress={() => void handleDelete()}
+              loading={loading}
+              style={styles.flex1}
+            />
+          </View>
+        </>
+      )}
     </CustomModal>
   );
 };

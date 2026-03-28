@@ -1,8 +1,9 @@
 import { Ionicons } from '@expo/vector-icons';
-import { differenceInDays } from 'date-fns';
-import React, { useEffect, useMemo, useState } from 'react';
+import DateTimePicker from '@react-native-community/datetimepicker';
+import { differenceInDays, format } from 'date-fns';
+import { useEffect, useMemo, useState } from 'react';
 import {
-  Alert,
+  Platform,
   ScrollView,
   StyleSheet,
   Text,
@@ -12,7 +13,7 @@ import {
 } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Button, Card, EmptyState, ProgressBar, CustomModal } from '../../components/common';
+import { Button, Card, CustomModal, EmptyState, ProgressBar } from '../../components/common';
 import { useTheme, type ThemeColors } from '../../hooks/useTheme';
 import { GoalService } from '../../services/dataService';
 import { useAppStore } from '../../store/appStore';
@@ -39,7 +40,9 @@ export default function GoalsScreen() {
   const dataRevision = useAppStore((state) => state.dataRevision);
   const [goals, setGoals] = useState<Goal[]>([]);
   const [showAdd, setShowAdd] = useState(false);
+  const [editGoal, setEditGoal] = useState<Goal | null>(null);
   const [selectedGoal, setSelectedGoal] = useState<Goal | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<Goal | null>(null);
   const [fundAmount, setFundAmount] = useState('');
 
   useEffect(() => {
@@ -122,19 +125,8 @@ export default function GoalsScreen() {
                   key={goal.id}
                   goal={goal}
                   onFund={() => setSelectedGoal(goal)}
-                  onDelete={() => {
-                    Alert.alert('Delete Goal', `Are you sure you want to delete "${goal.name}"?`, [
-                      { text: 'Cancel', style: 'cancel' },
-                      {
-                        text: 'Delete',
-                        style: 'destructive',
-                        onPress: async () => {
-                          await GoalService.delete(goal.id);
-                          void loadGoals();
-                        },
-                      },
-                    ]);
-                  }}
+                  onEdit={() => setEditGoal(goal)}
+                  onDelete={() => setDeleteTarget(goal)}
                   colors={colors}
                 />
               ))}
@@ -143,6 +135,36 @@ export default function GoalsScreen() {
         </Animated.View>
         <View style={{ height: 100 }} />
       </ScrollView>
+
+      {/* Delete Confirmation Modal */}
+      <CustomModal visible={!!deleteTarget} onClose={() => setDeleteTarget(null)} hideCloseBtn>
+        <Text style={{ ...TYPOGRAPHY.h3, color: colors.textPrimary, marginBottom: SPACING.sm }}>
+          Delete Goal
+        </Text>
+        <Text style={{ ...TYPOGRAPHY.body, color: colors.textSecondary, marginBottom: SPACING.lg }}>
+          Are you sure you want to delete &quot;{deleteTarget?.name}&quot;?
+        </Text>
+        <View style={{ flexDirection: 'row', gap: SPACING.md }}>
+          <Button
+            title="Cancel"
+            variant="secondary"
+            onPress={() => setDeleteTarget(null)}
+            style={{ flex: 1 }}
+          />
+          <Button
+            title="Delete"
+            onPress={() => {
+              if (deleteTarget) {
+                void GoalService.delete(deleteTarget.id).then(() => {
+                  setDeleteTarget(null);
+                  void loadGoals();
+                });
+              }
+            }}
+            style={{ flex: 1, backgroundColor: colors.expense }}
+          />
+        </View>
+      </CustomModal>
 
       {/* Fund Goal Modal */}
       <CustomModal
@@ -215,6 +237,18 @@ export default function GoalsScreen() {
         colors={colors}
         isDark={isDark}
       />
+
+      <EditGoalModal
+        visible={!!editGoal}
+        goal={editGoal}
+        onClose={() => setEditGoal(null)}
+        onSave={() => {
+          void loadGoals();
+          setEditGoal(null);
+        }}
+        colors={colors}
+        isDark={isDark}
+      />
     </SafeAreaView>
   );
 }
@@ -222,11 +256,13 @@ export default function GoalsScreen() {
 const GoalCard = ({
   goal,
   onFund,
+  onEdit,
   onDelete,
   colors,
 }: {
   goal: Goal;
   onFund: () => void;
+  onEdit: () => void;
   onDelete: () => void;
   colors: ThemeColors;
 }) => {
@@ -284,6 +320,12 @@ const GoalCard = ({
           </TouchableOpacity>
           <TouchableOpacity
             style={[styles.fundButton, { backgroundColor: colors.bgElevated }]}
+            onPress={onEdit}
+          >
+            <Ionicons name="pencil-outline" size={18} color={colors.textSecondary} />
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.fundButton, { backgroundColor: colors.bgElevated }]}
             onPress={onDelete}
           >
             <Ionicons name="trash-outline" size={18} color={colors.expense} />
@@ -291,13 +333,21 @@ const GoalCard = ({
         </View>
       )}
       {isCompleted && (
-        <TouchableOpacity
-          style={[styles.fundButton, { backgroundColor: colors.bgElevated }]}
-          onPress={onDelete}
-        >
-          <Ionicons name="trash-outline" size={18} color={colors.expense} />
-          <Text style={[styles.fundText, { color: colors.expense }]}>Delete</Text>
-        </TouchableOpacity>
+        <View style={{ flexDirection: 'row', gap: SPACING.sm }}>
+          <TouchableOpacity
+            style={[styles.fundButton, { backgroundColor: colors.bgElevated, flex: 1 }]}
+            onPress={onEdit}
+          >
+            <Ionicons name="pencil-outline" size={18} color={colors.textSecondary} />
+            <Text style={[styles.fundText, { color: colors.textSecondary }]}>Edit</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.fundButton, { backgroundColor: colors.bgElevated }]}
+            onPress={onDelete}
+          >
+            <Ionicons name="trash-outline" size={18} color={colors.expense} />
+          </TouchableOpacity>
+        </View>
       )}
     </Card>
   );
@@ -321,20 +371,23 @@ const AddGoalModal = ({
   const [targetAmount, setTargetAmount] = useState('');
   const [color, setColor] = useState(GOAL_COLORS[0]);
   const [icon, setIcon] = useState(GOAL_ICONS[0]);
+  const [deadline, setDeadline] = useState(() => {
+    const d = new Date();
+    d.setMonth(d.getMonth() + 6);
+    return d;
+  });
+  const [showDatePicker, setShowDatePicker] = useState(false);
   const [loading, setLoading] = useState(false);
 
   const handleSave = async () => {
     if (!name || !targetAmount) return;
 
     setLoading(true);
-    const targetDate = new Date();
-    targetDate.setMonth(targetDate.getMonth() + 6); // Default 6 months for now
-
     await GoalService.create({
       name,
       targetAmount: Number(targetAmount),
       currentAmount: 0,
-      deadline: targetDate.toISOString().slice(0, 10),
+      deadline: deadline.toISOString().slice(0, 10),
       color,
       icon,
       isCompleted: false,
@@ -368,6 +421,24 @@ const AddGoalModal = ({
           onChangeText={setTargetAmount}
           keyboardAppearance={isDark ? 'dark' : 'light'}
         />
+
+        <Text style={styles.label}>Deadline</Text>
+        <TouchableOpacity style={styles.input} onPress={() => setShowDatePicker(true)}>
+          <Text style={{ color: colors.textPrimary, ...TYPOGRAPHY.body }}>
+            {format(deadline, 'MMM dd, yyyy')}
+          </Text>
+        </TouchableOpacity>
+        {showDatePicker && (
+          <DateTimePicker
+            value={deadline}
+            mode="date"
+            minimumDate={new Date()}
+            onChange={(_, date) => {
+              setShowDatePicker(Platform.OS === 'ios');
+              if (date) setDeadline(date);
+            }}
+          />
+        )}
 
         <Text style={styles.label}>Style</Text>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.selector}>
@@ -405,6 +476,146 @@ const AddGoalModal = ({
           <Button title="Cancel" variant="secondary" onPress={onClose} style={styles.flex1} />
           <Button
             title="Save Goal"
+            onPress={() => void handleSave()}
+            loading={loading}
+            style={styles.flex1}
+            disabled={!name || !targetAmount}
+          />
+        </View>
+      </ScrollView>
+    </CustomModal>
+  );
+};
+
+const EditGoalModal = ({
+  visible,
+  goal,
+  onClose,
+  onSave,
+  colors,
+  isDark,
+}: {
+  visible: boolean;
+  goal: Goal | null;
+  onClose: () => void;
+  onSave: () => void;
+  colors: ThemeColors;
+  isDark: boolean;
+}) => {
+  const styles = useMemo(() => modalStyles(colors), [colors]);
+  const [name, setName] = useState('');
+  const [targetAmount, setTargetAmount] = useState('');
+  const [color, setColor] = useState(GOAL_COLORS[0]);
+  const [icon, setIcon] = useState(GOAL_ICONS[0]);
+  const [deadline, setDeadline] = useState(new Date());
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (goal) {
+      setName(goal.name);
+      setTargetAmount(String(goal.targetAmount));
+      setColor(goal.color || GOAL_COLORS[0]);
+      setIcon(goal.icon || GOAL_ICONS[0]);
+      setDeadline(goal.deadline ? new Date(goal.deadline) : new Date());
+      setShowDatePicker(false);
+    }
+  }, [goal]);
+
+  const handleSave = async () => {
+    if (!goal || !name || !targetAmount) return;
+    setLoading(true);
+    try {
+      await GoalService.update(goal.id, {
+        name,
+        targetAmount: Number(targetAmount),
+        deadline: deadline.toISOString().slice(0, 10),
+        color,
+        icon,
+      });
+      onSave();
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <CustomModal visible={visible} onClose={onClose} hideCloseBtn>
+      <Text style={styles.title}>Edit Goal</Text>
+
+      <ScrollView showsVerticalScrollIndicator={false}>
+        <TextInput
+          style={styles.input}
+          placeholder="Goal Name"
+          placeholderTextColor={colors.textMuted}
+          value={name}
+          onChangeText={setName}
+        />
+
+        <TextInput
+          style={styles.input}
+          placeholder="Target Amount"
+          placeholderTextColor={colors.textMuted}
+          keyboardType="numeric"
+          value={targetAmount}
+          onChangeText={setTargetAmount}
+          keyboardAppearance={isDark ? 'dark' : 'light'}
+        />
+
+        <Text style={styles.label}>Deadline</Text>
+        <TouchableOpacity style={styles.input} onPress={() => setShowDatePicker(true)}>
+          <Text style={{ color: colors.textPrimary, ...TYPOGRAPHY.body }}>
+            {format(deadline, 'MMM dd, yyyy')}
+          </Text>
+        </TouchableOpacity>
+        {showDatePicker && (
+          <DateTimePicker
+            value={deadline}
+            mode="date"
+            minimumDate={new Date()}
+            onChange={(_, date) => {
+              setShowDatePicker(Platform.OS === 'ios');
+              if (date) setDeadline(date);
+            }}
+          />
+        )}
+
+        <Text style={styles.label}>Style</Text>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.selector}>
+          {GOAL_COLORS.map((c) => (
+            <TouchableOpacity
+              key={c}
+              onPress={() => setColor(c)}
+              style={[
+                styles.colorOption,
+                { backgroundColor: c },
+                color === c && styles.selectedOption,
+              ]}
+            />
+          ))}
+        </ScrollView>
+
+        <Text style={styles.label}>Icon</Text>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.selector}>
+          {GOAL_ICONS.map((i) => (
+            <TouchableOpacity
+              key={i}
+              onPress={() => setIcon(i)}
+              style={[
+                styles.iconOption,
+                { backgroundColor: colors.bgElevated },
+                icon === i && [styles.selectedOption, { borderColor: color }],
+              ]}
+            >
+              <Ionicons name={i as never} size={24} color={icon === i ? color : colors.textMuted} />
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
+
+        <View style={styles.actions}>
+          <Button title="Cancel" variant="secondary" onPress={onClose} style={styles.flex1} />
+          <Button
+            title="Save"
             onPress={() => void handleSave()}
             loading={loading}
             style={styles.flex1}

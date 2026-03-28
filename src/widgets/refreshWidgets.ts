@@ -29,7 +29,8 @@ export async function refreshAllWidgets() {
         renderWidget: () => BudgetHealthWidget(budgetData),
       }),
     ]);
-  } catch {
+  } catch (error) {
     // Widget update failures are non-critical — swallow silently
+    console.warn('Widget refresh failed:', error);
   }
 }

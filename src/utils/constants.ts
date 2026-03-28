@@ -117,7 +117,7 @@ export const SHADOWS = {
 } as const;
 
 export const CURRENCY = {
-  symbol: 'Rs',
+  symbol: '₹',
   code: 'INR',
   locale: 'en-IN',
 } as const;
@@ -131,6 +131,7 @@ export const SYNCABLE_TABLES = [
   'assets',
   'liabilities',
   'net_worth_history',
+  'recurring_templates',
   'split_expenses',
   'split_members',
   'split_friends',
@@ -174,5 +175,20 @@ export const formatCompact = (amount: number): string => {
   return `${CURRENCY.symbol}${amount.toFixed(0)}`;
 };
 
-export const generateId = (): string =>
-  `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 10)}`;
+/**
+ * Generates a RFC-4122 compliant UUID v4 using the Hermes-native
+ * `crypto.randomUUID()` API (available since RN 0.71 / Hermes 0.12).
+ * Falls back to a random-based UUID if the native API is unavailable
+ * (e.g., Jest / non-Hermes environments).
+ */
+export const generateId = (): string => {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+  // Fallback: RFC-4122 v4 UUID via Math.random (test environments)
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0;
+    const v = c === 'x' ? r : (r & 0x3) | 0x8;
+    return v.toString(16);
+  });
+};

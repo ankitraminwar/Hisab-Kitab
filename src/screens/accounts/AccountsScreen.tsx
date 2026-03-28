@@ -16,7 +16,7 @@ import {
 import Animated, { FadeInDown, FadeInRight } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { Button, CustomModal } from '../../components/common';
+import { Button, CustomModal, usePopup } from '../../components/common';
 import { useTheme, type ThemeColors } from '../../hooks/useTheme';
 import { AccountService } from '../../services/dataServices';
 import { triggerBackgroundSync } from '../../services/syncService';
@@ -55,10 +55,12 @@ const ACCOUNT_COLORS = [
 
 export default function AccountsScreen() {
   const { colors, isDark } = useTheme();
+  const { showCustomPopup } = usePopup();
   const dataRevision = useAppStore((state) => state.dataRevision);
   const styles = useMemo(() => createStyles(colors), [colors]);
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [showAdd, setShowAdd] = useState(false);
+  const [editingAccount, setEditingAccount] = useState<Account | null>(null);
   const [refreshing, setRefreshing] = useState(false);
 
   const loadAccounts = useCallback(async () => {
@@ -194,9 +196,18 @@ export default function AccountsScreen() {
                   <Animated.View entering={FadeInRight.duration(400).delay(250 + index * 50)}>
                     <AccountCreditCard
                       account={item}
-                      onDelete={async () => {
-                        await AccountService.delete(item.id);
-                        void loadAccounts();
+                      onEdit={() => setEditingAccount(item)}
+                      onDelete={() => {
+                        showCustomPopup({
+                          title: 'Delete Account?',
+                          message: `Are you sure you want to delete "${item.name}"? This action cannot be undone. All associated transactions will be hidden.`,
+                          type: 'error',
+                          confirmLabel: 'Delete',
+                          onConfirm: async () => {
+                            await AccountService.delete(item.id);
+                            void loadAccounts();
+                          },
+                        });
                       }}
                     />
                   </Animated.View>
@@ -236,14 +247,25 @@ export default function AccountsScreen() {
           setShowAdd(false);
         }}
       />
+
+      <EditAccountModal
+        visible={!!editingAccount}
+        account={editingAccount}
+        onClose={() => setEditingAccount(null)}
+        onSave={() => {
+          void loadAccounts();
+          setEditingAccount(null);
+        }}
+      />
     </View>
   );
 }
 
-const AccountCreditCard: React.FC<{ account: Account; onDelete: () => void }> = ({
-  account,
-  onDelete,
-}) => {
+const AccountCreditCard: React.FC<{
+  account: Account;
+  onEdit: () => void;
+  onDelete: () => void;
+}> = ({ account, onEdit, onDelete }) => {
   const { colors } = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const typeInfo = ACCOUNT_TYPES.find((type) => type.key === account.type);
@@ -267,9 +289,14 @@ const AccountCreditCard: React.FC<{ account: Account; onDelete: () => void }> = 
         <View style={styles.cardIconBox}>
           <Ionicons name={account.icon as IoniconsName} size={20} color={c1} />
         </View>
-        <TouchableOpacity onPress={onDelete} style={styles.deleteAction} hitSlop={10}>
-          <Ionicons name="trash" size={18} color="rgba(255,255,255,0.8)" />
-        </TouchableOpacity>
+        <View style={{ flexDirection: 'row', gap: 8 }}>
+          <TouchableOpacity onPress={onEdit} style={styles.deleteAction} hitSlop={10}>
+            <Ionicons name="pencil" size={18} color="rgba(255,255,255,0.8)" />
+          </TouchableOpacity>
+          <TouchableOpacity onPress={onDelete} style={styles.deleteAction} hitSlop={10}>
+            <Ionicons name="trash" size={18} color="rgba(255,255,255,0.8)" />
+          </TouchableOpacity>
+        </View>
       </View>
 
       <View style={styles.cardMiddle}>
@@ -423,6 +450,145 @@ const AddAccountModal: React.FC<{
       <View style={styles.actions}>
         <Button title="Cancel" onPress={onClose} variant="ghost" style={{ flex: 1 }} />
         <Button title="Add Account" onPress={handleSave} loading={loading} style={{ flex: 1 }} />
+      </View>
+    </CustomModal>
+  );
+};
+
+// ── EDIT ACCOUNT MODAL ────────────────────────────────────────────────────────
+
+const EditAccountModal: React.FC<{
+  visible: boolean;
+  account: Account | null;
+  onClose: () => void;
+  onSave: () => void;
+}> = ({ visible, account, onClose, onSave }) => {
+  const { colors } = useTheme();
+  const styles = useMemo(() => createModalStyles(colors), [colors]);
+  const [name, setName] = useState('');
+  const [type, setType] = useState<AccountType>('bank');
+  const [balance, setBalance] = useState('');
+  const [color, setColor] = useState(ACCOUNT_COLORS[0]);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (visible && account) {
+      setName(account.name);
+      setType(account.type);
+      setBalance(String(account.balance));
+      setColor(account.color || ACCOUNT_COLORS[0]);
+    }
+  }, [visible, account]);
+
+  const handleSave = async () => {
+    if (!name.trim() || !account) return;
+
+    setLoading(true);
+    try {
+      const typeInfo = ACCOUNT_TYPES.find((item) => item.key === type);
+      await AccountService.update(account.id, {
+        name: name.trim(),
+        type,
+        balance: parseFloat(balance) || 0,
+        color,
+        icon: typeInfo?.icon || account.icon,
+      });
+      onSave();
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <CustomModal visible={visible} onClose={onClose} hideCloseBtn>
+      <View style={styles.modalHeader}>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.title}>Edit Account</Text>
+          <Text style={styles.subtitle}>Update your account details.</Text>
+        </View>
+        <TouchableOpacity style={styles.closeBtn} onPress={onClose}>
+          <Ionicons name="close" size={20} color={colors.textSecondary} />
+        </TouchableOpacity>
+      </View>
+
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.formContent}
+        keyboardShouldPersistTaps="handled"
+      >
+        <Text style={styles.label}>Account Type</Text>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={{ marginBottom: SPACING.lg }}
+          keyboardShouldPersistTaps="handled"
+        >
+          {ACCOUNT_TYPES.map((item) => (
+            <TouchableOpacity
+              key={item.key}
+              onPress={() => setType(item.key)}
+              style={[
+                styles.typeChip,
+                type === item.key && {
+                  backgroundColor: item.color,
+                  borderColor: item.color,
+                },
+              ]}
+            >
+              <Ionicons
+                name={item.icon as IoniconsName}
+                size={16}
+                color={type === item.key ? '#fff' : colors.textMuted}
+              />
+              <Text style={[styles.typeLabel, type === item.key && { color: '#fff' }]}>
+                {item.label}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
+
+        <TextInput
+          value={name}
+          onChangeText={setName}
+          placeholder="Account name"
+          placeholderTextColor={colors.textMuted}
+          style={styles.input}
+        />
+        <TextInput
+          value={balance}
+          onChangeText={setBalance}
+          keyboardType="numeric"
+          placeholder="Balance (₹)"
+          placeholderTextColor={colors.textMuted}
+          style={styles.input}
+        />
+
+        <Text style={styles.label}>Theme Color</Text>
+        <View style={styles.colorRow}>
+          {ACCOUNT_COLORS.map((value) => (
+            <TouchableOpacity
+              key={value}
+              onPress={() => setColor(value)}
+              style={[
+                styles.colorDot,
+                {
+                  backgroundColor: value,
+                  borderWidth: color === value ? 3 : 0,
+                  borderColor: colors.bgCard,
+                  shadowColor: value,
+                  shadowOpacity: color === value ? 0.3 : 0,
+                  shadowRadius: 4,
+                  elevation: color === value ? 4 : 0,
+                },
+              ]}
+            />
+          ))}
+        </View>
+      </ScrollView>
+
+      <View style={styles.actions}>
+        <Button title="Cancel" onPress={onClose} variant="ghost" style={{ flex: 1 }} />
+        <Button title="Save Changes" onPress={handleSave} loading={loading} style={{ flex: 1 }} />
       </View>
     </CustomModal>
   );

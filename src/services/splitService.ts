@@ -27,39 +27,19 @@ const createSyncMetadata = () => ({
   deletedAt: null,
 });
 
-type SplitExpenseRow = SplitExpense & {
-  transaction_id?: string;
-  paid_by_user_id?: string;
-  total_amount?: number | string;
-  split_method?: SplitExpense['splitMethod'];
-};
-
-type SplitMemberRow = SplitMember & {
-  split_expense_id?: string;
-  friend_id?: string | null;
-  share_amount?: number | string;
-  share_percent?: number | string | null;
-};
-
+type SplitExpenseRow = SplitExpense;
+type SplitMemberRow = SplitMember;
 type SplitFriendRow = SplitFriend;
 
 const parseSplitExpense = (row: SplitExpenseRow): SplitExpense => ({
   ...row,
-  transactionId: row.transactionId ?? row.transaction_id ?? '',
-  paidByUserId: row.paidByUserId ?? row.paid_by_user_id ?? '',
-  totalAmount: Number(row.totalAmount ?? row.total_amount) || 0,
-  splitMethod: row.splitMethod ?? row.split_method ?? 'equal',
+  totalAmount: Number(row.totalAmount) || 0,
 });
 
 const parseSplitMember = (row: SplitMemberRow): SplitMember => ({
   ...row,
-  splitExpenseId: row.splitExpenseId ?? row.split_expense_id ?? '',
-  friendId: row.friendId ?? row.friend_id ?? undefined,
-  shareAmount: Number(row.shareAmount ?? row.share_amount) || 0,
-  sharePercent:
-    row.sharePercent != null || row.share_percent != null
-      ? Number(row.sharePercent ?? row.share_percent) || 0
-      : undefined,
+  shareAmount: Number(row.shareAmount) || 0,
+  sharePercent: row.sharePercent != null ? Number(row.sharePercent) : undefined,
 });
 
 const parseSplitFriend = (row: SplitFriendRow): SplitFriend => ({
@@ -239,7 +219,7 @@ export const SplitService = {
     try {
       await db.runAsync(
         `INSERT INTO split_expenses
-          (id, transaction_id, paid_by_user_id, total_amount, split_method, notes, createdAt, updatedAt, userId, syncStatus, lastSyncedAt, deletedAt)
+          (id, transactionId, paidByUserId, totalAmount, splitMethod, notes, createdAt, updatedAt, userId, syncStatus, lastSyncedAt, deletedAt)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           expense.id,
@@ -269,7 +249,7 @@ export const SplitService = {
 
         await db.runAsync(
           `INSERT INTO split_members
-            (id, split_expense_id, friendId, name, share_amount, share_percent, status, createdAt, updatedAt, userId, syncStatus, lastSyncedAt, deletedAt)
+            (id, splitExpenseId, friendId, name, shareAmount, sharePercent, status, createdAt, updatedAt, userId, syncStatus, lastSyncedAt, deletedAt)
            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [
             member.id,
@@ -343,7 +323,7 @@ export const SplitService = {
 
     const existingExpense = parseSplitExpense(expenseRow);
     const existingMemberRows = await db.getAllAsync<SplitMemberRow>(
-      'SELECT * FROM split_members WHERE split_expense_id = ? AND deletedAt IS NULL',
+      'SELECT * FROM split_members WHERE splitExpenseId = ? AND deletedAt IS NULL',
       [splitId],
     );
     const existingMembers = existingMemberRows.map(parseSplitMember);
@@ -370,7 +350,7 @@ export const SplitService = {
     try {
       await db.runAsync(
         `UPDATE split_expenses
-         SET transaction_id = ?, paid_by_user_id = ?, total_amount = ?, split_method = ?, notes = ?, updatedAt = ?, syncStatus = 'pending', deletedAt = NULL
+         SET transactionId = ?, paidByUserId = ?, totalAmount = ?, splitMethod = ?, notes = ?, updatedAt = ?, syncStatus = 'pending', deletedAt = NULL
          WHERE id = ?`,
         [
           expense.transactionId,
@@ -403,7 +383,7 @@ export const SplitService = {
 
           await db.runAsync(
             `UPDATE split_members
-             SET friendId = ?, name = ?, share_amount = ?, share_percent = ?, status = ?, updatedAt = ?, syncStatus = 'pending', deletedAt = NULL
+             SET friendId = ?, name = ?, shareAmount = ?, sharePercent = ?, status = ?, updatedAt = ?, syncStatus = 'pending', deletedAt = NULL
              WHERE id = ?`,
             [
               bindValue(updatedMember.friendId),
@@ -431,7 +411,7 @@ export const SplitService = {
 
         await db.runAsync(
           `INSERT INTO split_members
-            (id, split_expense_id, friendId, name, share_amount, share_percent, status, createdAt, updatedAt, userId, syncStatus, lastSyncedAt, deletedAt)
+            (id, splitExpenseId, friendId, name, shareAmount, sharePercent, status, createdAt, updatedAt, userId, syncStatus, lastSyncedAt, deletedAt)
            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [
             createdMember.id,
@@ -508,7 +488,7 @@ export const SplitService = {
     transactionId: string,
   ): Promise<{ expense: SplitExpense; members: SplitMember[] } | null> {
     const expenseRow = await getDatabase().getFirstAsync<SplitExpenseRow>(
-      'SELECT * FROM split_expenses WHERE transaction_id = ? AND deletedAt IS NULL',
+      'SELECT * FROM split_expenses WHERE transactionId = ? AND deletedAt IS NULL',
       [transactionId],
     );
 
@@ -517,7 +497,7 @@ export const SplitService = {
     const expense = parseSplitExpense(expenseRow);
 
     const memberRows = await getDatabase().getAllAsync<SplitMemberRow>(
-      'SELECT * FROM split_members WHERE split_expense_id = ? AND deletedAt IS NULL',
+      'SELECT * FROM split_members WHERE splitExpenseId = ? AND deletedAt IS NULL',
       [expense.id],
     );
     const members = memberRows.map(parseSplitMember);
@@ -556,39 +536,92 @@ export const SplitService = {
       transactionDate?: string;
     }[]
   > {
-    const expenseRows = await getDatabase().getAllAsync<SplitExpenseRow>(
-      'SELECT * FROM split_expenses WHERE deletedAt IS NULL ORDER BY createdAt DESC',
-    );
+    type JoinedRow = SplitExpenseRow &
+      SplitMemberRow & {
+        t_merchant: string | null;
+        t_notes: string | null;
+        t_date: string | null;
+        m_id: string | null;
+        m_name: string | null;
+        m_shareAmount: number | null;
+        m_sharePercent: number | null;
+        m_status: string | null;
+        m_friendId: string | null;
+        m_splitExpenseId: string | null;
+        m_createdAt: string | null;
+        m_updatedAt: string | null;
+        m_syncStatus: string | null;
+        m_lastSyncedAt: string | null;
+        m_deletedAt: string | null;
+      };
 
-    const results: {
-      expense: SplitExpense;
-      members: SplitMember[];
-      transactionMerchant?: string;
-      transactionDate?: string;
-    }[] = [];
+    const rows = await getDatabase().getAllAsync<JoinedRow>(`
+      SELECT
+        se.*,
+        sm.id           AS m_id,
+        sm.name         AS m_name,
+        sm.shareAmount  AS m_shareAmount,
+        sm.sharePercent AS m_sharePercent,
+        sm.status       AS m_status,
+        sm.friendId     AS m_friendId,
+        sm.splitExpenseId AS m_splitExpenseId,
+        sm.createdAt    AS m_createdAt,
+        sm.updatedAt    AS m_updatedAt,
+        sm.syncStatus   AS m_syncStatus,
+        sm.lastSyncedAt AS m_lastSyncedAt,
+        sm.deletedAt    AS m_deletedAt,
+        t.merchant      AS t_merchant,
+        t.notes         AS t_notes,
+        t.date          AS t_date
+      FROM split_expenses se
+      LEFT JOIN split_members sm
+        ON sm.splitExpenseId = se.id AND sm.deletedAt IS NULL
+      LEFT JOIN transactions t ON t.id = se.transactionId
+      WHERE se.deletedAt IS NULL
+      ORDER BY se.createdAt DESC
+    `);
 
-    for (const row of expenseRows) {
-      const expense = parseSplitExpense(row);
-      const memberRows = await getDatabase().getAllAsync<SplitMemberRow>(
-        'SELECT * FROM split_members WHERE split_expense_id = ? AND deletedAt IS NULL',
-        [expense.id],
-      );
-      const members = memberRows.map(parseSplitMember);
-      const transaction = await getDatabase().getFirstAsync<{
-        merchant: string | null;
-        notes: string | null;
-        date: string;
-      }>('SELECT merchant, notes, date FROM transactions WHERE id = ?', [expense.transactionId]);
+    const expenseMap = new Map<
+      string,
+      {
+        expense: SplitExpense;
+        members: SplitMember[];
+        transactionMerchant?: string;
+        transactionDate?: string;
+      }
+    >();
 
-      results.push({
-        expense,
-        members,
-        transactionMerchant: transaction?.merchant || transaction?.notes || undefined,
-        transactionDate: transaction?.date,
-      });
+    for (const row of rows) {
+      if (!expenseMap.has(row.id)) {
+        expenseMap.set(row.id, {
+          expense: parseSplitExpense(row),
+          members: [],
+          transactionMerchant: row.t_merchant || row.t_notes || undefined,
+          transactionDate: row.t_date ?? undefined,
+        });
+      }
+      if (row.m_id) {
+        expenseMap.get(row.id)!.members.push(
+          parseSplitMember({
+            id: row.m_id,
+            name: row.m_name ?? '',
+            shareAmount: row.m_shareAmount ?? 0,
+            sharePercent: row.m_sharePercent ?? null,
+            status: row.m_status ?? 'pending',
+            friendId: row.m_friendId ?? undefined,
+            splitExpenseId: row.m_splitExpenseId ?? '',
+            createdAt: row.m_createdAt ?? '',
+            updatedAt: row.m_updatedAt ?? '',
+            syncStatus: row.m_syncStatus ?? 'pending',
+            lastSyncedAt: row.m_lastSyncedAt ?? null,
+            deletedAt: row.m_deletedAt ?? null,
+            userId: null,
+          } as unknown as SplitMemberRow),
+        );
+      }
     }
 
-    return results;
+    return Array.from(expenseMap.values());
   },
 
   async getById(splitId: string): Promise<{
@@ -605,7 +638,7 @@ export const SplitService = {
 
     const expense = parseSplitExpense(expenseRow);
     const memberRows = await getDatabase().getAllAsync<SplitMemberRow>(
-      'SELECT * FROM split_members WHERE split_expense_id = ? AND deletedAt IS NULL',
+      'SELECT * FROM split_members WHERE splitExpenseId = ? AND deletedAt IS NULL',
       [expense.id],
     );
     const members = memberRows.map(parseSplitMember);
@@ -637,7 +670,7 @@ export const SplitService = {
 
     await getDatabase().runAsync(
       `UPDATE split_members
-       SET status = ?, share_amount = ?, updatedAt = ?, syncStatus = 'pending'
+       SET status = ?, shareAmount = ?, updatedAt = ?, syncStatus = 'pending'
        WHERE id = ?`,
       [status, Math.max(remaining, 0), updatedAt, memberId],
     );
@@ -654,7 +687,7 @@ export const SplitService = {
   async deleteSplit(splitId: string) {
     const now = new Date().toISOString();
     const memberRows = await getDatabase().getAllAsync<SplitMemberRow>(
-      'SELECT * FROM split_members WHERE split_expense_id = ? AND deletedAt IS NULL',
+      'SELECT * FROM split_members WHERE splitExpenseId = ? AND deletedAt IS NULL',
       [splitId],
     );
     const members = memberRows.map(parseSplitMember);
@@ -707,18 +740,22 @@ export const SplitService = {
       totalPending: number;
     }[]
   > {
+    const rows = await getDatabase().getAllAsync<{
+      friendId: string;
+      totalPending: number;
+    }>(`
+      SELECT sm.friendId, COALESCE(SUM(sm.shareAmount), 0) AS totalPending
+      FROM split_members sm
+      WHERE sm.friendId IS NOT NULL AND sm.status = 'pending' AND sm.deletedAt IS NULL
+      GROUP BY sm.friendId
+    `);
+
+    const pendingByFriend = new Map(rows.map((r) => [r.friendId, r.totalPending]));
     const friends = await this.getFriends();
-    const balances = await Promise.all(
-      friends.map(async (friend) => {
-        const members = await getDatabase().getAllAsync<SplitMemberRow>(
-          'SELECT * FROM split_members WHERE friendId = ? AND status = ? AND deletedAt IS NULL',
-          [friend.id, 'pending'],
-        );
-        const totalPending = members.reduce((sum, m) => sum + (Number(m.share_amount) || 0), 0);
-        return { friend, totalPending };
-      }),
-    );
-    return balances.sort((a, b) => b.totalPending - a.totalPending);
+
+    return friends
+      .map((friend) => ({ friend, totalPending: pendingByFriend.get(friend.id) ?? 0 }))
+      .sort((a, b) => b.totalPending - a.totalPending);
   },
 
   async getFriendDetails(friendId: string): Promise<
@@ -729,42 +766,91 @@ export const SplitService = {
       transactionDate?: string;
     }[]
   > {
-    const memberRows = await getDatabase().getAllAsync<SplitMemberRow>(
-      'SELECT * FROM split_members WHERE friendId = ? AND deletedAt IS NULL ORDER BY createdAt DESC',
+    type FriendDetailRow = SplitMemberRow &
+      SplitExpenseRow & {
+        t_merchant: string | null;
+        t_notes: string | null;
+        t_date: string | null;
+        e_id: string;
+        e_transactionId: string;
+        e_paidByUserId: string;
+        e_totalAmount: number;
+        e_splitMethod: string;
+        e_notes: string | null;
+        e_createdAt: string;
+        e_updatedAt: string;
+        e_syncStatus: string;
+        e_lastSyncedAt: string | null;
+        e_deletedAt: string | null;
+        e_userId: string | null;
+      };
+
+    const rows = await getDatabase().getAllAsync<FriendDetailRow>(
+      `
+      SELECT
+        sm.*,
+        se.id               AS e_id,
+        se.transactionId    AS e_transactionId,
+        se.paidByUserId     AS e_paidByUserId,
+        se.totalAmount      AS e_totalAmount,
+        se.splitMethod      AS e_splitMethod,
+        se.notes            AS e_notes,
+        se.createdAt        AS e_createdAt,
+        se.updatedAt        AS e_updatedAt,
+        se.syncStatus       AS e_syncStatus,
+        se.lastSyncedAt     AS e_lastSyncedAt,
+        se.deletedAt        AS e_deletedAt,
+        se.userId           AS e_userId,
+        t.merchant          AS t_merchant,
+        t.notes             AS t_notes,
+        t.date              AS t_date
+      FROM split_members sm
+      JOIN split_expenses se
+        ON se.id = sm.splitExpenseId AND se.deletedAt IS NULL
+      LEFT JOIN transactions t ON t.id = se.transactionId
+      WHERE sm.friendId = ? AND sm.deletedAt IS NULL
+      ORDER BY sm.createdAt DESC
+    `,
       [friendId],
     );
 
-    const results: {
-      expense: SplitExpense;
-      member: SplitMember;
-      transactionMerchant?: string;
-      transactionDate?: string;
-    }[] = [];
-
-    for (const memberRow of memberRows) {
-      const member = parseSplitMember(memberRow);
-      const expenseRow = await getDatabase().getFirstAsync<SplitExpenseRow>(
-        'SELECT * FROM split_expenses WHERE id = ? AND deletedAt IS NULL',
-        [member.splitExpenseId],
-      );
-      if (!expenseRow) continue;
-      const expense = parseSplitExpense(expenseRow);
-
-      const transaction = await getDatabase().getFirstAsync<{
-        merchant: string | null;
-        notes: string | null;
-        date: string;
-      }>('SELECT merchant, notes, date FROM transactions WHERE id = ?', [expense.transactionId]);
-
-      results.push({
+    return rows.map((row) => {
+      const member = parseSplitMember({
+        id: row.id,
+        name: row.name,
+        shareAmount: row.shareAmount,
+        sharePercent: row.sharePercent ?? null,
+        status: row.status,
+        friendId: row.friendId,
+        splitExpenseId: row.e_id,
+        createdAt: row.createdAt,
+        updatedAt: row.updatedAt,
+        syncStatus: row.syncStatus,
+        lastSyncedAt: row.lastSyncedAt ?? null,
+        deletedAt: row.deletedAt ?? null,
+        userId: row.userId ?? null,
+      } as unknown as SplitMemberRow);
+      const expense = parseSplitExpense({
+        id: row.e_id,
+        transactionId: row.e_transactionId,
+        paidByUserId: row.e_paidByUserId,
+        totalAmount: row.e_totalAmount,
+        splitMethod: row.e_splitMethod,
+        notes: row.e_notes ?? null,
+        createdAt: row.e_createdAt,
+        updatedAt: row.e_updatedAt,
+        syncStatus: row.e_syncStatus ?? 'pending',
+        lastSyncedAt: row.e_lastSyncedAt ?? null,
+        deletedAt: row.e_deletedAt ?? null,
+        userId: row.e_userId ?? null,
+      } as unknown as SplitExpenseRow);
+      return {
         expense,
         member,
-        transactionMerchant: transaction?.merchant || transaction?.notes || undefined,
-        transactionDate: transaction?.date,
-      });
-    }
-
-    return results;
+        transactionMerchant: row.t_merchant || row.t_notes || undefined,
+        transactionDate: row.t_date ?? undefined,
+      };
+    });
   },
 
   async settleUpFriend(friendId: string): Promise<void> {

@@ -29,7 +29,12 @@ import Svg, { Circle } from 'react-native-svg';
 import { Card, EmptyState, ProgressBar, SectionHeader } from '../../components/common';
 import TransactionItem from '../../components/TransactionItem';
 import { useTheme, type ThemeColors } from '../../hooks/useTheme';
-import { AccountService, BudgetService, NetWorthService } from '../../services/dataServices';
+import {
+  AccountService,
+  BudgetService,
+  CategoryService,
+  NetWorthService,
+} from '../../services/dataServices';
 import { triggerBackgroundSync } from '../../services/syncService';
 import { TransactionService } from '../../services/transactionService';
 import { useAppStore } from '../../store/appStore';
@@ -260,6 +265,8 @@ export default function DashboardScreen() {
   const dataRevision = useAppStore((s) => s.dataRevision);
   const userProfile = useAppStore((s) => s.userProfile);
   const syncInProgress = useAppStore((s) => s.syncInProgress);
+  const unreadNotificationsCount = useAppStore((s) => s.unreadNotificationsCount);
+  const setCategories = useAppStore((s) => s.setCategories);
 
   const [refreshing, setRefreshing] = useState(false);
   const [spendingSlices, setSpendingSlices] = useState<DonutSlice[]>([]);
@@ -285,19 +292,23 @@ export default function DashboardScreen() {
     const year = now.getFullYear();
     const month = String(now.getMonth() + 1).padStart(2, '0');
 
-    const [txs, accs, budgetData, nw, monthStats] = await Promise.all([
-      TransactionService.getAll(undefined, 10),
+    const [accs, cats, recents, bdgts, monthStats, nw] = await Promise.all([
       AccountService.getAll(),
+      CategoryService.getAll(),
+      TransactionService.getAll(undefined, 5),
       BudgetService.getForMonth(year, month),
-      NetWorthService.getNetWorth(),
       TransactionService.getMonthlyStats(year, month),
+      NetWorthService.getNetWorth(),
     ]);
-
-    setRecentTransactions(txs);
     setAccounts(accs);
-    setBudgets(budgetData);
+    setCategories(cats);
+    setRecentTransactions(recents);
+    setBudgets(bdgts);
 
-    const totalBalance = accs.reduce((sum, a) => sum + a.balance, 0);
+    const totalBalance = accs.reduce(
+      (sum: number, a: { balance: number }) => sum + (Number(a.balance) || 0),
+      0,
+    );
     const savingsRate =
       monthStats.income > 0
         ? ((monthStats.income - monthStats.expense) / monthStats.income) * 100
@@ -326,7 +337,14 @@ export default function DashboardScreen() {
     }));
     setSpendingSlices(slices);
     setTotalSpent(monthStats.expense);
-  }, [CHART_COLORS, setAccounts, setBudgets, setDashboardStats, setRecentTransactions]);
+  }, [
+    CHART_COLORS,
+    setAccounts,
+    setCategories,
+    setBudgets,
+    setDashboardStats,
+    setRecentTransactions,
+  ]);
 
   useEffect(() => {
     void loadData();
@@ -442,6 +460,28 @@ export default function DashboardScreen() {
             </TouchableOpacity>
             <TouchableOpacity onPress={() => router.push('/notifications')} style={styles.iconBtn}>
               <Ionicons name="notifications" size={22} color={colors.textSecondary} />
+              {unreadNotificationsCount > 0 && (
+                <View
+                  style={{
+                    position: 'absolute',
+                    top: 6,
+                    right: 6,
+                    backgroundColor: colors.expense,
+                    borderRadius: 8,
+                    minWidth: 16,
+                    height: 16,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    paddingHorizontal: 4,
+                    borderWidth: 2,
+                    borderColor: colors.bg,
+                  }}
+                >
+                  <Text style={{ color: '#fff', fontSize: 8, fontWeight: '800' }}>
+                    {unreadNotificationsCount}
+                  </Text>
+                </View>
+              )}
             </TouchableOpacity>
           </View>
         </Animated.View>

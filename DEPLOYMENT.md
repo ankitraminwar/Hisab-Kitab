@@ -8,6 +8,7 @@ This guide provides step-by-step instructions for deploying the Hisab Kitab appl
 - [EAS CLI](https://docs.expo.dev/build/setup/) installed: `npm install -g eas-cli`
 - A [Supabase](https://supabase.com/) project.
 - [Supabase CLI](https://supabase.com/docs/guides/cli) installed (optional, for local development).
+- A [Firebase](https://console.firebase.google.com/) project with Analytics enabled. Place `google-services.json` (Android) in the project root.
 
 ## 2. Setting Up Environment Variables (Local)
 

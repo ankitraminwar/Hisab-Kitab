@@ -37,13 +37,9 @@ const createSyncMetadata = () => ({
   deletedAt: null,
 });
 
-type BudgetRow = Budget & {
-  limit_amount?: number | string;
-};
-
-const parseBudget = (row: BudgetRow): Budget => ({
+const parseBudget = (row: Budget): Budget => ({
   ...row,
-  limitAmount: Number(row.limitAmount ?? row.limit_amount) || 0,
+  limitAmount: Number(row.limitAmount) || 0,
   spent: Number(row.spent) || 0,
 });
 
@@ -60,10 +56,31 @@ const queueEntitySync = async (
 
 export const AccountService = {
   async getAll(): Promise<Account[]> {
-    const rows = await getDatabase().getAllAsync<Account>(
-      'SELECT * FROM accounts WHERE deletedAt IS NULL ORDER BY isDefault DESC, name ASC',
-    );
-    return rows.map((row) => ({ ...row, isDefault: Boolean(row.isDefault) }));
+    try {
+      const db = getDatabase();
+      let rows = await db.getAllAsync<Account>(
+        'SELECT * FROM accounts WHERE deletedAt IS NULL ORDER BY isDefault DESC, name ASC',
+      );
+
+      // Emergency seed if empty (ensure at least one account exists)
+      if (rows.length === 0) {
+        const { seedDefaultData } = await import('../database');
+        await seedDefaultData(db);
+        rows = await db.getAllAsync<Account>(
+          'SELECT * FROM accounts WHERE deletedAt IS NULL ORDER BY isDefault DESC, name ASC',
+        );
+      }
+
+      const accounts = rows.map((row) => ({
+        ...row,
+        isDefault: Boolean(row.isDefault),
+      }));
+
+      return accounts;
+    } catch (e) {
+      console.error('[AccountService] Failed to fetch accounts:', e);
+      return [];
+    }
   },
 
   async create(
@@ -169,10 +186,31 @@ export const AccountService = {
 
 export const CategoryService = {
   async getAll(): Promise<Category[]> {
-    const rows = await getDatabase().getAllAsync<Omit<Category, 'isCustom'> & { isCustom: number }>(
-      'SELECT * FROM categories WHERE deletedAt IS NULL ORDER BY isCustom ASC, name ASC',
-    );
-    return rows.map((row) => ({ ...row, isCustom: Boolean(row.isCustom) }));
+    try {
+      const db = getDatabase();
+      let rows = await db.getAllAsync<Omit<Category, 'isCustom'> & { isCustom: number | null }>(
+        'SELECT * FROM categories WHERE deletedAt IS NULL ORDER BY isCustom ASC, name ASC',
+      );
+
+      // Emergency seed if empty (safety net for interrupted init)
+      if (rows.length === 0) {
+        const { seedDefaultData } = await import('../database');
+        await seedDefaultData(db);
+        rows = await db.getAllAsync<Omit<Category, 'isCustom'> & { isCustom: number | null }>(
+          'SELECT * FROM categories WHERE deletedAt IS NULL ORDER BY isCustom ASC, name ASC',
+        );
+      }
+
+      const categories = rows.map((row) => ({
+        ...row,
+        isCustom: row.isCustom === 1,
+      }));
+
+      return categories;
+    } catch (e) {
+      console.error('[CategoryService] Failed to fetch categories:', e);
+      return [];
+    }
   },
 
   async create(data: Pick<Category, 'name' | 'type' | 'icon' | 'color'>) {
@@ -252,7 +290,7 @@ export const CategoryService = {
 
 export const BudgetService = {
   async getForMonth(year: number, month: string): Promise<Budget[]> {
-    const rows = await getDatabase().getAllAsync<BudgetRow>(
+    const rows = await getDatabase().getAllAsync<Budget>(
       `SELECT b.*,
               c.name as categoryName,
               c.icon as categoryIcon,
@@ -298,7 +336,7 @@ export const BudgetService = {
 
     await getDatabase().runAsync(
       `INSERT INTO budgets
-        (id, categoryId, limit_amount, spent, month, year, alertAt, createdAt, updatedAt, userId, syncStatus, lastSyncedAt, deletedAt)
+        (id, categoryId, limitAmount, spent, month, year, alertAt, createdAt, updatedAt, userId, syncStatus, lastSyncedAt, deletedAt)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         budget.id,
@@ -322,7 +360,7 @@ export const BudgetService = {
   },
 
   async update(id: string, data: Partial<Pick<Budget, 'limitAmount' | 'alertAt'>>) {
-    const existingRow = await getDatabase().getFirstAsync<BudgetRow>(
+    const existingRow = await getDatabase().getFirstAsync<Budget>(
       'SELECT * FROM budgets WHERE id = ?',
       [id],
     );
@@ -342,7 +380,7 @@ export const BudgetService = {
 
     await getDatabase().runAsync(
       `UPDATE budgets
-       SET limit_amount = COALESCE(?, limit_amount), alertAt = COALESCE(?, alertAt), updatedAt = ?, syncStatus = 'pending'
+       SET limitAmount = COALESCE(?, limitAmount), alertAt = COALESCE(?, alertAt), updatedAt = ?, syncStatus = 'pending'
        WHERE id = ?`,
       [data.limitAmount ?? null, data.alertAt ?? null, updatedAt, id],
     );
@@ -441,6 +479,39 @@ export const GoalService = {
       isCompleted: isCompleted ? 1 : 0,
       updatedAt,
       syncStatus: 'pending',
+    } as Record<string, unknown>);
+  },
+
+  async update(
+    id: string,
+    data: Partial<Pick<Goal, 'name' | 'targetAmount' | 'deadline' | 'icon' | 'color'>>,
+  ) {
+    const existing = await getDatabase().getFirstAsync<Goal>('SELECT * FROM goals WHERE id = ?', [
+      id,
+    ]);
+    if (!existing) throw new Error('Goal not found');
+
+    const updatedAt = new Date().toISOString();
+    const goal = { ...existing, ...data, updatedAt, syncStatus: 'pending' as const };
+
+    await getDatabase().runAsync(
+      `UPDATE goals
+       SET name = ?, targetAmount = ?, deadline = ?, icon = ?, color = ?, updatedAt = ?, syncStatus = 'pending'
+       WHERE id = ?`,
+      [
+        goal.name,
+        goal.targetAmount,
+        goal.deadline ?? null,
+        goal.icon ?? null,
+        goal.color ?? null,
+        updatedAt,
+        id,
+      ],
+    );
+
+    await queueEntitySync('goals', id, {
+      ...goal,
+      isCompleted: goal.isCompleted ? 1 : 0,
     } as Record<string, unknown>);
   },
 
@@ -654,14 +725,32 @@ export const DataService = {
       'notes',
       'split_expenses',
       'split_members',
+      'split_friends',
+      'payment_methods',
+      'recurring_templates',
     ];
 
     const result: Record<string, unknown[]> = {};
+    const syncColumns = new Set([
+      'syncStatus',
+      'lastSyncedAt',
+      'userId',
+      'deletedAt',
+      'sync_status',
+      'last_synced_at',
+      'user_id',
+      'deleted_at',
+    ]);
 
     for (const table of tables) {
-      result[table] = await getDatabase().getAllAsync(
+      const rows = await getDatabase().getAllAsync<Record<string, unknown>>(
         `SELECT * FROM ${table} WHERE deletedAt IS NULL`,
       );
+
+      // Map rows to exclude sync metadata
+      result[table] = rows.map((row) => {
+        return Object.fromEntries(Object.entries(row).filter(([key]) => !syncColumns.has(key)));
+      });
     }
 
     return result;
@@ -681,6 +770,9 @@ export const DataService = {
       'notes',
       'split_expenses',
       'split_members',
+      'split_friends',
+      'payment_methods',
+      'recurring_templates',
     ];
 
     let imported = 0;
@@ -688,38 +780,58 @@ export const DataService = {
 
     // Build column whitelist per table from SQLite schema
     const schemaCache = new Map<string, Set<string>>();
+    const syncColumns = new Set([
+      'syncStatus',
+      'lastSyncedAt',
+      'userId',
+      'sync_status',
+      'last_synced_at',
+    ]);
+
     for (const table of validTables) {
       const cols = await db.getAllAsync<{ name: string }>(`PRAGMA table_info(${table})`);
       schemaCache.set(table, new Set(cols.map((c) => c.name)));
     }
 
-    for (const table of validTables) {
-      const rows = data[table];
-      if (!Array.isArray(rows) || rows.length === 0) continue;
+    try {
+      await db.execAsync('BEGIN TRANSACTION');
 
-      const allowedColumns = schemaCache.get(table)!;
+      for (const table of validTables) {
+        const rows = data[table];
+        if (!Array.isArray(rows) || rows.length === 0) continue;
 
-      for (const row of rows) {
-        if (typeof row !== 'object' || row === null) continue;
-        const record = row as Record<string, unknown>;
-        // Only keep keys that exist in the table schema
-        const keys = Object.keys(record).filter((k) => allowedColumns.has(k));
-        if (keys.length === 0) continue;
+        const allowedColumnsSet = schemaCache.get(table)!;
+        // Finding 7: Protect sync fields from being overwritten during import
+        const keysToImport = Array.from(allowedColumnsSet).filter((col) => !syncColumns.has(col));
 
-        const placeholders = keys.map(() => '?').join(', ');
-        const values = keys.map((k) => {
-          const v = record[k];
-          if (v === null || v === undefined) return null;
-          if (typeof v === 'boolean') return v ? 1 : 0;
-          return v;
-        });
+        for (const row of rows) {
+          if (typeof row !== 'object' || row === null) continue;
+          const record = row as Record<string, unknown>;
 
-        await db.runAsync(
-          `INSERT OR REPLACE INTO ${table} (${keys.join(', ')}) VALUES (${placeholders})`,
-          values as (string | number | null)[],
-        );
-        imported++;
+          // Only keep keys that exist in the import payload AND are in our import-safe whitelist
+          const keys = keysToImport.filter((k) => k in record);
+          if (keys.length === 0) continue;
+
+          const placeholders = keys.map(() => '?').join(', ');
+          const values = keys.map((k) => {
+            const v = record[k];
+            if (v === null || v === undefined) return null;
+            if (typeof v === 'boolean') return v ? 1 : 0;
+            return v;
+          });
+
+          await db.runAsync(
+            `INSERT OR REPLACE INTO ${table} (${keys.join(', ')}) VALUES (${placeholders})`,
+            values as (string | number | null)[],
+          );
+          imported++;
+        }
       }
+
+      await db.execAsync('COMMIT');
+    } catch (error) {
+      await db.execAsync('ROLLBACK');
+      throw error;
     }
 
     useAppStore.getState().bumpDataRevision();
@@ -843,7 +955,15 @@ export const PaymentMethodService = {
       icon: string;
       isCustom: number;
     }>('SELECT * FROM payment_methods WHERE deletedAt IS NULL ORDER BY isCustom ASC, name ASC');
-    return rows.map((row) => ({ ...row, isCustom: Boolean(row.isCustom) }));
+
+    const methods = rows.map((row) => ({ ...row, isCustom: Boolean(row.isCustom) }));
+
+    const seen = new Set<string>();
+    return methods.filter((m) => {
+      if (seen.has(m.name)) return false;
+      seen.add(m.name);
+      return true;
+    });
   },
 
   async create(name: string, icon = 'card'): Promise<string> {

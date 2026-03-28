@@ -5,6 +5,7 @@ import type { SyncQueueItem, SyncStatus } from '../utils/types';
 
 let db: SQLite.SQLiteDatabase | null = null;
 let initialized = false;
+let initializingPromise: Promise<void> | null = null;
 
 const normalizeBindValue = (value: unknown): SQLite.SQLiteBindValue => {
   if (
@@ -25,7 +26,10 @@ const baseSyncColumns = `
   userId TEXT,
   syncStatus TEXT NOT NULL DEFAULT 'pending' CHECK(syncStatus IN ('synced', 'pending', 'failed')),
   lastSyncedAt TEXT,
-  deletedAt TEXT
+  deletedAt TEXT,
+  last_modified INTEGER NOT NULL DEFAULT 0,
+  server_id TEXT,
+  version_hash TEXT
 `;
 
 const transactionalTables = [
@@ -77,7 +81,7 @@ const transactionalTables = [
   `CREATE TABLE IF NOT EXISTS budgets (
     id TEXT PRIMARY KEY,
     categoryId TEXT NOT NULL,
-    limit_amount REAL NOT NULL,
+    limitAmount REAL NOT NULL,
     spent REAL NOT NULL DEFAULT 0,
     month TEXT NOT NULL,
     year INTEGER NOT NULL,
@@ -135,6 +139,7 @@ const transactionalTables = [
     themePreference TEXT NOT NULL DEFAULT 'system' CHECK(themePreference IN ('dark','light','system')),
     notificationsEnabled INTEGER NOT NULL DEFAULT 0,
     biometricEnabled INTEGER NOT NULL DEFAULT 0,
+    avatar TEXT,
     createdAt TEXT NOT NULL,
     updatedAt TEXT NOT NULL,
     ${baseSyncColumns}
@@ -184,28 +189,28 @@ const transactionalTables = [
   )`,
   `CREATE TABLE IF NOT EXISTS split_expenses (
     id TEXT PRIMARY KEY,
-    transaction_id TEXT NOT NULL,
-    paid_by_user_id TEXT NOT NULL,
-    total_amount REAL NOT NULL,
-    split_method TEXT NOT NULL CHECK(split_method IN ('equal', 'exact', 'percent')),
+    transactionId TEXT NOT NULL,
+    paidByUserId TEXT NOT NULL,
+    totalAmount REAL NOT NULL,
+    splitMethod TEXT NOT NULL CHECK(splitMethod IN ('equal', 'exact', 'percent')),
     notes TEXT,
     createdAt TEXT NOT NULL,
     updatedAt TEXT NOT NULL,
     ${baseSyncColumns},
-    FOREIGN KEY (transaction_id) REFERENCES transactions(id) ON DELETE CASCADE
+    FOREIGN KEY (transactionId) REFERENCES transactions(id) ON DELETE CASCADE
   )`,
   `CREATE TABLE IF NOT EXISTS split_members (
     id TEXT PRIMARY KEY,
-    split_expense_id TEXT NOT NULL,
+    splitExpenseId TEXT NOT NULL,
     friendId TEXT,
     name TEXT NOT NULL,
-    share_amount REAL NOT NULL,
-    share_percent REAL,
+    shareAmount REAL NOT NULL,
+    sharePercent REAL,
     status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending', 'paid', 'dismissed')),
     createdAt TEXT NOT NULL,
     updatedAt TEXT NOT NULL,
     ${baseSyncColumns},
-    FOREIGN KEY (split_expense_id) REFERENCES split_expenses(id) ON DELETE CASCADE
+    FOREIGN KEY (splitExpenseId) REFERENCES split_expenses(id) ON DELETE CASCADE
   )`,
   `CREATE TABLE IF NOT EXISTS split_friends (
     id TEXT PRIMARY KEY,
@@ -250,8 +255,8 @@ const indexes = [
   `CREATE UNIQUE INDEX IF NOT EXISTS idx_budgets_unique_cat_month ON budgets(categoryId, month, year) WHERE deletedAt IS NULL`,
   `CREATE INDEX IF NOT EXISTS idx_sync_queue_entity_record ON sync_queue(entity, recordId)`,
   `CREATE INDEX IF NOT EXISTS idx_sync_queue_retryCount ON sync_queue(retryCount, updatedAt)`,
-  `CREATE INDEX IF NOT EXISTS idx_split_expenses_transaction ON split_expenses(transaction_id)`,
-  `CREATE INDEX IF NOT EXISTS idx_split_members_split_id ON split_members(split_expense_id)`,
+  `CREATE INDEX IF NOT EXISTS idx_split_expenses_transaction ON split_expenses(transactionId)`,
+  `CREATE INDEX IF NOT EXISTS idx_split_members_split_id ON split_members(splitExpenseId)`,
   `CREATE INDEX IF NOT EXISTS idx_split_members_friend_id ON split_members(friendId)`,
   `CREATE INDEX IF NOT EXISTS idx_split_friends_name ON split_friends(name)`,
   `CREATE INDEX IF NOT EXISTS idx_transactions_type_date_category ON transactions(type, date DESC, categoryId)`,
@@ -259,6 +264,9 @@ const indexes = [
   `CREATE INDEX IF NOT EXISTS idx_transactions_dashboard ON transactions(date DESC, type)`,
   `CREATE INDEX IF NOT EXISTS idx_transactions_filter ON transactions(type, categoryId, accountId)`,
   `CREATE INDEX IF NOT EXISTS idx_transactions_cat_type_deleted ON transactions(categoryId, type, deletedAt DESC)`,
+  `CREATE INDEX IF NOT EXISTS idx_transactions_merchant ON transactions(merchant)`,
+  `CREATE INDEX IF NOT EXISTS idx_transactions_notes ON transactions(notes)`,
+  `CREATE INDEX IF NOT EXISTS idx_transactions_amount ON transactions(amount)`,
 ];
 
 const defaultCategories = [
@@ -441,6 +449,7 @@ const localTablesToClear = [
   'recurring_templates',
   'split_expenses',
   'split_members',
+  'split_friends',
   'payment_methods',
   'sync_queue',
   'sync_state',
@@ -459,24 +468,40 @@ export const initializeDatabase = async (): Promise<void> => {
     return;
   }
 
-  const database = getDatabase();
-  await database.execAsync(
-    'PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON; PRAGMA synchronous = NORMAL;',
-  );
-
-  for (const statement of transactionalTables) {
-    await database.execAsync(statement);
+  // If initialization is already in progress, wait for it
+  if (initializingPromise) {
+    await initializingPromise;
+    return;
   }
 
-  for (const statement of indexes) {
-    await database.execAsync(statement);
+  // Start initialization and store the promise
+  initializingPromise = (async () => {
+    const database = getDatabase();
+    await database.execAsync('PRAGMA journal_mode = WAL;');
+    await database.execAsync('PRAGMA foreign_keys = ON;');
+    await database.execAsync('PRAGMA synchronous = NORMAL;');
+
+    for (const statement of transactionalTables) {
+      await database.execAsync(statement);
+    }
+
+    for (const statement of indexes) {
+      await database.execAsync(statement);
+    }
+
+    await runMigrations(database);
+    await ensureSyncStateSchema(database);
+
+    await seedDefaultData(database);
+    initialized = true;
+  })();
+
+  try {
+    await initializingPromise;
+  } finally {
+    // Clear the promise so future calls can reinitialize if needed (e.g., after reset)
+    initializingPromise = null;
   }
-
-  await runMigrations(database);
-  await ensureSyncStateSchema(database);
-
-  await seedDefaultData(database);
-  initialized = true;
 };
 
 const ensureSyncStateSchema = async (database: SQLite.SQLiteDatabase) => {
@@ -505,43 +530,66 @@ const ensureSyncStateSchema = async (database: SQLite.SQLiteDatabase) => {
   await database.execAsync('ALTER TABLE sync_state_next RENAME TO sync_state;');
 };
 
-const seedDefaultData = async (database: SQLite.SQLiteDatabase) => {
-  const categoryCount = await database.getFirstAsync<{ count: number }>(
-    'SELECT COUNT(*) as count FROM categories',
-  );
+export const seedDefaultData = async (database: SQLite.SQLiteDatabase) => {
+  const now = new Date().toISOString();
 
-  if ((categoryCount?.count ?? 0) === 0) {
-    const now = new Date().toISOString();
-    for (const category of defaultCategories) {
+  // Seed default categories
+  for (const category of defaultCategories) {
+    try {
+      // First, ensure any existing default category is not soft‑deleted
       await database.runAsync(
-        `INSERT INTO categories
+        `UPDATE categories SET deletedAt = NULL, isCustom = 0 WHERE id = ? AND deletedAt IS NOT NULL`,
+        [category.id],
+      );
+      // Insert or ignore (will ignore if already present with same PK)
+      await database.runAsync(
+        `INSERT OR IGNORE INTO categories
           (id, name, type, icon, color, isCustom, parentId, createdAt, updatedAt, userId, syncStatus, lastSyncedAt, deletedAt)
          VALUES (?, ?, ?, ?, ?, 0, NULL, ?, ?, NULL, 'synced', ?, NULL)`,
         [category.id, category.name, category.type, category.icon, category.color, now, now, now],
       );
+    } catch {
+      // Seed failure for a single category is non-fatal
     }
   }
 
-  const pmCount = await database.getFirstAsync<{ count: number }>(
-    'SELECT COUNT(*) as count FROM payment_methods',
-  );
+  // Seed default payment methods
+  const pmDefaults = [
+    { id: 'pm_cash', name: 'Cash', icon: 'cash', color: '#10B981' },
+    { id: 'pm_upi', name: 'UPI', icon: 'qr-code', color: '#8B5CF6' },
+    { id: 'pm_credit', name: 'Credit Card', icon: 'card', color: '#3B82F6' },
+    { id: 'pm_debit', name: 'Debit Card', icon: 'card-outline', color: '#F59E0B' },
+    { id: 'pm_bank', name: 'Bank Transfer', icon: 'business', color: '#6366F1' },
+  ];
 
-  if ((pmCount?.count ?? 0) === 0) {
-    const now = new Date().toISOString();
-    const defaults = [
-      { name: 'Cash', icon: 'cash' },
-      { name: 'UPI', icon: 'qr-code' },
-      { name: 'Credit Card', icon: 'card' },
-      { name: 'Debit Card', icon: 'card-outline' },
-      { name: 'Bank Transfer', icon: 'business' },
-    ];
-    for (const pm of defaults) {
+  for (const pm of pmDefaults) {
+    try {
       await database.runAsync(
-        `INSERT INTO payment_methods (id, name, icon, createdAt, updatedAt, syncStatus)
-         VALUES (?, ?, ?, ?, ?, 'synced')`,
-        [generateId(), pm.name, pm.icon, now, now],
+        `INSERT OR IGNORE INTO payment_methods
+          (id, name, icon, color, isCustom, createdAt, updatedAt, userId, syncStatus, lastSyncedAt, deletedAt)
+         VALUES (?, ?, ?, ?, 0, ?, ?, NULL, 'synced', ?, NULL)`,
+        [pm.id, pm.name, pm.icon, pm.color, now, now, now],
       );
+    } catch {
+      // Seed failure for a single payment method is non-fatal
     }
+  }
+
+  // Seed default Cash account — always ensure at least one account exists.
+  // Uses a stable id ('acc_cash') so it is never duplicated on repeated seeds.
+  try {
+    // If it was previously soft-deleted, restore it.
+    await database.runAsync(
+      `UPDATE accounts SET deletedAt = NULL, isDefault = 1 WHERE id = 'acc_cash' AND deletedAt IS NOT NULL`,
+    );
+    await database.runAsync(
+      `INSERT OR IGNORE INTO accounts
+        (id, name, type, balance, currency, color, icon, isDefault, createdAt, updatedAt, userId, syncStatus, lastSyncedAt, deletedAt)
+       VALUES ('acc_cash', 'Cash', 'cash', 0, 'INR', '#22C55E', 'cash', 1, ?, ?, NULL, 'pending', NULL, NULL)`,
+      [now, now],
+    );
+  } catch {
+    // Seed failure for the default Cash account is non-fatal
   }
 };
 
@@ -575,6 +623,115 @@ export const enqueueSync = async (
     [id, entity, recordId, operation, JSON.stringify(payload), now, now],
   );
   return id;
+};
+
+export const fetchLocalRecord = async (
+  table: SyncableTable | string,
+  id: string,
+): Promise<Record<string, unknown> | null> => {
+  const database = getDatabase();
+  const row = await database.getFirstAsync<Record<string, unknown>>(
+    `SELECT * FROM ${table} WHERE id = ?`,
+    [id],
+  );
+  return row || null;
+};
+
+/**
+ * Re-bases a local record's ID to a new one (e.g. from Supabase).
+ * Used for conflict resolution when a remote record with a different ID already exists but matches a unique constraint.
+ */
+export const rebaseLocalRecordId = async (
+  table: string,
+  oldId: string,
+  newId: string,
+): Promise<void> => {
+  const database = getDatabase();
+
+  // 1. Check if newId already exists locally
+  const targetExists = await database.getFirstAsync(`SELECT id FROM ${table} WHERE id = ?`, [
+    newId,
+  ]);
+
+  await database.withTransactionAsync(async () => {
+    // Defer FK enforcement to COMMIT so we can reorder parent/child updates freely
+    // within the transaction without hitting intermediate constraint violations.
+    await database.runAsync('PRAGMA defer_foreign_keys = ON');
+
+    if (targetExists) {
+      // Merge path: newId already exists locally.
+      // Move all child references to newId FIRST (newId is a valid parent),
+      // THEN delete the now-orphan oldId row.
+      if (table === 'accounts') {
+        await database.runAsync('UPDATE transactions SET accountId = ? WHERE accountId = ?', [
+          newId,
+          oldId,
+        ]);
+        await database.runAsync('UPDATE transactions SET toAccountId = ? WHERE toAccountId = ?', [
+          newId,
+          oldId,
+        ]);
+        await database.runAsync('UPDATE goals SET accountId = ? WHERE accountId = ?', [
+          newId,
+          oldId,
+        ]);
+        await database.runAsync(
+          'UPDATE recurring_templates SET accountId = ? WHERE accountId = ?',
+          [newId, oldId],
+        );
+      } else if (table === 'categories') {
+        await database.runAsync('UPDATE transactions SET categoryId = ? WHERE categoryId = ?', [
+          newId,
+          oldId,
+        ]);
+        await database.runAsync('UPDATE budgets SET categoryId = ? WHERE categoryId = ?', [
+          newId,
+          oldId,
+        ]);
+        await database.runAsync(
+          'UPDATE recurring_templates SET categoryId = ? WHERE categoryId = ?',
+          [newId, oldId],
+        );
+      }
+      await database.runAsync(`DELETE FROM ${table} WHERE id = ?`, [oldId]);
+    } else {
+      // Rename path: newId does not exist locally yet.
+      // With defer_foreign_keys ON, SQLite checks FKs at COMMIT, so it is safe
+      // to rename the parent ID then update children within the same transaction.
+      await database.runAsync(`UPDATE ${table} SET id = ? WHERE id = ?`, [newId, oldId]);
+      if (table === 'accounts') {
+        await database.runAsync('UPDATE transactions SET accountId = ? WHERE accountId = ?', [
+          newId,
+          oldId,
+        ]);
+        await database.runAsync('UPDATE transactions SET toAccountId = ? WHERE toAccountId = ?', [
+          newId,
+          oldId,
+        ]);
+        await database.runAsync('UPDATE goals SET accountId = ? WHERE accountId = ?', [
+          newId,
+          oldId,
+        ]);
+        await database.runAsync(
+          'UPDATE recurring_templates SET accountId = ? WHERE accountId = ?',
+          [newId, oldId],
+        );
+      } else if (table === 'categories') {
+        await database.runAsync('UPDATE transactions SET categoryId = ? WHERE categoryId = ?', [
+          newId,
+          oldId,
+        ]);
+        await database.runAsync('UPDATE budgets SET categoryId = ? WHERE categoryId = ?', [
+          newId,
+          oldId,
+        ]);
+        await database.runAsync(
+          'UPDATE recurring_templates SET categoryId = ? WHERE categoryId = ?',
+          [newId, oldId],
+        );
+      }
+    }
+  });
 };
 
 export const markRecordSyncStatus = async (

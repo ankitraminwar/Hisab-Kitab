@@ -1,5 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { FlatList, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -24,6 +24,7 @@ export default function NotificationsScreen() {
   const { colors } = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const dataRevision = useAppStore((s) => s.dataRevision);
+  const setUnreadNotificationsCount = useAppStore((s) => s.setUnreadNotificationsCount);
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
 
   const buildNotifications = useCallback(async () => {
@@ -95,12 +96,31 @@ export default function NotificationsScreen() {
       });
     }
 
+    // Tip: show a helpful notification when no alerts are present
+    if (items.length === 0) {
+      items.push({
+        id: 'tip-budgets',
+        title: 'Set Up Budgets',
+        message:
+          'Create monthly budgets for your categories to get spending alerts and stay on track.',
+        type: 'info',
+        time: 'Tip',
+        isRead: true,
+      });
+    }
+
     setNotifications(items);
-  }, []);
+    setUnreadNotificationsCount(items.filter((n) => !n.isRead).length);
+  }, [setUnreadNotificationsCount]);
 
   useEffect(() => {
     void buildNotifications();
   }, [buildNotifications, dataRevision]);
+
+  // Reset badge count when screen is opened
+  useEffect(() => {
+    return () => setUnreadNotificationsCount(0);
+  }, [setUnreadNotificationsCount]);
 
   const getIconForType = (type: NotificationItem['type']) => {
     switch (type) {

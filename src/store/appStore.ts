@@ -1,3 +1,4 @@
+import * as SecureStore from 'expo-secure-store';
 import { create, type StateCreator } from 'zustand';
 
 import type {
@@ -39,10 +40,13 @@ interface UISlice {
   theme: ThemePreference;
   notificationPreferences: NotificationPreferences;
   selectedMonth: string;
+  unreadNotificationsCount: number;
   setLoading: (loading: boolean) => void;
   setTheme: (theme: ThemePreference) => void;
   setNotificationPreferences: (preferences: NotificationPreferences) => void;
   setSelectedMonth: (month: string) => void;
+  setUnreadNotificationsCount: (count: number) => void;
+  incrementUnreadNotifications: () => void;
 }
 
 interface DataSlice {
@@ -91,7 +95,7 @@ const initialAuthState: Pick<
 
 const initialUIState: Pick<
   UISlice,
-  'isLoading' | 'theme' | 'notificationPreferences' | 'selectedMonth'
+  'isLoading' | 'theme' | 'notificationPreferences' | 'selectedMonth' | 'unreadNotificationsCount'
 > = {
   isLoading: false,
   theme: 'system',
@@ -102,6 +106,7 @@ const initialUIState: Pick<
     monthlyReportReminder: true,
   },
   selectedMonth: new Date().toISOString().slice(0, 7),
+  unreadNotificationsCount: 0,
 };
 
 const initialDataState: Pick<
@@ -158,9 +163,15 @@ const createAuthSlice: StateCreator<AppState, [], [], AuthSlice> = (set) => ({
 const createUISlice: StateCreator<AppState, [], [], UISlice> = (set) => ({
   ...initialUIState,
   setLoading: (isLoading) => set({ isLoading }),
-  setTheme: (theme) => set({ theme }),
+  setTheme: (theme) => {
+    set({ theme });
+    void SecureStore.setItemAsync('theme_pref', theme);
+  },
   setNotificationPreferences: (notificationPreferences) => set({ notificationPreferences }),
   setSelectedMonth: (selectedMonth) => set({ selectedMonth }),
+  setUnreadNotificationsCount: (unreadNotificationsCount) => set({ unreadNotificationsCount }),
+  incrementUnreadNotifications: () =>
+    set((state) => ({ unreadNotificationsCount: state.unreadNotificationsCount + 1 })),
 });
 
 const createDataSlice: StateCreator<AppState, [], [], DataSlice> = (set) => ({
@@ -190,5 +201,8 @@ export const useAppStore = create<AppState>((...a) => ({
   ...createAuthSlice(...a),
   ...createUISlice(...a),
   ...createDataSlice(...a),
-  resetAppState: () => a[0]({ ...initialAuthState, ...initialUIState, ...initialDataState }),
+  resetAppState: () => {
+    clearTimeout(revisionTimer);
+    a[0]({ ...initialAuthState, ...initialUIState, ...initialDataState });
+  },
 }));

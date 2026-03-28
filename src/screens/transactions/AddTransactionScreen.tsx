@@ -31,7 +31,32 @@ import type {
   TransactionType,
 } from '../../utils/types';
 
-const toDateString = (date: Date) => date.toISOString().slice(0, 10);
+/** ISO string for storage / DB operations */
+const toISODate = (date: Date) => date.toISOString();
+
+/** User-friendly display string */
+const formatDisplayDate = (date: Date): string => {
+  const now = new Date();
+  const isToday =
+    date.getDate() === now.getDate() &&
+    date.getMonth() === now.getMonth() &&
+    date.getFullYear() === now.getFullYear();
+  if (isToday) return 'Today';
+
+  const yesterday = new Date(now);
+  yesterday.setDate(now.getDate() - 1);
+  const isYesterday =
+    date.getDate() === yesterday.getDate() &&
+    date.getMonth() === yesterday.getMonth() &&
+    date.getFullYear() === yesterday.getFullYear();
+  if (isYesterday) return 'Yesterday';
+
+  return date.toLocaleDateString(undefined, {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+  });
+};
 
 export default function AddTransactionScreen() {
   const router = useRouter();
@@ -225,7 +250,7 @@ export default function AddTransactionScreen() {
         accountId: selectedAccount.id,
         toAccountId: type === 'transfer' ? selectedToAccount?.id : undefined,
         notes: notes.trim() || undefined,
-        date: toDateString(selectedDate),
+        date: toISODate(selectedDate),
         paymentMethod: paymentMethod as PaymentMethod,
         isRecurring: false,
         tags: [],
@@ -253,6 +278,8 @@ export default function AddTransactionScreen() {
         message: 'Transaction could not be saved. Please try again.',
         type: 'error',
       });
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -416,11 +443,7 @@ export default function AddTransactionScreen() {
               </View>
               <View style={styles.detailContent}>
                 <Text style={styles.detailLabel}>DATE</Text>
-                <Text style={styles.detailText}>
-                  {toDateString(selectedDate) === toDateString(new Date())
-                    ? 'Today'
-                    : toDateString(selectedDate)}
-                </Text>
+                <Text style={styles.detailText}>{formatDisplayDate(selectedDate)}</Text>
               </View>
               <Ionicons name="chevron-forward" size={20} color={colors.textMuted} />
             </TouchableOpacity>

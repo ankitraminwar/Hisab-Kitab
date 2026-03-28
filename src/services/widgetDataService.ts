@@ -1,3 +1,4 @@
+import { initializeDatabase } from '../database';
 import { AccountService, BudgetService, GoalService } from './dataService';
 import { TransactionService } from './transactionService';
 
@@ -30,6 +31,7 @@ export interface WidgetNetWorth {
 export const WidgetDataService = {
   /** Expense Summary widget data — current month income/expense + top categories */
   async getExpenseSummary(): Promise<WidgetExpenseSummary> {
+    await initializeDatabase();
     const now = new Date();
     const year = now.getFullYear();
     const month = String(now.getMonth() + 1).padStart(2, '0');
@@ -57,6 +59,7 @@ export const WidgetDataService = {
 
   /** Budget Health widget data — budget utilization for current month */
   async getBudgetHealth(): Promise<WidgetBudgetHealth> {
+    await initializeDatabase();
     const now = new Date();
     const year = now.getFullYear();
     const month = String(now.getMonth() + 1).padStart(2, '0');
@@ -78,6 +81,7 @@ export const WidgetDataService = {
 
   /** Savings Goal widget — top active goal */
   async getTopSavingsGoal(): Promise<WidgetSavingsGoal | null> {
+    await initializeDatabase();
     const goals = await GoalService.getAll();
     const active = goals
       .filter((g) => g.currentAmount < g.targetAmount)
@@ -101,6 +105,7 @@ export const WidgetDataService = {
 
   /** Net Worth widget — total balance across all accounts */
   async getNetWorth(): Promise<WidgetNetWorth> {
+    await initializeDatabase();
     const accounts = await AccountService.getAll();
     return {
       totalBalance: accounts.reduce((s, a) => s + a.balance, 0),

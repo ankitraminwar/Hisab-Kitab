@@ -6,30 +6,6 @@ type Migration = {
   run: (db: SQLite.SQLiteDatabase) => Promise<void>;
 };
 
-const DOMAIN_TABLES = [
-  'accounts',
-  'categories',
-  'transactions',
-  'budgets',
-  'goals',
-  'assets',
-  'liabilities',
-  'user_profile',
-  'recurring_templates',
-  'net_worth_history',
-  'split_expenses',
-  'split_members',
-  'split_friends',
-  'payment_methods',
-] as const;
-
-const REQUIRED_SYNC_COLUMNS: { name: string; sqlType: string }[] = [
-  { name: 'sync_status', sqlType: "TEXT NOT NULL DEFAULT 'PENDING'" },
-  { name: 'last_modified', sqlType: 'INTEGER NOT NULL DEFAULT 0' },
-  { name: 'server_id', sqlType: 'TEXT' },
-  { name: 'version_hash', sqlType: 'TEXT' },
-];
-
 const ensureMigrationsTable = async (db: SQLite.SQLiteDatabase) => {
   await db.execAsync(`
     CREATE TABLE IF NOT EXISTS _migrations (
@@ -45,89 +21,39 @@ const getAppliedVersions = async (db: SQLite.SQLiteDatabase) => {
   return new Set(rows.map((row) => row.version));
 };
 
-const getTableColumns = async (db: SQLite.SQLiteDatabase, tableName: string) => {
-  const columns = await db.getAllAsync<{ name: string }>(`PRAGMA table_info(${tableName})`);
-  return new Set(columns.map((column) => column.name));
-};
+/**
+ * All historical migrations (v1-v9) have been consolidated into the base schema
+ * in database/index.ts. This runner now only exists for future migrations that
+ * may be added post-launch. Fresh installs get the complete schema directly;
+ * existing installs already ran v1-v9 via the old MigrationRunner.
+ */
+const migrations: Migration[] = [];
 
-const addMissingSyncColumns = async (db: SQLite.SQLiteDatabase, tableName: string) => {
-  const existingColumns = await getTableColumns(db, tableName);
-
-  for (const column of REQUIRED_SYNC_COLUMNS) {
-    if (existingColumns.has(column.name)) {
-      continue;
-    }
-
-    await db.execAsync(`ALTER TABLE ${tableName} ADD COLUMN ${column.name} ${column.sqlType};`);
+/** Clean up any orphaned _old tables left by previous migration renames. */
+const cleanupOrphanedTables = async (db: SQLite.SQLiteDatabase) => {
+  const rows = await db.getAllAsync<{ name: string }>(
+    `SELECT name FROM sqlite_master WHERE type='table' AND name LIKE '%_old'`,
+  );
+  for (const { name } of rows) {
+    await db.execAsync(`DROP TABLE IF EXISTS "${name}"`);
   }
 };
 
-const migrations: Migration[] = [
-  {
-    version: 1,
-    name: 'add_required_sync_metadata_columns',
-    run: async (db) => {
-      for (const tableName of DOMAIN_TABLES) {
-        await addMissingSyncColumns(db, tableName);
-      }
-    },
-  },
-  {
-    version: 2,
-    name: 'add_avatar_column_to_user_profile',
-    run: async (db) => {
-      const columns = await getTableColumns(db, 'user_profile');
-      if (!columns.has('avatar')) {
-        await db.execAsync(`ALTER TABLE user_profile ADD COLUMN avatar TEXT;`);
-      }
-    },
-  },
-  {
-    version: 3,
-    name: 'add_split_friends_and_split_member_friend_id',
-    run: async (db) => {
-      await db.execAsync(`
-        CREATE TABLE IF NOT EXISTS split_friends (
-          id TEXT PRIMARY KEY,
-          name TEXT NOT NULL,
-          createdAt TEXT NOT NULL,
-          updatedAt TEXT NOT NULL,
-          userId TEXT,
-          syncStatus TEXT NOT NULL DEFAULT 'pending',
-          lastSyncedAt TEXT,
-          deletedAt TEXT
-        );
-      `);
-
-      const splitMemberColumns = await getTableColumns(db, 'split_members');
-      if (!splitMemberColumns.has('friendId')) {
-        await db.execAsync(`ALTER TABLE split_members ADD COLUMN friendId TEXT;`);
-      }
-    },
-  },
-];
-
-export const runMigrations = async (db: SQLite.SQLiteDatabase) => {
+export const runMigrations = async (db: SQLite.SQLiteDatabase): Promise<void> => {
   await ensureMigrationsTable(db);
+  await cleanupOrphanedTables(db);
+
+  if (migrations.length === 0) return;
+
   const applied = await getAppliedVersions(db);
+  const pending = migrations.filter((m) => !applied.has(m.version));
 
-  for (const migration of migrations) {
-    if (applied.has(migration.version)) {
-      continue;
-    }
-
-    await db.execAsync('BEGIN IMMEDIATE TRANSACTION;');
-    try {
-      await migration.run(db);
-      await db.runAsync(`INSERT INTO _migrations (version, name, applied_at) VALUES (?, ?, ?);`, [
-        migration.version,
-        migration.name,
-        new Date().toISOString(),
-      ]);
-      await db.execAsync('COMMIT;');
-    } catch (error) {
-      await db.execAsync('ROLLBACK;');
-      throw error;
-    }
+  for (const migration of pending) {
+    await migration.run(db);
+    await db.runAsync('INSERT INTO _migrations (version, name, applied_at) VALUES (?, ?, ?)', [
+      migration.version,
+      migration.name,
+      new Date().toISOString(),
+    ]);
   }
 };
