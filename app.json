@@ -2,7 +2,7 @@
   "expo": {
     "name": "Hisab Kitab",
     "slug": "hisab-kitab",
-    "version": "2.0.0",
+    "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "hisabkitab",
@@ -25,6 +25,7 @@
         "backgroundImage": "./assets/images/android-icon-background.png"
       },
       "package": "com.hisabkitab.app",
+      "googleServicesFile": "./google-services.json",
       "permissions": [
         "USE_BIOMETRIC",
         "USE_FINGERPRINT",
@@ -52,6 +53,7 @@
           "color": "#7C3AED"
         }
       ],
+      "expo-image-picker",
       [
         "react-native-android-widget",
         {

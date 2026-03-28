@@ -3,6 +3,7 @@ import type { Session } from '@supabase/supabase-js';
 import { QueryClientProvider } from '@tanstack/react-query';
 import * as Linking from 'expo-linking';
 import { Stack, useRouter, useSegments } from 'expo-router';
+import * as SecureStore from 'expo-secure-store';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -18,10 +19,18 @@ import {
 import { registerWidgetTaskHandler } from 'react-native-android-widget';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
-import { ScreenErrorBoundary } from '@/components/common';
-import { clearLocalData, hasLocalUserData, initializeDatabase } from '@/database';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
+
+import { PopupProvider, ScreenErrorBoundary } from '@/components/common';
+import {
+  clearLocalData,
+  getLastSyncTimestamp,
+  hasLocalUserData,
+  initializeDatabase,
+} from '@/database';
 import { useTheme, type ThemeColors } from '@/hooks/useTheme';
 import { queryClient } from '@/lib/queryClient';
+import { Crashlytics } from '@/services/analytics';
 import {
   authService,
   authenticateBiometric,
@@ -51,6 +60,10 @@ const previousGlobalHandler = errorUtils?.getGlobalHandler?.();
 errorUtils?.setGlobalHandler?.((error, isFatal) => {
   if (error.message.includes('Unable to activate keep awake')) {
     return;
+  }
+
+  if (isFatal) {
+    Crashlytics.recordError(error, 'fatal_js_error');
   }
 
   previousGlobalHandler?.(error, isFatal);
@@ -113,7 +126,8 @@ export default function RootLayout() {
 
     const hydrateAuthenticatedSession = async (nextSession: Session, reason: string) => {
       try {
-        const shouldRunInitialSync = !(await hasLocalUserData(nextSession.user.id));
+        const lastSyncAt = await getLastSyncTimestamp();
+        const shouldRunInitialSync = !lastSyncAt || !(await hasLocalUserData(nextSession.user.id));
         if (shouldRunInitialSync) {
           await syncService.initialSync();
         } else {
@@ -132,6 +146,15 @@ export default function RootLayout() {
 
     const bootstrap = async () => {
       try {
+        // Finding 14: Rapid theme hydration to prevent bootstrap flash
+        const persistedTheme = await SecureStore.getItemAsync('theme_pref');
+        if (
+          persistedTheme &&
+          (persistedTheme === 'dark' || persistedTheme === 'light' || persistedTheme === 'system')
+        ) {
+          setTheme(persistedTheme);
+        }
+
         await withTimeout(initializeDatabase(), 5000, undefined);
         const currentSession = await withTimeout(authService.getSession(), 5000, {
           data: { session: null },
@@ -174,6 +197,7 @@ export default function RootLayout() {
         smsImportService.start();
 
         if (nextSession) {
+          Crashlytics.setUserId(nextSession.user.id).catch(console.warn);
           hydrateAuthenticatedSession(nextSession, 'app-start').catch(console.warn);
           smsImportService.run().catch(console.warn);
         }
@@ -193,6 +217,8 @@ export default function RootLayout() {
       setSession(nextSession);
 
       if (!nextSession && previousSession) {
+        Crashlytics.setUserId(null).catch(console.warn);
+        syncService.stop();
         smsImportService.stop();
         await clearLocalData();
         queryClient.clear();
@@ -253,18 +279,17 @@ export default function RootLayout() {
   }, [session, isLocked, biometricsEnabled]);
 
   // Handle widget deep links that need tab route resolution
-  const deepLinkUrl = Linking.useURL();
-
   useEffect(() => {
-    if (!deepLinkUrl || initializing) return;
-    // Only process links matching the hisabkitab:// scheme
-    if (!deepLinkUrl.startsWith('hisabkitab://')) return;
-    const path = `/${deepLinkUrl.replace(/^hisabkitab:\/\//, '').split('?')[0]}`;
-    const target = ALLOWED_DEEP_LINK_PATHS[path];
-    if (target) {
-      router.replace(target as Parameters<typeof router.replace>[0]);
-    }
-  }, [deepLinkUrl, initializing, router]);
+    const sub = Linking.addEventListener('url', ({ url }) => {
+      if (!url.startsWith('hisabkitab://')) return;
+      const path = `/${url.replace(/^hisabkitab:\/\//, '').split('?')[0]}`;
+      const target = ALLOWED_DEEP_LINK_PATHS[path];
+      if (target) {
+        router.replace(target as Parameters<typeof router.replace>[0]);
+      }
+    });
+    return () => sub.remove();
+  }, [router]);
 
   const handleAuthenticate = async () => {
     try {
@@ -310,59 +335,63 @@ export default function RootLayout() {
 
   return (
     <ScreenErrorBoundary>
-      <GestureHandlerRootView style={styles.root}>
-        <QueryClientProvider client={queryClient}>
-          <StatusBar style={theme === 'dark' ? 'light' : 'dark'} backgroundColor={colors.bg} />
-          <Stack
-            screenOptions={{
-              headerShown: false,
-              animation: 'slide_from_right',
-            }}
-          >
-            <Stack.Screen name="login" options={{ headerShown: false }} />
-            <Stack.Screen name="auth" options={{ headerShown: false }} />
-            <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-            <Stack.Screen
-              name="transactions/add"
-              options={{
-                presentation: 'modal',
-                animation: 'slide_from_bottom',
-              }}
-            />
-            <Stack.Screen
-              name="transactions/[id]"
-              options={{
-                presentation: 'modal',
-                animation: 'slide_from_bottom',
-              }}
-            />
-            <Stack.Screen name="accounts/index" options={{ animation: 'slide_from_right' }} />
-            <Stack.Screen
-              name="reports/preview"
-              options={{
-                presentation: 'modal',
-                animation: 'slide_from_bottom',
-              }}
-            />
-            <Stack.Screen name="settings/index" options={{ animation: 'slide_from_right' }} />
-            <Stack.Screen
-              name="sms-import"
-              options={{
-                presentation: 'modal',
-                animation: 'slide_from_bottom',
-              }}
-            />
-            <Stack.Screen name="splits/index" options={{ animation: 'slide_from_right' }} />
-            <Stack.Screen
-              name="split-expense/[id]"
-              options={{
-                presentation: 'modal',
-                animation: 'slide_from_bottom',
-              }}
-            />
-          </Stack>
-        </QueryClientProvider>
-      </GestureHandlerRootView>
+      <SafeAreaProvider>
+        <GestureHandlerRootView style={{ flex: 1 }}>
+          <QueryClientProvider client={queryClient}>
+            <PopupProvider>
+              <StatusBar style={theme === 'dark' ? 'light' : 'dark'} backgroundColor={colors.bg} />
+              <Stack
+                screenOptions={{
+                  headerShown: false,
+                  animation: 'slide_from_right',
+                }}
+              >
+                <Stack.Screen name="login" options={{ headerShown: false }} />
+                <Stack.Screen name="auth" options={{ headerShown: false }} />
+                <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+                <Stack.Screen
+                  name="transactions/add"
+                  options={{
+                    presentation: 'modal',
+                    animation: 'slide_from_bottom',
+                  }}
+                />
+                <Stack.Screen
+                  name="transactions/[id]"
+                  options={{
+                    presentation: 'modal',
+                    animation: 'slide_from_bottom',
+                  }}
+                />
+                <Stack.Screen name="accounts/index" options={{ animation: 'slide_from_right' }} />
+                <Stack.Screen
+                  name="reports/preview"
+                  options={{
+                    presentation: 'modal',
+                    animation: 'slide_from_bottom',
+                  }}
+                />
+                <Stack.Screen name="settings/index" options={{ animation: 'slide_from_right' }} />
+                <Stack.Screen
+                  name="sms-import"
+                  options={{
+                    presentation: 'modal',
+                    animation: 'slide_from_bottom',
+                  }}
+                />
+                <Stack.Screen name="splits/index" options={{ animation: 'slide_from_right' }} />
+                <Stack.Screen
+                  name="split-expense/[id]"
+                  options={{
+                    presentation: 'modal',
+                    animation: 'slide_from_bottom',
+                  }}
+                />
+              </Stack>
+            </PopupProvider>
+          </QueryClientProvider>
+        </GestureHandlerRootView>
+      </SafeAreaProvider>
     </ScreenErrorBoundary>
   );
 }

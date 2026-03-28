@@ -4,7 +4,7 @@
 
 ## What This App Is
 
-Offline-first personal finance manager for Android/iOS. Expo + React Native + TypeScript + SQLite + Supabase. Current version: **2.0.0** — zero TypeScript errors, zero ESLint warnings, no `any` types.
+Offline-first personal finance manager for Android/iOS. Expo + React Native + TypeScript + SQLite + Supabase. Current version: **1.0.0** — zero TypeScript errors, zero ESLint warnings, no `any` types.
 
 ## Tech Stack
 
@@ -22,6 +22,7 @@ Offline-first personal finance manager for Android/iOS. Expo + React Native + Ty
 | Lists       | @shopify/flash-list 2.0.2 (v2 — no `estimatedItemSize` prop)                    |
 | Widgets     | react-native-android-widget ^0.20.1                                             |
 | SMS parsing | react-native-get-sms-android ^2.1.0                                             |
+| Analytics   | @react-native-firebase/analytics ^21.14.0 (via @react-native-firebase/app)      |
 | Linting     | ESLint 9 (`eslint . --max-warnings 0` = 0 warnings)                             |
 | Formatting  | Prettier (pre-commit via husky + lint-staged)                                   |
 
@@ -32,7 +33,7 @@ Offline-first personal finance manager for Android/iOS. Expo + React Native + Ty
 3. **Column naming**: Local SQLite = camelCase, Supabase = snake_case. Mapping in `src/services/syncTransform.ts`.
 4. **Auth gating**: Unauthenticated users → `/login`. Every authenticated user must have a `user_profile` row.
 5. **Theme**: All screens must use `useTheme()` colors, never hardcoded `COLORS`. Styles via `createStyles(colors: ThemeColors)` pattern.
-6. **Popups**: Use `CustomPopup` component, never `Alert.alert`.
+6. **Popups**: Use `CustomPopup` for success/error/info feedback. Use `CustomModal` for destructive confirmation dialogs (delete, discard). Never use `Alert.alert`.
 7. **IDs**: All entity IDs are `TEXT` (UUID strings from `generateId()`).
 8. **Native features**: SMS import and Android widgets require native builds (not Expo Go). iOS cannot read SMS inbox.
 9. **No `any`**: Every type must be explicit. Use `IoniconsName` for Ionicons icon names, `ThemeColors` for color objects, `DimensionValue` for percentage widths, proper interfaces for external data.
@@ -107,6 +108,7 @@ src/
     notifications/NotificationsScreen.tsx
     profile/EditProfileScreen.tsx
     faq/FaqScreen.tsx             # FAQ & Help screen (accordion)
+    notes/NotesScreen.tsx         # User notes / memos
   services/
     transactionService.ts        # Transaction CRUD, filtered queries, monthly stats, CSV export
     splitService.ts              # Split expenses CRUD (createSplit, getAll, getById, markSharePaid, deleteSplit)
@@ -121,7 +123,9 @@ src/
     exportService.ts             # CSV, PDF, JSON backup export + JSON import
     emailReportService.ts        # Monthly email via Supabase Edge Function + Resend
     widgetDataService.ts         # Data fetchers for Android home screen widgets
-    MigrationRunner.ts           # SQLite migration helper
+    noteService.ts               # Notes CRUD
+    analytics.ts                 # Firebase Analytics wrapper (screen views, events, user properties)
+    MigrationRunner.ts           # SQLite migration runner + orphaned table cleanup (consolidated base schema)
     permissions.ts               # Android permission requests
   store/
     appStore.ts                  # Zustand store — 3 slices: AuthSlice, UISlice, DataSlice
@@ -145,7 +149,7 @@ stitch_designs/                  # Reference UI mockups (PNG) — light + dark p
 
 ## SQLite Tables
 
-`accounts`, `categories`, `transactions`, `budgets`, `goals`, `assets`, `liabilities`, `net_worth_history`, `user_profile`, `recurring_templates`, `split_expenses`, `split_friends`, `split_members`, `payment_methods`, `sync_queue`, `sync_state`
+`accounts`, `categories`, `transactions`, `budgets`, `goals`, `assets`, `liabilities`, `net_worth_history`, `user_profile`, `recurring_templates`, `split_expenses`, `split_friends`, `split_members`, `payment_methods`, `notes`, `sync_queue`, `sync_state`
 
 ## Sync System
 
@@ -153,6 +157,7 @@ stitch_designs/                  # Reference UI mockups (PNG) — light + dark p
 - `syncService` pushes pending queue items → pulls remote changes by `updated_at`.
 - **Default data bootstrap**: On first push per device, `ensureDefaultsSynced()` runs once and enqueues all default (non-custom) categories and payment methods, so they exist in Supabase before transactions reference them. Tracked with a `defaultsSynced` flag in `sync_state`.
 - **`tags` field**: Stored as a JSON string (`TEXT`) in SQLite but Supabase stores it as `jsonb`. The sync service automatically parses the string to an array on push — do not pre-parse it in payloads.
+- **Null coalescing**: `syncTransform.ts` coalesces nullable SQLite columns to Supabase NOT NULL defaults (e.g. `isDefault→false`, `tags→'[]'`, `alertAt→80`) before push, preventing NOT NULL violations.
 - **Parallel pulls**: `pullRemoteChanges()` and `initialSync()` pull tables by dependency tier using `Promise.allSettled()`. Tier 0 (accounts, categories, payment_methods, goals, assets, liabilities, user_profile) → Tier 1 (transactions, budgets, net_worth_history) → Tier 2 (split_expenses) → Tier 3 (split_members).
 - **Sync queue compaction**: `enqueueSync()` automatically merges multiple mutations for the same `entity+recordId` into a single queue entry — only the latest payload is pushed to Supabase.
 - Only tables in `SYNCABLE_TABLES` (constants.ts) are synced.
@@ -174,6 +179,7 @@ stitch_designs/                  # Reference UI mockups (PNG) — light + dark p
 - **CustomPopup auto-dismiss**: Success-type popups automatically close after 3 seconds.
 - **SMS editability**: SMS-imported transactions can be edited; the `sms:` origin tag is preserved.
 - **CSV export**: Uses chunked 1000-row streaming to avoid loading the entire dataset into memory.
+- **Delete confirmations**: All destructive actions (delete transaction, budget, goal, account, note, split) show a confirmation dialog before proceeding. Uses `CustomModal` inline confirmation states or `Alert.alert`.
 - **SMS polling backoff**: Exponential backoff (up to 10 min) when no new messages are detected; resets on app foreground.
 - **Budget query**: Uses a single `LEFT JOIN` on transactions instead of a correlated subquery (N+1 → 1).
 
@@ -204,6 +210,7 @@ stitch_designs/                  # Reference UI mockups (PNG) — light + dark p
 | `/auth/forgot-password`     | AuthScreen (forgot)            | Screen     |
 | `/auth/reset-password`      | AuthScreen (reset)             | Screen     |
 | `/notifications`            | NotificationsScreen            | Screen     |
+| `/notes`                    | NotesScreen                    | Screen     |
 | `/profile/edit`             | EditProfileScreen              | Screen     |
 | `/reports/preview`          | MonthlyReportPreviewScreen     | Modal      |
 
@@ -237,9 +244,11 @@ Run `supabase/schema.sql` in the Supabase SQL editor. Single file — all tables
 
 - **No inter-table FK constraints** — constraints like `transactions.category_id → categories.id` have been intentionally dropped. SQLite enforces referential integrity locally; removing them from Supabase allows offline-first sync without FK violations when records arrive out of order.
 - **`user_id → auth.users(id)`** FK is retained on all tables for RLS and cascade delete.
-- **`user_profile.avatar`** — `TEXT` column for avatar URI (added in SQLite migration v2, applied to Supabase).
+- **`user_profile.avatar`** — `TEXT` column for avatar URI.
+- **`notes.id`** — `TEXT` primary key (UUID string, same as all other entity IDs). Not `uuid` type.
 - **`payment_method`** — no CHECK constraint; accepts any string to support SMS-imported transactions with varied payment method strings.
-- **`dashboard_monthly_stats`** — Materialized view pre-aggregating monthly income/expenses/net per user. Auto-refreshed via trigger on `transactions`. Access via `get_dashboard_stats(month)` RPC.
+- **`dashboard_monthly_stats`** — Materialized view pre-aggregating monthly income/expenses/net per user. Refreshed explicitly by the client (no auto-refresh trigger — removed to avoid write-path overhead). Access via `get_dashboard_stats(month)` RPC (`security invoker`).
+- **`categories` RLS** — Read policy allows access to rows where `user_id = auth.uid() OR user_id IS NULL` (for default categories). Write/update/delete policies require `user_id = auth.uid()` strictly.
 - **GIN index on `tags`** — `idx_transactions_tags_gin` enables fast tag-based analytics on Supabase.
 - **Composite indexes** — `idx_transactions_dashboard` (date DESC, type) and `idx_transactions_filter` (type, category_id, account_id) optimize dashboard and filter queries.
 - **Budget category+month index** — `idx_transactions_cat_type_deleted` (categoryId, type, deletedAt DESC) speeds up budget spending aggregation.
@@ -260,6 +269,71 @@ Run `supabase/schema.sql` in the Supabase SQL editor. Single file — all tables
 - **Biometric lock** — hardware back button is blocked via `BackHandler` when lock screen is active.
 - **Dashboard donut chart** — Uses SQL-backed `getCategoryBreakdownByDateRange()` for full-month category data, not limited to recent transactions.
 - **Split expense percent validation** uses `0.01` epsilon (not `0.5`) and transaction picker is limited to 100 items.
+
+## Code Review Standards
+
+After completing any implementation, review the code for:
+
+### 1. Function Complexity
+
+- Functions longer than 30 lines → consider splitting into smaller functions
+- Each function should have a single responsibility
+
+### 2. Code Duplication
+
+- Logic repeated more than twice → extract into reusable utilities/hooks
+
+### 3. Type Safety (TypeScript)
+
+- Avoid `any` type → replace with proper types or generics
+- Use interfaces/types for API responses and props
+
+### 4. Component Design
+
+- Components with more than 3–4 props → consider grouping into a single object
+- Separate UI and business logic (use hooks for logic)
+
+### 5. Async & Error Handling
+
+- All async operations must include:
+  - try/catch block
+  - Proper error handling (UI feedback or logging)
+
+### 6. Readability & Naming
+
+- Use meaningful variable and function names
+- Avoid deeply nested logic (>3 levels)
+
+### 7. Performance (React Native specific)
+
+- Avoid unnecessary re-renders:
+  - Use `useMemo`, `useCallback` where needed
+- Avoid inline functions inside JSX when possible
+
+### 8. File Structure
+
+- Keep files focused:
+  - One component per file
+  - Extract hooks/services/utils when needed
+
+### 9. Styling
+
+- Avoid inline styles → use StyleSheet
+- Reuse common styles
+
+### 10. Testing & Edge Cases
+
+- Handle empty states, loading states, and error states
+- Validate user inputs
+
+---
+
+## 🔄 Final Step
+
+- Run `/simplify`:
+  - Remove unnecessary complexity
+  - Improve readability
+  - Ensure maintainability
 
 ## Code Quality Status
 

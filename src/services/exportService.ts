@@ -336,7 +336,7 @@ const buildReportHtml = async (report: ReportDocumentData, isDark: boolean) => {
           border: 1px solid ${colors.border};
           border-radius: 28px;
           padding: 28px;
-          margin-bottom: 24px;
+          margin-bottom: 16px;
         }
         .hero-top {
           display: flex;
@@ -403,15 +403,17 @@ const buildReportHtml = async (report: ReportDocumentData, isDark: boolean) => {
           text-align: right;
         }
         .summary-grid {
-          display: grid;
-          grid-template-columns: repeat(4, minmax(0, 1fr));
-          gap: 14px;
+          display: flex;
+          flex-wrap: wrap;
+          gap: 12px;
         }
         .summary-card {
+          flex: 1 1 calc(25% - 12px);
+          min-width: 160px;
           background: ${colors.surface};
           border: 1px solid ${colors.border};
           border-radius: 20px;
-          padding: 18px;
+          padding: 16px;
         }
         .summary-label {
           color: ${colors.muted};
@@ -435,7 +437,7 @@ const buildReportHtml = async (report: ReportDocumentData, isDark: boolean) => {
           border: 1px solid ${colors.border};
           border-radius: 24px;
           padding: 24px;
-          margin-top: 20px;
+          margin-top: 14px;
         }
         .section-title {
           margin: 0 0 4px;
@@ -501,11 +503,13 @@ const buildReportHtml = async (report: ReportDocumentData, isDark: boolean) => {
         }
         @media print {
           body {
-            padding: 16px;
+            padding: 12px;
           }
-          .hero,
           .section {
-            break-inside: avoid;
+            page-break-inside: avoid;
+          }
+          tbody tr {
+            page-break-inside: avoid;
           }
         }
       </style>

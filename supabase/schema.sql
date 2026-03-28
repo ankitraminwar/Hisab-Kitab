@@ -77,7 +77,8 @@ create table if not exists public.accounts (
   updated_at timestamptz not null default timezone('utc', now()),
   sync_status text not null default 'synced' check (sync_status in ('synced', 'pending', 'failed')),
   last_synced_at timestamptz,
-  deleted_at timestamptz
+  deleted_at timestamptz,
+  unique(user_id, name)
 );
 
 create table if not exists public.categories (
@@ -93,7 +94,8 @@ create table if not exists public.categories (
   updated_at timestamptz not null default timezone('utc', now()),
   sync_status text not null default 'synced' check (sync_status in ('synced', 'pending', 'failed')),
   last_synced_at timestamptz,
-  deleted_at timestamptz
+  deleted_at timestamptz,
+  unique(user_id, name, type)
 );
 
 create table if not exists public.transactions (
@@ -107,7 +109,7 @@ create table if not exists public.transactions (
   merchant text,
   notes text,
   tags jsonb not null default '[]'::jsonb,
-  transaction_date date not null,
+  transaction_date timestamptz not null,
   payment_method text not null default 'other',
   is_recurring boolean not null default false,
   recurring_id text,
@@ -190,7 +192,7 @@ create table if not exists public.net_worth_history (
   total_assets double precision not null,
   total_liabilities double precision not null,
   net_worth double precision not null,
-  transaction_date date not null,
+  transaction_date timestamptz not null,
   created_at timestamptz not null default timezone('utc', now()),
   updated_at timestamptz not null default timezone('utc', now()),
   sync_status text not null default 'synced' check (sync_status in ('synced', 'pending', 'failed')),
@@ -274,17 +276,17 @@ create table if not exists public.payment_methods (
 );
 
 create table if not exists public.notes (
-  id uuid primary key default extensions.uuid_generate_v4(),
+  id text primary key,
   user_id uuid not null references auth.users(id) on delete cascade,
   title text not null,
   content text not null,
   color text default '#7C3AED',
   is_pinned boolean default false,
-  created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now(),
-  deleted_at timestamptz,
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now()),
   sync_status text not null default 'synced' check (sync_status in ('synced', 'pending', 'failed')),
-  last_synced_at timestamptz
+  last_synced_at timestamptz,
+  deleted_at timestamptz
 );
 
 create table if not exists public.recurring_templates (
@@ -370,7 +372,9 @@ drop trigger if exists set_split_friends_updated_at on public.split_friends;
 create trigger set_split_friends_updated_at before update on public.split_friends for each row execute function public.set_updated_at();
 drop trigger if exists set_payment_methods_updated_at on public.payment_methods;
 create trigger set_payment_methods_updated_at before update on public.payment_methods for each row execute function public.set_updated_at();
+drop trigger if exists update_notes_updated_at on public.notes;
 create trigger update_notes_updated_at before update on public.notes for each row execute function public.set_updated_at();
+drop trigger if exists set_recurring_templates_updated_at on public.recurring_templates;
 create trigger set_recurring_templates_updated_at before update on public.recurring_templates for each row execute function public.set_updated_at();
 drop trigger if exists on_auth_user_created on auth.users;
 create trigger on_auth_user_created after insert on auth.users for each row execute function public.handle_new_user();
@@ -432,6 +436,10 @@ alter table public.recurring_templates enable row level security;
 
 drop policy if exists "own_accounts" on public.accounts;
 drop policy if exists "own_categories" on public.categories;
+drop policy if exists "own_categories_read" on public.categories;
+drop policy if exists "own_categories_write" on public.categories;
+drop policy if exists "own_categories_update" on public.categories;
+drop policy if exists "own_categories_delete" on public.categories;
 drop policy if exists "own_transactions" on public.transactions;
 drop policy if exists "own_budgets" on public.budgets;
 drop policy if exists "own_goals" on public.goals;
@@ -445,7 +453,10 @@ drop policy if exists "own_split_friends" on public.split_friends;
 drop policy if exists "own_payment_methods" on public.payment_methods;
 
 create policy "own_accounts" on public.accounts for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
-create policy "own_categories" on public.categories for all using (auth.uid() = user_id or user_id is null) with check (auth.uid() = user_id or user_id is null);
+create policy "own_categories_read" on public.categories for select using (auth.uid() = user_id or user_id is null);
+create policy "own_categories_write" on public.categories for insert with check (auth.uid() = user_id);
+create policy "own_categories_update" on public.categories for update using (auth.uid() = user_id) with check (auth.uid() = user_id);
+create policy "own_categories_delete" on public.categories for delete using (auth.uid() = user_id);
 create policy "own_transactions" on public.transactions for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
 create policy "own_budgets" on public.budgets for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
 create policy "own_goals" on public.goals for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
@@ -492,7 +503,7 @@ returns table(
 )
 language sql
 stable
-security definer
+security invoker
 set search_path = public
 as $$
   select
@@ -517,34 +528,18 @@ begin
 end;
 $$;
 
-create or replace function public.trigger_refresh_dashboard_stats()
-returns trigger
-language plpgsql
-security definer
-set search_path = public
-as $$
-begin
-  perform public.refresh_dashboard_stats();
-  return null;
-end;
-$$;
-
+-- Dashboard stats are refreshed explicitly via refresh_dashboard_stats() or pg_cron.
+-- No automatic trigger to avoid per-statement overhead.
 drop trigger if exists refresh_dashboard_stats_trigger on public.transactions;
-create trigger refresh_dashboard_stats_trigger
-  after insert or update or delete on public.transactions
-  for each statement
-  execute function public.trigger_refresh_dashboard_stats();
 
 -- ============================================================
 -- Schema & Table Grants
 -- ============================================================
 
-grant usage on schema public to anon, authenticated;
+grant usage on schema public to authenticated;
 
-grant select on all tables in schema public to anon;
 grant select, insert, update, delete on all tables in schema public to authenticated;
 
-alter default privileges in schema public grant select on tables to anon;
 alter default privileges in schema public grant select, insert, update, delete on tables to authenticated;
 
 grant usage on all sequences in schema public to authenticated;

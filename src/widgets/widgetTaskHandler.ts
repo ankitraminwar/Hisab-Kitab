@@ -1,4 +1,5 @@
 import type { WidgetTaskHandlerProps } from 'react-native-android-widget';
+import { initializeDatabase } from '../database';
 import { WidgetDataService } from '../services/widgetDataService';
 import { BudgetHealthWidget } from './BudgetHealthWidget';
 import { ExpenseSummaryWidget } from './ExpenseSummaryWidget';
@@ -10,33 +11,48 @@ const WIDGET_NAMES = {
   BUDGET_HEALTH: 'BudgetHealth',
 } as const;
 
-export async function widgetTaskHandler(props: WidgetTaskHandlerProps) {
-  const { widgetInfo, widgetAction, renderWidget } = props;
+const WIDGET_TIMEOUT_MS = 10000;
 
-  // Skip deleted widgets
+export async function widgetTaskHandler(props: WidgetTaskHandlerProps) {
+  const { widgetAction, widgetInfo, renderWidget } = props;
+
   if (widgetAction === 'WIDGET_DELETED') return;
 
-  try {
-    switch (widgetInfo.widgetName) {
-      case WIDGET_NAMES.EXPENSE_SUMMARY: {
-        const data = await WidgetDataService.getExpenseSummary();
-        renderWidget(ExpenseSummaryWidget(data));
-        break;
+  const runWithTimeout = async () => {
+    try {
+      // Ensure DB is initialized for headless task (Finding 4)
+      await initializeDatabase();
+
+      switch (widgetInfo.widgetName) {
+        case WIDGET_NAMES.EXPENSE_SUMMARY: {
+          const data = await WidgetDataService.getExpenseSummary();
+          renderWidget(ExpenseSummaryWidget(data));
+          break;
+        }
+        case WIDGET_NAMES.QUICK_ADD: {
+          renderWidget(QuickAddWidget());
+          break;
+        }
+        case WIDGET_NAMES.BUDGET_HEALTH: {
+          const data = await WidgetDataService.getBudgetHealth();
+          renderWidget(BudgetHealthWidget(data));
+          break;
+        }
+        default:
+          break;
       }
-      case WIDGET_NAMES.QUICK_ADD: {
-        renderWidget(QuickAddWidget());
-        break;
-      }
-      case WIDGET_NAMES.BUDGET_HEALTH: {
-        const data = await WidgetDataService.getBudgetHealth();
-        renderWidget(BudgetHealthWidget(data));
-        break;
-      }
-      default:
-        break;
+    } catch (error) {
+      console.error('Widget task handler failed:', error);
     }
-  } catch (error) {
-    console.error('Widget task handler failed:', error);
-    // Optionally render a fallback widget or re-throw? For now, just log.
-  }
+  };
+
+  await Promise.race([
+    runWithTimeout(),
+    new Promise((resolve) =>
+      setTimeout(() => {
+        console.warn(`Widget task ${widgetInfo.widgetName} timed out after ${WIDGET_TIMEOUT_MS}ms`);
+        resolve(null);
+      }, WIDGET_TIMEOUT_MS),
+    ),
+  ]);
 }

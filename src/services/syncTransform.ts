@@ -64,6 +64,7 @@ const tableLocalToRemote: Partial<Record<SyncableTable, Record<string, string>>>
     themePreference: 'theme_preference',
     notificationsEnabled: 'notifications_enabled',
     biometricEnabled: 'biometric_enabled',
+    avatar: 'avatar',
   },
   split_expenses: {
     transactionId: 'transaction_id',
@@ -121,6 +122,21 @@ const toBooleanIfNeeded = (key: string, value: unknown) => {
   return value;
 };
 
+/**
+ * Columns that are NOT NULL in Supabase but nullable in SQLite.
+ * Map remote column name → default value to coalesce nulls before sync.
+ */
+const REMOTE_NOT_NULL_DEFAULTS: Partial<Record<SyncableTable, Record<string, unknown>>> = {
+  accounts: { is_default: false, color: '#7C3AED', icon: 'wallet' },
+  categories: { is_custom: false },
+  transactions: { tags: '[]', is_recurring: false },
+  budgets: { alert_at: 80 },
+  goals: { is_completed: false, icon: 'flag', color: '#7C3AED' },
+  liabilities: { interest_rate: 0 },
+  recurring_templates: { tags: '[]', is_active: true },
+  payment_methods: { is_custom: false },
+};
+
 export const mapLocalToRemoteRecord = (
   table: SyncableTable,
   record: Record<string, unknown>,
@@ -130,11 +146,23 @@ export const mapLocalToRemoteRecord = (
     ...(tableLocalToRemote[table] ?? {}),
   };
 
-  return Object.fromEntries(
+  const mapped = Object.fromEntries(
     Object.entries(record)
       .filter(([key]) => !LOCAL_ONLY_COLUMNS.has(key))
       .map(([key, value]) => [mapping[key] ?? key, value]),
   );
+
+  // Coalesce nulls to Supabase NOT NULL defaults
+  const defaults = REMOTE_NOT_NULL_DEFAULTS[table];
+  if (defaults) {
+    for (const [col, fallback] of Object.entries(defaults)) {
+      if (mapped[col] === null || mapped[col] === undefined) {
+        mapped[col] = fallback;
+      }
+    }
+  }
+
+  return mapped;
 };
 
 export const mapRemoteToLocalRecord = (
@@ -143,10 +171,25 @@ export const mapRemoteToLocalRecord = (
 ): Record<string, unknown> => {
   const mapping = tableRemoteToLocal[table] ?? invert(baseLocalToRemote);
 
-  return Object.fromEntries(
+  const localRecord = Object.fromEntries(
     Object.entries(record).map(([key, value]) => {
       const localKey = mapping[key] ?? key;
       return [localKey, toBooleanIfNeeded(localKey, value)];
     }),
   );
+
+  // Finding: Protect system-default records from remote deletion or custom overrides
+  // (e.g., cat_food, pm_cash, acc_cash)
+  const id = String(localRecord.id || '');
+  if (id.startsWith('cat_') || id.startsWith('pm_') || id === 'acc_cash') {
+    localRecord.deletedAt = null;
+    if (table === 'categories' || table === 'payment_methods') {
+      localRecord.isCustom = 0;
+    }
+    if (table === 'accounts' && id === 'acc_cash') {
+      localRecord.isDefault = 1;
+    }
+  }
+
+  return localRecord;
 };

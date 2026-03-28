@@ -32,6 +32,7 @@ Schema defined in `src/database/index.ts`. Tables:
 | `split_expenses`      | Split expense headers                     |
 | `split_friends`       | Native friend tracker for split balancing |
 | `split_members`       | Split expense member shares               |
+| `notes`               | User notes / memos                        |
 | `payment_methods`     | Payment method definitions                |
 | `sync_queue`          | Pending sync operations                   |
 | `sync_state`          | Per-table last-synced timestamps          |
@@ -43,7 +44,7 @@ RLS policies enforce per-user data isolation via `auth.uid()`.
 
 **FK constraint design**: Inter-table foreign keys (e.g. `transactions.category_id → categories.id`) have been intentionally removed from Supabase. Only the `user_id → auth.users(id)` FK is retained on each table. This allows offline-first sync to push records in any order without FK violations. SQLite enforces relational integrity locally via its own FK constraints.
 
-**Materialized view**: `dashboard_monthly_stats` pre-aggregates monthly income/expenses/net per user. Auto-refreshed via trigger on `transactions` table. Access via `get_dashboard_stats(month)` RPC function. Eliminates expensive client-side aggregation.
+**Materialized view**: `dashboard_monthly_stats` pre-aggregates monthly income/expenses/net per user. Refreshed explicitly by the client (no auto-refresh trigger — removed to avoid write-path overhead). Access via `get_dashboard_stats(month)` RPC function (`security invoker`). Eliminates expensive client-side aggregation.
 
 **Optimized indexes**: GIN index on `tags` column for fast tag-based analytics. Composite indexes on `(transaction_date DESC, type)` and `(type, category_id, account_id)` for dashboard and filter queries.
 
@@ -56,6 +57,7 @@ RLS policies enforce per-user data isolation via `auth.uid()`.
 - `paidByUserId` ↔ `paid_by_user_id`
 - `limit_amount` ↔ `limit_amount` (unchanged — shared name)
 - (all synced tables have full mappings defined)
+- Null-safe coalescing for 10 columns that are nullable in SQLite but NOT NULL in Supabase (e.g. `isDefault`, `isCustom`, `tags`, `alertAt`, `isCompleted`, `interestRate`, `isActive`, `isRecurring`, `isPinned`)
 
 ## Sync Flow
 
@@ -130,29 +132,31 @@ All types defined in `src/utils/types.ts`. No `any` in the codebase.
 
 ## Service Layer
 
-| Service                | File                    | Purpose                                                             |
-| ---------------------- | ----------------------- | ------------------------------------------------------------------- |
-| `AccountService`       | `dataService.ts`        | Account CRUD                                                        |
-| `CategoryService`      | `dataService.ts`        | Category CRUD                                                       |
-| `BudgetService`        | `dataService.ts`        | Budget CRUD + spent calculation                                     |
-| `GoalService`          | `dataService.ts`        | Goal CRUD + fund/withdraw                                           |
-| `NetWorthService`      | `dataService.ts`        | Asset, Liability, NetWorthHistory CRUD                              |
-| `UserProfileService`   | `dataService.ts`        | Profile read/upsert                                                 |
-| `PaymentMethodService` | `dataService.ts`        | Payment method CRUD                                                 |
-| `DataService`          | `dataServices.ts`       | Re-export umbrella + aggregate helpers                              |
-| `TransactionService`   | `transactionService.ts` | Transaction CRUD, filtered queries, CSV export, monthly stats       |
-| `SplitService`         | `splitService.ts`       | Split CRUD, friend management, Google Pay style balance aggregation |
-| `SyncService`          | `syncService.ts`        | Background push/pull sync orchestration                             |
-| `syncTransform`        | `syncTransform.ts`      | camelCase ↔ snake_case column mapping for all synced tables         |
-| `authService`          | `auth.ts`               | Sign in/up/out, biometric, session management, profile create       |
-| `SmsReadService`       | `smsReadService.ts`     | Android SMS list + bank message parser (regex-based)                |
-| `SmsService`           | `sms.ts`                | SMS polling, deduplication, transaction creation from SMS           |
-| `NotificationService`  | `notifications.ts`      | Expo scheduled notification management                              |
-| `exportService`        | `exportService.ts`      | CSV export, PDF export, full JSON backup, JSON import               |
-| `emailReportService`   | `emailReportService.ts` | Monthly summary email via Supabase Edge Function + Resend           |
-| `WidgetDataService`    | `widgetDataService.ts`  | Data fetchers for Android home screen widgets                       |
-| `MigrationRunner`      | `MigrationRunner.ts`    | SQLite schema migration helper                                      |
-| `permissions`          | `permissions.ts`        | Android runtime permission requests                                 |
+| Service                | File                    | Purpose                                                                     |
+| ---------------------- | ----------------------- | --------------------------------------------------------------------------- |
+| `AccountService`       | `dataService.ts`        | Account CRUD                                                                |
+| `CategoryService`      | `dataService.ts`        | Category CRUD                                                               |
+| `BudgetService`        | `dataService.ts`        | Budget CRUD + spent calculation                                             |
+| `GoalService`          | `dataService.ts`        | Goal CRUD + fund/withdraw + update                                          |
+| `NetWorthService`      | `dataService.ts`        | Asset, Liability, NetWorthHistory CRUD                                      |
+| `UserProfileService`   | `dataService.ts`        | Profile read/upsert                                                         |
+| `PaymentMethodService` | `dataService.ts`        | Payment method CRUD                                                         |
+| `DataService`          | `dataServices.ts`       | Re-export umbrella + aggregate helpers                                      |
+| `TransactionService`   | `transactionService.ts` | Transaction CRUD, filtered queries, CSV export, monthly stats               |
+| `SplitService`         | `splitService.ts`       | Split CRUD, friend management, Google Pay style balance aggregation         |
+| `SyncService`          | `syncService.ts`        | Background push/pull sync orchestration                                     |
+| `syncTransform`        | `syncTransform.ts`      | camelCase ↔ snake_case column mapping for all synced tables                 |
+| `authService`          | `auth.ts`               | Sign in/up/out, biometric, session management, profile create               |
+| `SmsReadService`       | `smsReadService.ts`     | Android SMS list + bank message parser (regex-based)                        |
+| `SmsService`           | `sms.ts`                | SMS polling, deduplication, transaction creation from SMS                   |
+| `NotificationService`  | `notifications.ts`      | Expo scheduled notification management                                      |
+| `exportService`        | `exportService.ts`      | CSV export, PDF export, full JSON backup, JSON import                       |
+| `emailReportService`   | `emailReportService.ts` | Monthly summary email via Supabase Edge Function + Resend                   |
+| `WidgetDataService`    | `widgetDataService.ts`  | Data fetchers for Android home screen widgets                               |
+| `NoteService`          | `noteService.ts`        | Notes CRUD                                                                  |
+| `Analytics`            | `analytics.ts`          | Firebase Analytics wrapper (screen views, events, user properties)          |
+| `MigrationRunner`      | `MigrationRunner.ts`    | SQLite migration runner + orphaned table cleanup (consolidated base schema) |
+| `permissions`          | `permissions.ts`        | Android runtime permission requests                                         |
 
 ## Component Library (`src/components/common/`)
 
@@ -228,6 +232,7 @@ File-based routing via expo-router. Route → screen mapping:
 - `app/accounts/index.tsx` — Accounts management
 - `app/sms-import.tsx` — SMS import modal
 - `app/notifications.tsx` — Notifications screen
+- `app/notes.tsx` — Notes screen
 - `app/profile/edit.tsx` — Edit profile screen
 
 Modal routes: `presentation: 'modal'` with `slide_from_bottom` or `slide_from_right`.

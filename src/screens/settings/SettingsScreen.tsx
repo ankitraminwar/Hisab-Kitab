@@ -2,7 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import * as LocalAuthentication from 'expo-local-authentication';
 import { useRouter, type Href } from 'expo-router';
-import React, { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Image,
@@ -438,7 +438,7 @@ export default function SettingsScreen() {
             <Ionicons name="log-out-outline" size={20} color={colors.expense} />
             <Text style={styles.logoutText}>Logout</Text>
           </TouchableOpacity>
-          <Text style={styles.versionText}>Hisab Kitab v2.0.0 (Stable)</Text>
+          <Text style={styles.versionText}>Hisab Kitab v1.0.0 (Stable)</Text>
         </Animated.View>
         <View style={{ height: 100 }} />
       </ScrollView>

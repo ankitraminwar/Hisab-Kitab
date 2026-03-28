@@ -6,7 +6,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { AmountText, Button, SearchBar, CustomModal } from '../../components/common';
+import { AmountText, Button, CustomModal, SearchBar } from '../../components/common';
 import TransactionItem from '../../components/TransactionItem';
 import { useTheme, type ThemeColors } from '../../hooks/useTheme';
 import { AccountService, CategoryService } from '../../services/dataServices';
@@ -53,10 +53,18 @@ const TransactionPreviewSheet: React.FC<{
   colors: ReturnType<typeof useTheme>['colors'];
 }> = ({ transaction, visible, onClose, onEdit, onDelete, colors }) => {
   const isSmsImported = transaction?.tags?.some((t) => t.startsWith('sms:')) ?? false;
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
   return (
-    <CustomModal visible={visible} onClose={onClose} hideCloseBtn>
-      {transaction && (
+    <CustomModal
+      visible={visible}
+      onClose={() => {
+        setConfirmDelete(false);
+        onClose();
+      }}
+      hideCloseBtn
+    >
+      {transaction && !confirmDelete && (
         <>
           <AmountText
             amount={transaction.amount}
@@ -139,12 +147,7 @@ const TransactionPreviewSheet: React.FC<{
             <Button
               title="Delete"
               variant="danger"
-              onPress={() => {
-                void (async () => {
-                  await TransactionService.delete(transaction.id);
-                  onDelete(transaction.id);
-                })();
-              }}
+              onPress={() => setConfirmDelete(true)}
               style={{ flex: 1 }}
             />
             {!isSmsImported && (
@@ -158,6 +161,37 @@ const TransactionPreviewSheet: React.FC<{
                 style={{ flex: 1 }}
               />
             )}
+          </View>
+        </>
+      )}
+      {transaction && confirmDelete && (
+        <>
+          <Text style={{ ...TYPOGRAPHY.h3, color: colors.textPrimary, marginBottom: SPACING.sm }}>
+            Delete Transaction
+          </Text>
+          <Text
+            style={{ ...TYPOGRAPHY.body, color: colors.textSecondary, marginBottom: SPACING.lg }}
+          >
+            Are you sure you want to delete this transaction?
+          </Text>
+          <View style={{ flexDirection: 'row', gap: SPACING.md }}>
+            <Button
+              title="Cancel"
+              variant="secondary"
+              onPress={() => setConfirmDelete(false)}
+              style={{ flex: 1 }}
+            />
+            <Button
+              title="Delete"
+              onPress={() => {
+                void (async () => {
+                  await TransactionService.delete(transaction.id);
+                  setConfirmDelete(false);
+                  onDelete(transaction.id);
+                })();
+              }}
+              style={{ flex: 1, backgroundColor: colors.expense }}
+            />
           </View>
         </>
       )}
@@ -276,9 +310,6 @@ export default function TransactionsScreen() {
       setCategories(cats);
       setAccounts(accs);
     })();
-  }, []);
-
-  useEffect(() => {
     void loadData(0, true);
   }, [dataRevision, loadData]);
 
@@ -365,9 +396,10 @@ export default function TransactionsScreen() {
     onPress: () => void,
     icon?: string,
     iconColor?: string,
+    id?: string,
   ) => (
     <TouchableOpacity
-      key={label}
+      key={id ?? label}
       style={[styles.filterOption, isSelected && styles.filterOptionActive]}
       onPress={onPress}
       activeOpacity={0.7}
@@ -396,6 +428,8 @@ export default function TransactionsScreen() {
     </TouchableOpacity>
   );
 
+  const unreadNotificationsCount = useAppStore((s) => s.unreadNotificationsCount);
+
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       {/* Header */}
@@ -403,6 +437,28 @@ export default function TransactionsScreen() {
         <Text style={styles.title}>Transactions</Text>
         <TouchableOpacity style={styles.menuBtn} onPress={() => router.push('/notifications')}>
           <Ionicons name="notifications-outline" size={22} color={colors.textSecondary} />
+          {unreadNotificationsCount > 0 && (
+            <View
+              style={{
+                position: 'absolute',
+                top: 8,
+                right: 8,
+                backgroundColor: colors.expense,
+                borderRadius: 8,
+                minWidth: 16,
+                height: 16,
+                alignItems: 'center',
+                justifyContent: 'center',
+                paddingHorizontal: 4,
+                borderWidth: 2,
+                borderColor: colors.bg,
+              }}
+            >
+              <Text style={{ color: '#fff', fontSize: 8, fontWeight: '800' }}>
+                {unreadNotificationsCount}
+              </Text>
+            </View>
+          )}
         </TouchableOpacity>
       </Animated.View>
 
@@ -582,6 +638,7 @@ export default function TransactionsScreen() {
             },
             c.icon,
             c.color,
+            c.id,
           ),
         )}
       </FilterSheet>
@@ -613,6 +670,7 @@ export default function TransactionsScreen() {
             },
             a.icon,
             a.color,
+            a.id,
           ),
         )}
       </FilterSheet>

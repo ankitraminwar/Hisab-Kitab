@@ -1,6 +1,7 @@
 import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
 
+import { useAppStore } from '../store/appStore';
 import type { NotificationPreferences } from '../utils/types';
 
 Notifications.setNotificationHandler({
@@ -108,4 +109,17 @@ export const applyNotificationPreferences = async (preferences: NotificationPref
   }
 
   return true;
+};
+
+export const notify = async (title: string, body: string) => {
+  useAppStore.getState().incrementUnreadNotifications();
+  await Notifications.scheduleNotificationAsync({
+    content: {
+      title,
+      body,
+      sound: true,
+      priority: Notifications.AndroidNotificationPriority.HIGH,
+    },
+    trigger: null,
+  });
 };

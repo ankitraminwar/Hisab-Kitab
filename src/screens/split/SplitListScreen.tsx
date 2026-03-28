@@ -1,7 +1,15 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  PanResponder,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -10,7 +18,7 @@ import { useTheme, type ThemeColors } from '../../hooks/useTheme';
 import { SplitService } from '../../services/splitService';
 import { useAppStore } from '../../store/appStore';
 import { RADIUS, SPACING, TYPOGRAPHY, formatCurrency } from '../../utils/constants';
-import type { SplitExpense, SplitMember, SplitFriend } from '../../utils/types';
+import type { SplitExpense, SplitFriend, SplitMember } from '../../utils/types';
 
 interface SplitItem {
   expense: SplitExpense;
@@ -31,6 +39,21 @@ export default function SplitListScreen() {
   >([]);
   const [activeTab, setActiveTab] = useState<'splits' | 'friends'>('splits');
   const [refreshing, setRefreshing] = useState(false);
+
+  const swipePanResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => false,
+      onMoveShouldSetPanResponder: (_, gs) =>
+        Math.abs(gs.dx) > 15 && Math.abs(gs.dx) > Math.abs(gs.dy) * 1.8,
+      onPanResponderRelease: (_, gs) => {
+        if (gs.dx < -40) {
+          setActiveTab('friends');
+        } else if (gs.dx > 40) {
+          setActiveTab('splits');
+        }
+      },
+    }),
+  ).current;
 
   const loadSplits = useCallback(async () => {
     const data = await SplitService.getAll();
@@ -64,7 +87,7 @@ export default function SplitListScreen() {
   }, 0);
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
+    <SafeAreaView style={styles.container} edges={['top']} {...swipePanResponder.panHandlers}>
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
@@ -91,6 +114,22 @@ export default function SplitListScreen() {
             By Friend
           </Text>
         </TouchableOpacity>
+      </View>
+
+      {/* Swipe indicator dots */}
+      <View style={styles.indicatorRow}>
+        <View
+          style={[
+            styles.indicatorDot,
+            activeTab === 'splits' && { backgroundColor: colors.primary, width: 20 },
+          ]}
+        />
+        <View
+          style={[
+            styles.indicatorDot,
+            activeTab === 'friends' && { backgroundColor: colors.primary, width: 20 },
+          ]}
+        />
       </View>
 
       <ScrollView
@@ -423,6 +462,19 @@ function createStyles(colors: ThemeColors) {
       ...TYPOGRAPHY.body,
       fontWeight: '600',
       color: colors.textSecondary,
+    },
+    indicatorRow: {
+      flexDirection: 'row',
+      justifyContent: 'center',
+      alignItems: 'center',
+      gap: 6,
+      paddingBottom: 6,
+    },
+    indicatorDot: {
+      height: 5,
+      width: 5,
+      borderRadius: 3,
+      backgroundColor: colors.border,
     },
     sectionTitle: {
       ...TYPOGRAPHY.h3,

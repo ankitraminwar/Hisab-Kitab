@@ -2,6 +2,7 @@ import NetInfo from '@react-native-community/netinfo';
 
 import {
   enqueueSync,
+  fetchLocalRecord,
   fetchTableRows,
   getDatabase,
   getLastSyncTimestamp,
@@ -11,6 +12,7 @@ import {
   incrementSyncRetry,
   listPendingSyncItems,
   markRecordSyncStatus,
+  rebaseLocalRecordId,
   removeFromSyncQueue,
   setLastSyncTimestamp,
   setSyncState,
@@ -109,7 +111,8 @@ class SyncService {
 
     const session = await supabase.auth.getSession();
     const userId = session.data.session?.user?.id ?? null;
-    if (userId && !(await hasLocalUserData(userId))) {
+    const lastSyncAt = await getLastSyncTimestamp();
+    if (userId && (!lastSyncAt || !(await hasLocalUserData(userId)))) {
       const result = await this.initialSync();
       return {
         success: result.success,
@@ -138,6 +141,7 @@ class SyncService {
         this.remoteSchemaAvailable = false;
         const message =
           'Supabase schema is not deployed yet. Apply supabase/schema.sql and restart sync.';
+        console.error('Sync failed: Supabase schema mismatch', error);
         useAppStore.getState().setSyncState({
           syncInProgress: false,
           lastSyncError: message,
@@ -146,6 +150,7 @@ class SyncService {
       }
 
       const message = errorMessage(error) || 'Sync failed';
+      console.error('Sync failed with error:', message, error);
       useAppStore.getState().setSyncState({
         syncInProgress: false,
         lastSyncError: message,
@@ -202,10 +207,17 @@ class SyncService {
     return false;
   }
 
-  private isExpectedDefaultCategoryRlsFailure(item: SyncQueueItem, reason: string) {
+  private isExpectedDefaultRecordRlsFailure(item: SyncQueueItem, reason: string) {
     const isDefaultCategory = item.entity === 'categories' && item.recordId.startsWith('cat_');
+    const isDefaultPaymentMethod =
+      item.entity === 'payment_methods' && item.recordId.startsWith('pm_');
+    const isDefaultCashAccount = item.entity === 'accounts' && item.recordId === 'acc_cash';
     const isRls = reason.includes('row-level security') || reason.includes('42501');
-    return isDefaultCategory && isRls;
+    const isFkConstraint = reason.toLowerCase().includes('foreign key');
+    return (
+      (isDefaultCategory || isDefaultPaymentMethod || isDefaultCashAccount) &&
+      (isRls || isFkConstraint)
+    );
   }
 
   private hydrateUserProfileStore(record: Record<string, unknown>) {
@@ -321,7 +333,7 @@ class SyncService {
       } catch (error) {
         const reason = errorMessage(error);
         failures.push({ item, reason });
-        if (!this.isExpectedDefaultCategoryRlsFailure(item, reason)) {
+        if (!this.isExpectedDefaultRecordRlsFailure(item, reason)) {
           console.warn(`Sync push failed for ${item.entity}/${item.recordId}:`, reason);
         }
 
@@ -336,9 +348,15 @@ class SyncService {
       // on shared devices — skip them so the rest of sync can succeed.
       const critical = failures.filter((f) => {
         const isDefault = f.item.entity === 'categories' && f.item.recordId.startsWith('cat_');
+        const isDefaultPm =
+          f.item.entity === 'payment_methods' && f.item.recordId.startsWith('pm_');
+        const isDefaultCash = f.item.entity === 'accounts' && f.item.recordId === 'acc_cash';
         const isRls = f.reason.includes('row-level security') || f.reason.includes('42501');
-        if (isDefault && isRls) {
-          markRecordSyncStatus('categories', f.item.recordId, 'synced').catch(console.warn);
+        const isFkConstraint = f.reason.toLowerCase().includes('foreign key');
+        if ((isDefault || isDefaultPm || isDefaultCash) && (isRls || isFkConstraint)) {
+          markRecordSyncStatus(f.item.entity as SyncableTable, f.item.recordId, 'synced').catch(
+            console.warn,
+          );
           removeFromSyncQueue(f.item.id).catch(console.warn);
           return false;
         }
@@ -358,8 +376,32 @@ class SyncService {
 
   private async pushQueueItem(item: SyncQueueItem, userId: string | null) {
     try {
-      const payload = JSON.parse(item.payload) as Record<string, unknown>;
       const table = item.entity as SyncableTable;
+      let payload = JSON.parse(item.payload) as Record<string, unknown>;
+
+      // If payload is partial (only id/timestamps, none of the actual record fields),
+      // fetch the full row from the local DB so NOT NULL constraints are satisfied.
+      // Each entity type has its own required unique field — check all of them to
+      // avoid false-positives on tables whose required field isn't in the generic set.
+      const isPartialPayload =
+        payload.name === undefined && // accounts, categories, goals, split_friends, payment_methods, notes
+        payload.amount === undefined && // transactions, recurring_templates
+        payload.content === undefined && // notes
+        payload.totalAssets === undefined && // net_worth_history
+        payload.limitAmount === undefined && // budgets ← key fix: budgets always have limitAmount
+        payload.targetAmount === undefined; // goals (also have name, but belt-and-suspenders)
+      if (isPartialPayload && item.operation !== 'delete') {
+        const fullRecord = await fetchLocalRecord(item.entity, item.recordId);
+        if (fullRecord) {
+          // fullRecord provides the authoritative base; payload overrides only non-null fields
+          // This prevents null payload values (e.g. a stale queue entry) from overwriting valid DB data
+          const nonNullPayloadEntries = Object.entries(payload).filter(
+            ([, v]) => v !== null && v !== undefined,
+          );
+          payload = { ...fullRecord, ...Object.fromEntries(nonNullPayloadEntries) };
+        }
+      }
+
       const remoteData = mapLocalToRemoteRecord(item.entity as SyncableTable, payload);
       const recordId = String(payload.id ?? item.recordId);
 
@@ -385,8 +427,9 @@ class SyncService {
 
       if (item.operation === 'delete') {
         const deletedAt = String(payload.deletedAt ?? new Date().toISOString());
+        // Only sync soft-delete to Supabase if the record already exists remotely
         if (
-          !remoteRecord ||
+          remoteRecord &&
           new Date(String(remoteRecord.updated_at ?? 0)).getTime() <= new Date(deletedAt).getTime()
         ) {
           const { error } = await supabase.from(table).upsert(
@@ -433,6 +476,32 @@ class SyncService {
         { onConflict: 'id' },
       );
       if (error) {
+        // Handle unique constraint violations by adopting the remote ID
+        if (error.code === '23505') {
+          let conflictQuery = supabase.from(table).select('id').eq('user_id', userId);
+
+          if (table === 'budgets') {
+            conflictQuery = conflictQuery
+              .eq('category_id', remoteData.category_id)
+              .eq('month', remoteData.month)
+              .eq('year', remoteData.year);
+          } else if (table === 'accounts') {
+            conflictQuery = conflictQuery.eq('name', remoteData.name);
+          } else if (table === 'categories') {
+            conflictQuery = conflictQuery.eq('name', remoteData.name).eq('type', remoteData.type);
+          } else {
+            throw error; // Not handled for other tables
+          }
+
+          const { data: conflictRecord } = await conflictQuery.maybeSingle();
+          if (conflictRecord?.id) {
+            await rebaseLocalRecordId(table, recordId, conflictRecord.id);
+            // Now that we've adopted the remote ID, the next pull will sync it correctly.
+            // We can remove it from the queue now as it's been "resolved".
+            await removeFromSyncQueue(item.id);
+            return;
+          }
+        }
         throw error;
       }
 
@@ -448,8 +517,8 @@ class SyncService {
       }
     } catch (error) {
       const reason = errorMessage(error) || 'Push failed';
-      if (this.isExpectedDefaultCategoryRlsFailure(item, reason)) {
-        await markRecordSyncStatus('categories', item.recordId, 'synced');
+      if (this.isExpectedDefaultRecordRlsFailure(item, reason)) {
+        await markRecordSyncStatus(item.entity as SyncableTable, item.recordId, 'synced');
         await removeFromSyncQueue(item.id);
         return;
       }
@@ -486,6 +555,25 @@ class SyncService {
     }
 
     await setSyncState('defaultsSynced', 'true');
+
+    // Enqueue the default Cash account on the first sync (or whenever the flag
+    // is missing, e.g. on fresh installs). Uses a separate flag so existing
+    // users who already ran ensureDefaultsSynced still get their Cash account pushed.
+    await this.ensureCashAccountSynced();
+  }
+
+  /** Enqueue the seeded 'acc_cash' account for push to Supabase once per install. */
+  private async ensureCashAccountSynced() {
+    const cashFlag = await getSyncState('cashDefaultSynced');
+    if (cashFlag === 'true') return;
+
+    const cashAccount = await fetchLocalRecord('accounts', 'acc_cash');
+    if (cashAccount && !cashAccount.deletedAt) {
+      await enqueueSync('accounts', 'acc_cash', 'upsert', cashAccount);
+      await markRecordSyncStatus('accounts' as SyncableTable, 'acc_cash', 'pending');
+    }
+
+    await setSyncState('cashDefaultSynced', 'true');
   }
 
   /**
@@ -504,6 +592,8 @@ class SyncService {
       'goals',
       'assets',
       'liabilities',
+      'notes',
+      'recurring_templates',
     ],
     ['transactions', 'budgets', 'net_worth_history'],
     ['split_expenses'],

@@ -26,7 +26,10 @@ const baseSyncColumns = `
   userId TEXT,
   syncStatus TEXT NOT NULL DEFAULT 'pending' CHECK(syncStatus IN ('synced', 'pending', 'failed')),
   lastSyncedAt TEXT,
-  deletedAt TEXT
+  deletedAt TEXT,
+  last_modified INTEGER NOT NULL DEFAULT 0,
+  server_id TEXT,
+  version_hash TEXT
 `;
 
 const transactionalTables = [
@@ -136,6 +139,7 @@ const transactionalTables = [
     themePreference TEXT NOT NULL DEFAULT 'system' CHECK(themePreference IN ('dark','light','system')),
     notificationsEnabled INTEGER NOT NULL DEFAULT 0,
     biometricEnabled INTEGER NOT NULL DEFAULT 0,
+    avatar TEXT,
     createdAt TEXT NOT NULL,
     updatedAt TEXT NOT NULL,
     ${baseSyncColumns}
@@ -260,6 +264,9 @@ const indexes = [
   `CREATE INDEX IF NOT EXISTS idx_transactions_dashboard ON transactions(date DESC, type)`,
   `CREATE INDEX IF NOT EXISTS idx_transactions_filter ON transactions(type, categoryId, accountId)`,
   `CREATE INDEX IF NOT EXISTS idx_transactions_cat_type_deleted ON transactions(categoryId, type, deletedAt DESC)`,
+  `CREATE INDEX IF NOT EXISTS idx_transactions_merchant ON transactions(merchant)`,
+  `CREATE INDEX IF NOT EXISTS idx_transactions_notes ON transactions(notes)`,
+  `CREATE INDEX IF NOT EXISTS idx_transactions_amount ON transactions(amount)`,
 ];
 
 const defaultCategories = [
@@ -470,9 +477,9 @@ export const initializeDatabase = async (): Promise<void> => {
   // Start initialization and store the promise
   initializingPromise = (async () => {
     const database = getDatabase();
-    await database.execAsync(
-      'PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON; PRAGMA synchronous = NORMAL;',
-    );
+    await database.execAsync('PRAGMA journal_mode = WAL;');
+    await database.execAsync('PRAGMA foreign_keys = ON;');
+    await database.execAsync('PRAGMA synchronous = NORMAL;');
 
     for (const statement of transactionalTables) {
       await database.execAsync(statement);
@@ -523,43 +530,66 @@ const ensureSyncStateSchema = async (database: SQLite.SQLiteDatabase) => {
   await database.execAsync('ALTER TABLE sync_state_next RENAME TO sync_state;');
 };
 
-const seedDefaultData = async (database: SQLite.SQLiteDatabase) => {
-  const categoryCount = await database.getFirstAsync<{ count: number }>(
-    'SELECT COUNT(*) as count FROM categories',
-  );
+export const seedDefaultData = async (database: SQLite.SQLiteDatabase) => {
+  const now = new Date().toISOString();
 
-  if ((categoryCount?.count ?? 0) === 0) {
-    const now = new Date().toISOString();
-    for (const category of defaultCategories) {
+  // Seed default categories
+  for (const category of defaultCategories) {
+    try {
+      // First, ensure any existing default category is not soft‑deleted
       await database.runAsync(
-        `INSERT INTO categories
+        `UPDATE categories SET deletedAt = NULL, isCustom = 0 WHERE id = ? AND deletedAt IS NOT NULL`,
+        [category.id],
+      );
+      // Insert or ignore (will ignore if already present with same PK)
+      await database.runAsync(
+        `INSERT OR IGNORE INTO categories
           (id, name, type, icon, color, isCustom, parentId, createdAt, updatedAt, userId, syncStatus, lastSyncedAt, deletedAt)
          VALUES (?, ?, ?, ?, ?, 0, NULL, ?, ?, NULL, 'synced', ?, NULL)`,
         [category.id, category.name, category.type, category.icon, category.color, now, now, now],
       );
+    } catch {
+      // Seed failure for a single category is non-fatal
     }
   }
 
-  const pmCount = await database.getFirstAsync<{ count: number }>(
-    'SELECT COUNT(*) as count FROM payment_methods',
-  );
+  // Seed default payment methods
+  const pmDefaults = [
+    { id: 'pm_cash', name: 'Cash', icon: 'cash', color: '#10B981' },
+    { id: 'pm_upi', name: 'UPI', icon: 'qr-code', color: '#8B5CF6' },
+    { id: 'pm_credit', name: 'Credit Card', icon: 'card', color: '#3B82F6' },
+    { id: 'pm_debit', name: 'Debit Card', icon: 'card-outline', color: '#F59E0B' },
+    { id: 'pm_bank', name: 'Bank Transfer', icon: 'business', color: '#6366F1' },
+  ];
 
-  if ((pmCount?.count ?? 0) === 0) {
-    const now = new Date().toISOString();
-    const defaults = [
-      { name: 'Cash', icon: 'cash' },
-      { name: 'UPI', icon: 'qr-code' },
-      { name: 'Credit Card', icon: 'card' },
-      { name: 'Debit Card', icon: 'card-outline' },
-      { name: 'Bank Transfer', icon: 'business' },
-    ];
-    for (const pm of defaults) {
+  for (const pm of pmDefaults) {
+    try {
       await database.runAsync(
-        `INSERT INTO payment_methods (id, name, icon, createdAt, updatedAt, syncStatus)
-         VALUES (?, ?, ?, ?, ?, 'synced')`,
-        [generateId(), pm.name, pm.icon, now, now],
+        `INSERT OR IGNORE INTO payment_methods
+          (id, name, icon, color, isCustom, createdAt, updatedAt, userId, syncStatus, lastSyncedAt, deletedAt)
+         VALUES (?, ?, ?, ?, 0, ?, ?, NULL, 'synced', ?, NULL)`,
+        [pm.id, pm.name, pm.icon, pm.color, now, now, now],
       );
+    } catch {
+      // Seed failure for a single payment method is non-fatal
     }
+  }
+
+  // Seed default Cash account — always ensure at least one account exists.
+  // Uses a stable id ('acc_cash') so it is never duplicated on repeated seeds.
+  try {
+    // If it was previously soft-deleted, restore it.
+    await database.runAsync(
+      `UPDATE accounts SET deletedAt = NULL, isDefault = 1 WHERE id = 'acc_cash' AND deletedAt IS NOT NULL`,
+    );
+    await database.runAsync(
+      `INSERT OR IGNORE INTO accounts
+        (id, name, type, balance, currency, color, icon, isDefault, createdAt, updatedAt, userId, syncStatus, lastSyncedAt, deletedAt)
+       VALUES ('acc_cash', 'Cash', 'cash', 0, 'INR', '#22C55E', 'cash', 1, ?, ?, NULL, 'pending', NULL, NULL)`,
+      [now, now],
+    );
+  } catch {
+    // Seed failure for the default Cash account is non-fatal
   }
 };
 
@@ -593,6 +623,115 @@ export const enqueueSync = async (
     [id, entity, recordId, operation, JSON.stringify(payload), now, now],
   );
   return id;
+};
+
+export const fetchLocalRecord = async (
+  table: SyncableTable | string,
+  id: string,
+): Promise<Record<string, unknown> | null> => {
+  const database = getDatabase();
+  const row = await database.getFirstAsync<Record<string, unknown>>(
+    `SELECT * FROM ${table} WHERE id = ?`,
+    [id],
+  );
+  return row || null;
+};
+
+/**
+ * Re-bases a local record's ID to a new one (e.g. from Supabase).
+ * Used for conflict resolution when a remote record with a different ID already exists but matches a unique constraint.
+ */
+export const rebaseLocalRecordId = async (
+  table: string,
+  oldId: string,
+  newId: string,
+): Promise<void> => {
+  const database = getDatabase();
+
+  // 1. Check if newId already exists locally
+  const targetExists = await database.getFirstAsync(`SELECT id FROM ${table} WHERE id = ?`, [
+    newId,
+  ]);
+
+  await database.withTransactionAsync(async () => {
+    // Defer FK enforcement to COMMIT so we can reorder parent/child updates freely
+    // within the transaction without hitting intermediate constraint violations.
+    await database.runAsync('PRAGMA defer_foreign_keys = ON');
+
+    if (targetExists) {
+      // Merge path: newId already exists locally.
+      // Move all child references to newId FIRST (newId is a valid parent),
+      // THEN delete the now-orphan oldId row.
+      if (table === 'accounts') {
+        await database.runAsync('UPDATE transactions SET accountId = ? WHERE accountId = ?', [
+          newId,
+          oldId,
+        ]);
+        await database.runAsync('UPDATE transactions SET toAccountId = ? WHERE toAccountId = ?', [
+          newId,
+          oldId,
+        ]);
+        await database.runAsync('UPDATE goals SET accountId = ? WHERE accountId = ?', [
+          newId,
+          oldId,
+        ]);
+        await database.runAsync(
+          'UPDATE recurring_templates SET accountId = ? WHERE accountId = ?',
+          [newId, oldId],
+        );
+      } else if (table === 'categories') {
+        await database.runAsync('UPDATE transactions SET categoryId = ? WHERE categoryId = ?', [
+          newId,
+          oldId,
+        ]);
+        await database.runAsync('UPDATE budgets SET categoryId = ? WHERE categoryId = ?', [
+          newId,
+          oldId,
+        ]);
+        await database.runAsync(
+          'UPDATE recurring_templates SET categoryId = ? WHERE categoryId = ?',
+          [newId, oldId],
+        );
+      }
+      await database.runAsync(`DELETE FROM ${table} WHERE id = ?`, [oldId]);
+    } else {
+      // Rename path: newId does not exist locally yet.
+      // With defer_foreign_keys ON, SQLite checks FKs at COMMIT, so it is safe
+      // to rename the parent ID then update children within the same transaction.
+      await database.runAsync(`UPDATE ${table} SET id = ? WHERE id = ?`, [newId, oldId]);
+      if (table === 'accounts') {
+        await database.runAsync('UPDATE transactions SET accountId = ? WHERE accountId = ?', [
+          newId,
+          oldId,
+        ]);
+        await database.runAsync('UPDATE transactions SET toAccountId = ? WHERE toAccountId = ?', [
+          newId,
+          oldId,
+        ]);
+        await database.runAsync('UPDATE goals SET accountId = ? WHERE accountId = ?', [
+          newId,
+          oldId,
+        ]);
+        await database.runAsync(
+          'UPDATE recurring_templates SET accountId = ? WHERE accountId = ?',
+          [newId, oldId],
+        );
+      } else if (table === 'categories') {
+        await database.runAsync('UPDATE transactions SET categoryId = ? WHERE categoryId = ?', [
+          newId,
+          oldId,
+        ]);
+        await database.runAsync('UPDATE budgets SET categoryId = ? WHERE categoryId = ?', [
+          newId,
+          oldId,
+        ]);
+        await database.runAsync(
+          'UPDATE recurring_templates SET categoryId = ? WHERE categoryId = ?',
+          [newId, oldId],
+        );
+      }
+    }
+  });
 };
 
 export const markRecordSyncStatus = async (

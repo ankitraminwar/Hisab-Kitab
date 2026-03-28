@@ -1,9 +1,10 @@
 import { enqueueSync, getDatabase } from '@/database';
-import { triggerBackgroundSync } from '@/services/syncService';
 import { useAppStore } from '@/store/appStore';
 import { generateId } from '@/utils/constants';
 import type { Transaction, TransactionFilters, TransactionType } from '@/utils/types';
 import type { SQLiteBindValue } from 'expo-sqlite';
+import { notify } from './notifications';
+import { triggerBackgroundSync } from './syncService';
 
 /** Lazy-import to break the require cycle:
  *  transactionService → refreshWidgets → widgetDataService → transactionService
@@ -217,18 +218,27 @@ export const TransactionService = {
         transaction.accountId,
         transaction.toAccountId,
       );
+      await enqueueSync('transactions', transaction.id, 'upsert', {
+        ...transaction,
+        tags: JSON.stringify(transaction.tags ?? []),
+        isRecurring: transaction.isRecurring ? 1 : 0,
+      });
       await db.execAsync('COMMIT');
     } catch (error) {
       await db.execAsync('ROLLBACK');
       throw error;
     }
 
-    await enqueueSync('transactions', transaction.id, 'upsert', {
-      ...transaction,
-      tags: JSON.stringify(transaction.tags ?? []),
-      isRecurring: transaction.isRecurring ? 1 : 0,
-    });
-    useAppStore.getState().bumpDataRevision();
+    const store = useAppStore.getState();
+    store.bumpDataRevision();
+    store.setUnreadNotificationsCount(store.unreadNotificationsCount + 1);
+
+    if (transaction.type === 'transfer') {
+      void notify('Transfer Registered', `Moved ${transaction.amount} between accounts.`);
+    } else {
+      void notify('Transaction Added', `Recorded ${transaction.type} of ${transaction.amount}.`);
+    }
+
     triggerBackgroundSync('transaction-created').catch(console.warn);
     refreshAllWidgets().catch(console.warn);
 
@@ -292,17 +302,17 @@ export const TransactionService = {
         updated.accountId,
         updated.toAccountId,
       );
+      await enqueueSync('transactions', id, 'upsert', {
+        ...updated,
+        tags: JSON.stringify(updated.tags ?? []),
+        isRecurring: updated.isRecurring ? 1 : 0,
+      });
       await db.execAsync('COMMIT');
     } catch (e) {
       await db.execAsync('ROLLBACK');
       throw e;
     }
 
-    await enqueueSync('transactions', id, 'upsert', {
-      ...updated,
-      tags: JSON.stringify(updated.tags ?? []),
-      isRecurring: updated.isRecurring ? 1 : 0,
-    });
     useAppStore.getState().bumpDataRevision();
     triggerBackgroundSync('transaction-updated').catch(console.warn);
     refreshAllWidgets().catch(console.warn);
@@ -332,17 +342,17 @@ export const TransactionService = {
          WHERE id = ?`,
         [deletedAt, deletedAt, id],
       );
+      await enqueueSync('transactions', id, 'delete', {
+        id,
+        deletedAt,
+        updatedAt: deletedAt,
+      });
       await db.execAsync('COMMIT');
     } catch (e) {
       await db.execAsync('ROLLBACK');
       throw e;
     }
 
-    await enqueueSync('transactions', id, 'delete', {
-      id,
-      deletedAt,
-      updatedAt: deletedAt,
-    });
     useAppStore.getState().bumpDataRevision();
     triggerBackgroundSync('transaction-deleted').catch(console.warn);
     refreshAllWidgets().catch(console.warn);

@@ -278,10 +278,23 @@ export default function AuthScreen({ mode }: { mode: Mode }) {
         });
       }
     } catch (error) {
+      const msg = error instanceof Error ? error.message : 'Unable to complete the request.';
+      const isNetworkError =
+        msg.toLowerCase().includes('fetch') ||
+        msg.toLowerCase().includes('network') ||
+        msg.toLowerCase().includes('failed to fetch') ||
+        msg === '';
       setPopupConfig({
         visible: true,
-        title: 'Auth failed',
-        message: error instanceof Error ? error.message : 'Unable to complete the request.',
+        title:
+          mode === 'login'
+            ? 'Sign In Failed'
+            : mode === 'signup'
+              ? 'Sign Up Failed'
+              : 'Request Failed',
+        message: isNetworkError
+          ? 'Could not reach the server. Check your internet connection and try again.'
+          : msg,
         type: 'error',
       });
     } finally {

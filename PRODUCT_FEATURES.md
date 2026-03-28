@@ -118,8 +118,8 @@ Users can manage accounts such as:
 Account features include:
 
 - Add account
-- Edit account details
-- Delete account
+- Edit account details (type, name, balance, color)
+- Delete account (with confirmation prompt)
 - Track current balance
 - Assign icon and color
 - Use accounts as sources and destinations in transactions
@@ -173,11 +173,12 @@ The app includes savings goal tracking to support longer-term financial planning
 
 Users can:
 
-- Create savings goals
-- Set target amount
-- Set current saved amount
+- Create savings goals with name, target amount, deadline, icon, and color
+- Edit goal details (name, target, deadline, icon, color)
+- Set and update deadlines with a date picker
 - Add funds to a goal
-- Delete a goal
+- View progress with visual progress bars
+- Delete a goal (with confirmation prompt)
 
 Goal value to the product:
 
@@ -371,6 +372,15 @@ Available widget experiences include:
 - Savings goal and net worth related widget data support
 
 These widgets help the app remain useful even outside direct in-app sessions.
+
+## 19. Analytics
+
+The app uses Firebase Analytics to track screen views and key user events (transaction created, goal completed, budget exceeded, etc.) for product improvement insights.
+
+- Analytics is instrumented via `src/services/analytics.ts`
+- Only non-PII events are tracked — no amounts, account names, or personal notes
+- User ID is set on sign-in for cross-device attribution
+- Screen view tracking helps identify feature adoption and drop-off points
 
 ## End-to-End User Flows
 
