@@ -31,8 +31,8 @@ import type {
   TransactionType,
 } from '../../utils/types';
 
-/** ISO string for storage / DB operations */
-const toISODate = (date: Date) => date.toISOString();
+/** YYYY-MM-DD date string for storage / DB operations — keeps format consistent across all writers */
+const toISODate = (date: Date) => date.toISOString().slice(0, 10);
 
 /** User-friendly display string */
 const formatDisplayDate = (date: Date): string => {

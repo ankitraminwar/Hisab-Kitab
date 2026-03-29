@@ -117,9 +117,9 @@ export default function NotificationsScreen() {
     void buildNotifications();
   }, [buildNotifications, dataRevision]);
 
-  // Reset badge count when screen is opened
+  // Reset badge count when screen is opened (on mount/focus, not on unmount)
   useEffect(() => {
-    return () => setUnreadNotificationsCount(0);
+    setUnreadNotificationsCount(0);
   }, [setUnreadNotificationsCount]);
 
   const getIconForType = (type: NotificationItem['type']) => {

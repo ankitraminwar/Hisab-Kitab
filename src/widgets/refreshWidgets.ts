@@ -30,7 +30,7 @@ export async function refreshAllWidgets() {
       }),
     ]);
   } catch (error) {
-    // Widget update failures are non-critical — swallow silently
+    // Widget update failures are non-critical — log warning but do not rethrow
     console.warn('Widget refresh failed:', error);
   }
 }

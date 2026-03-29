@@ -477,7 +477,7 @@ export default function DashboardScreen() {
                     borderColor: colors.bg,
                   }}
                 >
-                  <Text style={{ color: '#fff', fontSize: 8, fontWeight: '800' }}>
+                  <Text style={{ color: colors.textInverse, fontSize: 8, fontWeight: '800' }}>
                     {unreadNotificationsCount}
                   </Text>
                 </View>

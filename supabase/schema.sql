@@ -291,7 +291,7 @@ create table if not exists public.notes (
 
 create table if not exists public.recurring_templates (
   id text primary key,
-  user_id uuid references auth.users(id) on delete cascade,
+  user_id uuid not null references auth.users(id) on delete cascade,
   amount double precision not null,
   type text not null,
   category_id text not null,
@@ -373,6 +373,8 @@ create trigger set_split_friends_updated_at before update on public.split_friend
 drop trigger if exists set_payment_methods_updated_at on public.payment_methods;
 create trigger set_payment_methods_updated_at before update on public.payment_methods for each row execute function public.set_updated_at();
 drop trigger if exists update_notes_updated_at on public.notes;
+-- Also drop the legacy trigger name installed by the original migration
+drop trigger if exists handle_updated_at on public.notes;
 create trigger update_notes_updated_at before update on public.notes for each row execute function public.set_updated_at();
 drop trigger if exists set_recurring_templates_updated_at on public.recurring_templates;
 create trigger set_recurring_templates_updated_at before update on public.recurring_templates for each row execute function public.set_updated_at();
@@ -451,6 +453,17 @@ drop policy if exists "own_split_expenses" on public.split_expenses;
 drop policy if exists "own_split_members" on public.split_members;
 drop policy if exists "own_split_friends" on public.split_friends;
 drop policy if exists "own_payment_methods" on public.payment_methods;
+-- Drop old per-operation policies created by early migrations (notes + recurring_templates)
+drop policy if exists "Users can create their own notes" on public.notes;
+drop policy if exists "Users can view their own notes" on public.notes;
+drop policy if exists "Users can update their own notes" on public.notes;
+drop policy if exists "Users can delete their own notes" on public.notes;
+drop policy if exists "own_notes" on public.notes;
+drop policy if exists "recurring_templates_select_own" on public.recurring_templates;
+drop policy if exists "recurring_templates_insert_own" on public.recurring_templates;
+drop policy if exists "recurring_templates_update_own" on public.recurring_templates;
+drop policy if exists "recurring_templates_delete_own" on public.recurring_templates;
+drop policy if exists "own_recurring_templates" on public.recurring_templates;
 
 create policy "own_accounts" on public.accounts for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
 create policy "own_categories_read" on public.categories for select using (auth.uid() = user_id or user_id is null);
