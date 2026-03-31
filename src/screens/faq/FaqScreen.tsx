@@ -216,11 +216,13 @@ export default function FaqScreen() {
             end={{ x: 1, y: 1 }}
             style={styles.heroCard}
           >
-            <View style={[styles.heroIconWrap, { backgroundColor: 'rgba(255,255,255,0.15)' }]}>
-              <Ionicons name="help-circle" size={34} color="#FFF" />
+            <View style={[styles.heroIconWrap, { backgroundColor: colors.heroOverlay }]}>
+              <Ionicons name="help-circle" size={34} color={colors.heroText} />
             </View>
-            <Text style={[styles.heroTitle, { color: '#FFF' }]}>Understand the app faster</Text>
-            <Text style={[styles.heroSubtitle, { color: 'rgba(255,255,255,0.8)' }]}>
+            <Text style={[styles.heroTitle, { color: colors.heroText }]}>
+              Understand the app faster
+            </Text>
+            <Text style={[styles.heroSubtitle, { color: colors.heroTextMuted }]}>
               Start with the basic flows below, then open the questions for more detail.
             </Text>
           </LinearGradient>

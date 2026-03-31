@@ -451,14 +451,24 @@ export default function DashboardScreen() {
             {syncInProgress && (
               <ActivityIndicator size="small" color={colors.primary} style={{ marginRight: 8 }} />
             )}
-            <TouchableOpacity onPress={toggleHideBalance} style={styles.iconBtn}>
+            <TouchableOpacity
+              onPress={toggleHideBalance}
+              style={styles.iconBtn}
+              accessibilityLabel={isBalanceHidden ? 'Show balance' : 'Hide balance'}
+              accessibilityRole="button"
+            >
               <Ionicons
                 name={isBalanceHidden ? 'eye-off' : 'eye'}
                 size={22}
                 color={colors.textSecondary}
               />
             </TouchableOpacity>
-            <TouchableOpacity onPress={() => router.push('/notifications')} style={styles.iconBtn}>
+            <TouchableOpacity
+              onPress={() => router.push('/notifications')}
+              style={styles.iconBtn}
+              accessibilityLabel="Notifications"
+              accessibilityRole="button"
+            >
               <Ionicons name="notifications" size={22} color={colors.textSecondary} />
               {unreadNotificationsCount > 0 && (
                 <View
@@ -771,19 +781,19 @@ const createStyles = (colors: ThemeColors) =>
       shadowOpacity: 0.25,
       shadowRadius: 16,
     },
-    heroBlob: { position: 'absolute', backgroundColor: 'rgba(255,255,255,0.07)' },
-    heroLabel: { ...TYPOGRAPHY.label, color: 'rgba(255,255,255,0.7)', letterSpacing: 1 },
+    heroBlob: { position: 'absolute', backgroundColor: colors.heroOverlay },
+    heroLabel: { ...TYPOGRAPHY.label, color: colors.heroTextMuted, letterSpacing: 1 },
     heroAmount: {
       fontSize: 42,
       fontWeight: '900',
-      color: '#fff',
+      color: colors.heroText,
       letterSpacing: -1.5,
       marginVertical: SPACING.md,
     },
     heroStatsContainer: {
       flexDirection: 'row',
       alignItems: 'center',
-      backgroundColor: 'rgba(0,0,0,0.2)',
+      backgroundColor: colors.overlayLight,
       borderRadius: RADIUS.lg,
       padding: SPACING.md,
       backdropFilter: 'blur(10px)',
@@ -802,7 +812,7 @@ const createStyles = (colors: ThemeColors) =>
       color: 'rgba(255,255,255,0.6)',
       textTransform: 'uppercase',
     },
-    heroStatValue: { fontSize: 16, fontWeight: '800', color: '#fff', marginTop: 2 },
+    heroStatValue: { fontSize: 16, fontWeight: '800', color: colors.heroText, marginTop: 2 },
     heroStatDivider: {
       width: 1,
       height: 40,
@@ -818,7 +828,7 @@ const createStyles = (colors: ThemeColors) =>
       padding: SPACING.md,
       alignItems: 'center',
       justifyContent: 'center',
-      shadowColor: '#000',
+      shadowColor: colors.shadow,
       shadowOffset: { width: 0, height: 2 },
       shadowOpacity: 0.05,
       shadowRadius: 6,
@@ -850,7 +860,7 @@ const createStyles = (colors: ThemeColors) =>
       alignItems: 'center',
       justifyContent: 'center',
       opacity: 0.8,
-      shadowColor: '#000',
+      shadowColor: colors.shadow,
       shadowOpacity: 0.1,
       shadowRadius: 4,
       elevation: 2,
@@ -875,7 +885,7 @@ const createStyles = (colors: ThemeColors) =>
     savingsCard: {
       padding: SPACING.xl,
       marginBottom: SPACING.xl,
-      shadowColor: '#000',
+      shadowColor: colors.shadow,
       shadowOpacity: 0.05,
       shadowRadius: 10,
       elevation: 4,

@@ -45,11 +45,17 @@ const CenterFAB: React.FC = () => {
         scale.value = withSpring(1, { damping: 10, stiffness: 300 });
       }}
       onPress={() => router.push('/transactions/add')}
+      accessibilityLabel="Add transaction"
+      accessibilityRole="button"
     >
       <Animated.View
-        style={[fabStyles.container, { backgroundColor: colors.primary }, animatedStyle]}
+        style={[
+          fabStyles.container,
+          { backgroundColor: colors.primary, shadowColor: colors.primary },
+          animatedStyle,
+        ]}
       >
-        <Ionicons name="add" size={28} color="#fff" />
+        <Ionicons name="add" size={28} color={colors.heroText} />
       </Animated.View>
     </Pressable>
   );
@@ -146,8 +152,8 @@ export default function TabsLayout() {
 
 const iconStyles = StyleSheet.create({
   container: {
-    width: 36,
-    height: 28,
+    width: 44,
+    height: 36,
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: 10,

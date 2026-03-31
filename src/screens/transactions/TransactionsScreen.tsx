@@ -435,7 +435,12 @@ export default function TransactionsScreen() {
       {/* Header */}
       <Animated.View entering={FadeInDown.duration(400)} style={styles.header}>
         <Text style={styles.title}>Transactions</Text>
-        <TouchableOpacity style={styles.menuBtn} onPress={() => router.push('/notifications')}>
+        <TouchableOpacity
+          style={styles.menuBtn}
+          onPress={() => router.push('/notifications')}
+          accessibilityLabel="Notifications"
+          accessibilityRole="button"
+        >
           <Ionicons name="notifications-outline" size={22} color={colors.textSecondary} />
           {unreadNotificationsCount > 0 && (
             <View
@@ -890,7 +895,7 @@ const createStyles = (colors: ThemeColors) =>
       borderRadius: RADIUS.full,
       marginTop: SPACING.sm,
     },
-    emptyCtaText: { fontSize: 14, fontWeight: '700', color: '#fff' },
+    emptyCtaText: { fontSize: 14, fontWeight: '700', color: colors.heroText },
     loadingMore: { alignItems: 'center', paddingVertical: SPACING.md },
     loadingMoreText: { ...TYPOGRAPHY.caption, color: colors.textMuted },
   });

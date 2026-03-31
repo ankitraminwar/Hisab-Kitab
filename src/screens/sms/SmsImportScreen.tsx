@@ -134,7 +134,7 @@ export default function SmsImportScreen() {
         <Animated.View entering={FadeInDown.duration(400)}>
           <View style={styles.summaryCard}>
             <View style={styles.summaryIcon}>
-              <Ionicons name="chatbubbles" size={24} color="#FFFFFF" />
+              <Ionicons name="chatbubbles" size={24} color={colors.heroText} />
             </View>
             <View>
               <Text style={styles.summaryTitle}>{pending.length} New Messages</Text>
@@ -231,7 +231,7 @@ export default function SmsImportScreen() {
             <Text
               style={[
                 styles.confirmAllText,
-                { color: selectedIds.size > 0 ? '#fff' : colors.textMuted },
+                { color: selectedIds.size > 0 ? colors.heroText : colors.textMuted },
               ]}
             >
               {loading ? 'Importing...' : `Import Selected (${selectedIds.size})`}
@@ -404,7 +404,7 @@ function createStyles(colors: ThemeColors) {
       flex: 1,
       justifyContent: 'center',
     },
-    confirmBtnText: { ...TYPOGRAPHY.caption, color: '#fff', fontWeight: '700' },
+    confirmBtnText: { ...TYPOGRAPHY.caption, color: colors.heroText, fontWeight: '700' },
     editBtn: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -452,7 +452,7 @@ function createStyles(colors: ThemeColors) {
       paddingVertical: 14,
       borderWidth: 1,
       borderColor: colors.border,
-      shadowColor: '#000',
+      shadowColor: colors.shadow,
       shadowOffset: { width: 0, height: 4 },
       shadowOpacity: 0.2,
       shadowRadius: 8,

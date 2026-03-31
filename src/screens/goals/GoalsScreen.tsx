@@ -4,6 +4,7 @@ import { differenceInDays, format } from 'date-fns';
 import { useEffect, useMemo, useState } from 'react';
 import {
   Platform,
+  RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
@@ -44,6 +45,7 @@ export default function GoalsScreen() {
   const [selectedGoal, setSelectedGoal] = useState<Goal | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Goal | null>(null);
   const [fundAmount, setFundAmount] = useState('');
+  const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => {
     void loadGoals();
@@ -88,7 +90,21 @@ export default function GoalsScreen() {
         </TouchableOpacity>
       </Animated.View>
 
-      <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        contentContainerStyle={styles.scroll}
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={async () => {
+              setRefreshing(true);
+              await loadGoals();
+              setRefreshing(false);
+            }}
+            tintColor={colors.primary}
+          />
+        }
+      >
         {goals.length > 0 && (
           <Animated.View entering={FadeInDown.duration(400).delay(100)}>
             <Card style={styles.summaryCard}>

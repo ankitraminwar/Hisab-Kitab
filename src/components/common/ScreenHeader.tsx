@@ -29,6 +29,8 @@ export const ScreenHeader: React.FC<ScreenHeaderProps> = ({
           <TouchableOpacity
             onPress={() => router.back()}
             style={[styles.backButton, { backgroundColor: colors.bgCard }]}
+            accessibilityLabel="Go back"
+            accessibilityRole="button"
           >
             <Ionicons name="chevron-back" size={24} color={colors.textPrimary} />
           </TouchableOpacity>
@@ -40,6 +42,8 @@ export const ScreenHeader: React.FC<ScreenHeaderProps> = ({
         <TouchableOpacity
           onPress={rightAction.onPress}
           style={[styles.rightButton, { backgroundColor: colors.bgCard }]}
+          accessibilityLabel="More options"
+          accessibilityRole="button"
         >
           <Ionicons name={rightAction.icon} size={22} color={colors.primary} />
         </TouchableOpacity>

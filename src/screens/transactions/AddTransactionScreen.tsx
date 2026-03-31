@@ -606,7 +606,7 @@ export default function AddTransactionScreen() {
                     alignItems: 'center',
                   }}
                 >
-                  <Text style={{ color: '#fff', fontWeight: '700' }}>Add & Select</Text>
+                  <Text style={{ color: colors.heroText, fontWeight: '700' }}>Add & Select</Text>
                 </TouchableOpacity>
               </View>
             )}
@@ -816,7 +816,7 @@ const createStyles = (colors: ThemeColors) =>
     },
     pmOverlay: {
       flex: 1,
-      backgroundColor: 'rgba(0,0,0,0.5)',
+      backgroundColor: colors.overlay,
       justifyContent: 'center',
     },
     toggleWrap: { paddingHorizontal: SPACING.lg, paddingVertical: SPACING.md },

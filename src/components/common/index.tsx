@@ -232,7 +232,7 @@ export const FAB: React.FC<FABProps> = ({ onPress, icon = 'add' }) => {
       accessibilityLabel="Add new"
     >
       <View style={styles.fabInner}>
-        <Ionicons name={icon as IoniconsName} size={28} color="#fff" />
+        <Ionicons name={icon as IoniconsName} size={28} color={colors.heroText} />
       </View>
     </TouchableOpacity>
   );
@@ -322,7 +322,7 @@ export const CustomSwitch: React.FC<CustomSwitchProps> = ({ value, onValueChange
           }),
         },
       ],
-      backgroundColor: value ? '#FFFFFF' : colors.textMuted,
+      backgroundColor: value ? colors.heroText : colors.textMuted,
     };
   });
 
@@ -599,7 +599,7 @@ function createStyles(colors: ThemeColors, isDark: boolean) {
     },
     popupOverlay: {
       flex: 1,
-      backgroundColor: 'rgba(0,0,0,0.6)',
+      backgroundColor: colors.overlay,
       alignItems: 'center',
       justifyContent: 'center',
       padding: SPACING.xl,
