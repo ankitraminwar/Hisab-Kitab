@@ -176,6 +176,7 @@ export default function NotesScreen() {
   const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
   const [longPressNote, setLongPressNote] = useState<Note | null>(null);
   const [showPinMenu, setShowPinMenu] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => {
     void loadNotes();
@@ -241,8 +242,12 @@ export default function NotesScreen() {
           showsVerticalScrollIndicator={false}
           refreshControl={
             <RefreshControl
-              refreshing={false}
-              onRefresh={() => void loadNotes()}
+              refreshing={refreshing}
+              onRefresh={async () => {
+                setRefreshing(true);
+                await loadNotes();
+                setRefreshing(false);
+              }}
               tintColor={colors.primary}
             />
           }

@@ -22,6 +22,8 @@ import Animated, {
   useAnimatedProps,
   useSharedValue,
   withTiming,
+  withRepeat,
+  useAnimatedStyle,
 } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Svg, { Circle } from 'react-native-svg';
@@ -287,6 +289,29 @@ export default function DashboardScreen() {
     return () => clearInterval(t);
   }, []);
 
+  const blobRotation1 = useSharedValue(0);
+  const blobRotation2 = useSharedValue(0);
+
+  useEffect(() => {
+    blobRotation1.value = withRepeat(
+      withTiming(360, { duration: 15000, easing: Easing.linear }),
+      -1,
+      false,
+    );
+    blobRotation2.value = withRepeat(
+      withTiming(-360, { duration: 20000, easing: Easing.linear }),
+      -1,
+      false,
+    );
+  }, []);
+
+  const animatedBlobStyle = useAnimatedStyle(() => {
+    return { transform: [{ rotate: `${blobRotation1.value}deg` }, { scale: 1.1 }] };
+  });
+  const animatedBlobStyle2 = useAnimatedStyle(() => {
+    return { transform: [{ rotate: `${blobRotation2.value}deg` }, { scale: 1.2 }] };
+  });
+
   const loadData = useCallback(async () => {
     const now = new Date();
     const year = now.getFullYear();
@@ -500,22 +525,26 @@ export default function DashboardScreen() {
         <Animated.View entering={FadeInDown.duration(500).delay(100)}>
           <TouchableOpacity activeOpacity={0.9} onPress={() => router.push('/accounts' as Href)}>
             <LinearGradient
-              colors={isDark ? ['#6D28D9', '#4C1D95'] : ['#8B5CF6', '#6D28D9']}
+              colors={
+                isDark ? [colors.primaryDark, '#4C1D95'] : [colors.primary, colors.primaryDark]
+              }
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
               style={styles.heroCard}
             >
               {/* Complex Glassy Blobs */}
-              <View
+              <Animated.View
                 style={[
                   styles.heroBlob,
                   { right: -40, top: -40, width: 160, height: 160, borderRadius: 80 },
+                  animatedBlobStyle,
                 ]}
               />
-              <View
+              <Animated.View
                 style={[
                   styles.heroBlob,
                   { left: -30, bottom: -40, width: 120, height: 120, borderRadius: 60 },
+                  animatedBlobStyle2,
                 ]}
               />
 

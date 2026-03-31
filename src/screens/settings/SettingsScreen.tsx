@@ -568,7 +568,7 @@ function createStyles(colors: ThemeColors) {
     },
     themeBtnActive: {
       backgroundColor: colors.bgCard,
-      shadowColor: '#000',
+      shadowColor: colors.shadow,
       shadowOffset: { width: 0, height: 1 },
       shadowOpacity: 0.1,
       shadowRadius: 1,

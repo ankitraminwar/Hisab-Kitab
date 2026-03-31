@@ -122,7 +122,7 @@ export default function FriendDetailScreen() {
 
           {totalOwed > 0 && (
             <TouchableOpacity style={styles.settleBtn} onPress={handleSettleUp} activeOpacity={0.8}>
-              <Ionicons name="checkmark-done" size={18} color="#fff" />
+              <Ionicons name="checkmark-done" size={18} color={colors.textInverse} />
               <Text style={styles.settleBtnText}>Settle Up</Text>
             </TouchableOpacity>
           )}
@@ -271,7 +271,7 @@ function createStyles(colors: ThemeColors) {
     },
     settleBtnText: {
       ...TYPOGRAPHY.body,
-      color: '#fff',
+      color: colors.textInverse,
       fontWeight: '700',
     },
     sectionTitle: {
