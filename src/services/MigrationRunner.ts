@@ -39,11 +39,14 @@ const migrations: Migration[] = [
       const hasNewColumn = cols.some((c) => c.name === 'transactionId');
       if (hasNewColumn) return; // already on new schema
 
-      // Rebuild split_members first (FK dependency), then split_expenses.
-      await db.execAsync(`
-        ALTER TABLE split_members RENAME TO split_members_old;
+      // Wrap in an explicit transaction so a mid-migration failure rolls back
+      // automatically, preventing a partially-migrated state.
+      await db.withTransactionAsync(async () => {
+        // Rebuild split_members first (FK dependency), then split_expenses.
+        await db.execAsync(`
+          ALTER TABLE split_members RENAME TO split_members_old;
 
-        CREATE TABLE split_members (
+          CREATE TABLE split_members (
           id TEXT PRIMARY KEY,
           splitExpenseId TEXT NOT NULL,
           friendId TEXT,
@@ -118,7 +121,8 @@ const migrations: Migration[] = [
         FROM split_expenses_old;
 
         DROP TABLE split_expenses_old;
-      `);
+        `);
+      });
     },
   },
 ];

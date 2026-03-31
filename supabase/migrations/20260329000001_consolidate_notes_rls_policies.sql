@@ -32,6 +32,7 @@ CREATE POLICY "own_recurring_templates" ON public.recurring_templates
 -- Fix the notes updated_at trigger to use the canonical set_updated_at()
 -- function (the original migration used handle_updated_at() which is identical
 -- in behavior but differs in name).
+DROP TRIGGER IF EXISTS handle_updated_at ON public.notes;
 DROP TRIGGER IF EXISTS update_notes_updated_at ON public.notes;
 CREATE TRIGGER update_notes_updated_at
   BEFORE UPDATE ON public.notes
