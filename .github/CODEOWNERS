@@ -1,0 +1,18 @@
+# Default owner for everything
+
+- @ankitraminwar
+
+# Database & sync layer
+
+src/database/ @ankitraminwar
+src/services/sync\*.ts @ankitraminwar
+src/services/dataService.ts @ankitraminwar
+supabase/ @ankitraminwar
+
+# Supabase migrations require owner review
+
+supabase/migrations/ @ankitraminwar
+
+# Copilot instruction files
+
+.github/instructions/ @ankitraminwar

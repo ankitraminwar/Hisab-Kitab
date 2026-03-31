@@ -1,6 +1,8 @@
 # AI Context — Hisab Kitab
 
 > Primary reference for AI coding agents. Read this before modifying any code.
+>
+> **Last Updated:** 2026-04-01
 
 ## What This App Is
 

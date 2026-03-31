@@ -1,5 +1,7 @@
 # Architecture — Hisab Kitab
 
+> **Last Updated:** 2026-04-01
+
 ## Runtime Model
 
 ```

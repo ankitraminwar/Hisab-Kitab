@@ -108,8 +108,17 @@ yarn test         # Alias for typecheck
 
 ## Docs
 
-- [AI_CONTEXT.md](./AI_CONTEXT.md) — AI agent reference (read this first for coding)
-- [ARCHITECTURE.md](./ARCHITECTURE.md) — Technical architecture details
-- [SUPABASE_SETUP.md](./SUPABASE_SETUP.md) — Backend setup guide
-- [PRODUCT_FEATURES.md](./PRODUCT_FEATURES.md) — Detailed product feature documentation
-- [DEPLOYMENT.md](./DEPLOYMENT.md) — EAS build & deployment guide
+| Document                                     | Purpose                                              |
+| -------------------------------------------- | ---------------------------------------------------- |
+| [docs/onboarding.md](./docs/onboarding.md)   | **Start here** — Setup → first PR in 2 hours         |
+| [CONTRIBUTING.md](./CONTRIBUTING.md)         | Contribution guidelines, branch strategy, PR process |
+| [ARCHITECTURE.md](./ARCHITECTURE.md)         | Technical architecture — data layer, sync, state     |
+| [AI_CONTEXT.md](./AI_CONTEXT.md)             | AI agent reference (full codebase context)           |
+| [AGENT_SOP.md](./AGENT_SOP.md)               | Code patterns, conventions, hard rules               |
+| [PRODUCT_FEATURES.md](./PRODUCT_FEATURES.md) | Detailed product feature documentation               |
+| [SUPABASE_SETUP.md](./SUPABASE_SETUP.md)     | Backend setup guide                                  |
+| [DEPLOYMENT.md](./DEPLOYMENT.md)             | EAS build & deployment guide                         |
+| [CHANGELOG.md](./CHANGELOG.md)               | Release history                                      |
+| [SECURITY.md](./SECURITY.md)                 | Security policy & vulnerability reporting            |
+| [docs/adr/](./docs/adr/)                     | Architecture Decision Records                        |
+| [docs/runbooks/](./docs/runbooks/)           | Operational runbooks (sync, releases)                |
