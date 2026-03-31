@@ -8,7 +8,6 @@ interface PopupOptions {
   onConfirm?: () => void;
   onCancel?: () => void;
   confirmLabel?: string;
-  cancelLabel?: string;
 }
 
 interface PopupContextType {

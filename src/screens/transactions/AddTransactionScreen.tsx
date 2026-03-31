@@ -31,8 +31,15 @@ import type {
   TransactionType,
 } from '../../utils/types';
 
-/** ISO string for storage / DB operations */
-const toISODate = (date: Date) => date.toISOString();
+/** YYYY-MM-DD date string for storage / DB operations — keeps format consistent across all writers */
+const toISODate = (date: Date) => {
+  const year = date.getFullYear();
+  const month = date.getMonth() + 1; // getMonth is zero-based
+  const day = date.getDate();
+  const mm = month < 10 ? `0${month}` : `${month}`;
+  const dd = day < 10 ? `0${day}` : `${day}`;
+  return `${year}-${mm}-${dd}`;
+};
 
 /** User-friendly display string */
 const formatDisplayDate = (date: Date): string => {

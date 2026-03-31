@@ -1,6 +1,8 @@
 # Standard Operating Procedures — Hisab Kitab
 
 > For AI coding agents. Read this entire document before making any changes.
+>
+> **Last Updated:** 2026-04-01
 
 ---
 
@@ -103,9 +105,9 @@ export { default } from '../../src/screens/domain/YourScreen';
 
 ---
 
-## 3. Complete Navigation Map (Including Gaps in AI_CONTEXT.md)
+## 3. Complete Navigation Map
 
-These routes exist in the actual codebase but are missing from `AI_CONTEXT.md`:
+These routes supplement `AI_CONTEXT.md` with entry-point context:
 
 | Route                            | Screen                             | Entry Point                                           |
 | -------------------------------- | ---------------------------------- | ----------------------------------------------------- |
@@ -113,7 +115,7 @@ These routes exist in the actual codebase but are missing from `AI_CONTEXT.md`:
 | `/transactions/[id]` (no params) | `TransactionDetailScreen`          | Transaction list tap                                  |
 | `/transactions/[id]?edit=1`      | `AddTransactionScreen` (edit mode) | Detail screen edit button or "Split This Expense" row |
 
-All other routes are documented in `AI_CONTEXT.md`.
+All routes including these are documented in the `AI_CONTEXT.md` Navigation Map.
 
 ---
 
@@ -539,7 +541,7 @@ Key rules:
 
 ## 18. Supabase Schema Changes
 
-All Supabase schema changes go into `supabase/schema.sql` — a **single idempotent file**. No separate migration files.
+The canonical schema lives in `supabase/schema.sql` — a **single idempotent file**. Incremental changes also get a dated migration file in `supabase/migrations/` so they can be applied to existing Supabase instances without re-running the full schema.
 
 When modifying:
 

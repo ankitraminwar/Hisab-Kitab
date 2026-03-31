@@ -110,17 +110,14 @@ export default function NotificationsScreen() {
     }
 
     setNotifications(items);
-    setUnreadNotificationsCount(items.filter((n) => !n.isRead).length);
+    // User is viewing this screen — clear the badge (single source of truth).
+    // Do NOT set a non-zero count here; that would race with the mount reset.
+    setUnreadNotificationsCount(0);
   }, [setUnreadNotificationsCount]);
 
   useEffect(() => {
     void buildNotifications();
   }, [buildNotifications, dataRevision]);
-
-  // Reset badge count when screen is opened
-  useEffect(() => {
-    return () => setUnreadNotificationsCount(0);
-  }, [setUnreadNotificationsCount]);
 
   const getIconForType = (type: NotificationItem['type']) => {
     switch (type) {
