@@ -167,12 +167,17 @@ export const EmptyState: React.FC<EmptyStateProps> = ({
   return (
     <View style={styles.emptyState}>
       <View style={styles.emptyIcon}>
-        <Ionicons name={icon as IoniconsName} size={32} color={colors.textMuted} />
+        <Ionicons name={icon as IoniconsName} size={36} color={colors.primary} />
       </View>
       <Text style={styles.emptyTitle}>{title}</Text>
       {subtitle && <Text style={styles.emptySubtitle}>{subtitle}</Text>}
       {action && (
-        <TouchableOpacity style={styles.emptyAction} onPress={onAction}>
+        <TouchableOpacity
+          style={styles.emptyAction}
+          onPress={onAction}
+          accessibilityLabel={action}
+          accessibilityRole="button"
+        >
           <Text style={styles.emptyActionText}>{action}</Text>
         </TouchableOpacity>
       )}
@@ -487,36 +492,37 @@ function createStyles(colors: ThemeColors, isDark: boolean) {
       gap: SPACING.sm,
     },
     emptyIcon: {
-      width: 64,
-      height: 64,
-      borderRadius: 32,
-      backgroundColor: colors.bgElevated,
+      width: 72,
+      height: 72,
+      borderRadius: 36,
+      backgroundColor: colors.primary + '12',
       alignItems: 'center',
       justifyContent: 'center',
-      marginBottom: SPACING.sm,
+      marginBottom: SPACING.md,
     },
     emptyTitle: {
-      ...TYPOGRAPHY.bodyMedium,
-      color: colors.textSecondary,
+      ...TYPOGRAPHY.h3,
+      color: colors.textPrimary,
+      fontWeight: '700',
     },
     emptySubtitle: {
-      ...TYPOGRAPHY.caption,
+      ...TYPOGRAPHY.body,
       color: colors.textMuted,
       textAlign: 'center',
+      maxWidth: 280,
+      lineHeight: 22,
     },
     emptyAction: {
-      marginTop: SPACING.sm,
-      paddingHorizontal: SPACING.lg,
-      paddingVertical: SPACING.sm,
-      backgroundColor: colors.primary + '20',
+      marginTop: SPACING.md,
+      paddingHorizontal: SPACING.xl,
+      paddingVertical: SPACING.sm + 2,
+      backgroundColor: colors.primary,
       borderRadius: RADIUS.full,
-      borderWidth: 1,
-      borderColor: colors.primary + '40',
     },
     emptyActionText: {
-      ...TYPOGRAPHY.caption,
-      color: colors.primary,
-      fontWeight: '600',
+      ...TYPOGRAPHY.bodyMedium,
+      color: colors.heroText,
+      fontWeight: '700',
     },
     searchContainer: {
       flexDirection: 'row',

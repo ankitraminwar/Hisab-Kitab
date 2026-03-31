@@ -298,6 +298,8 @@ export default function SettingsScreen() {
           <TouchableOpacity
             onPress={() => router.push('/sms-import')}
             style={{ paddingHorizontal: SPACING.lg, paddingBottom: SPACING.lg }}
+            accessibilityLabel="Run manual SMS import check"
+            accessibilityRole="button"
           >
             <Text style={{ fontSize: 13, color: colors.primary, fontWeight: '700' }}>
               Run manual SMS check now

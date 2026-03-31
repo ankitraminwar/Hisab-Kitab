@@ -80,6 +80,9 @@ const StickyNoteCard = ({
         activeOpacity={1}
         delayLongPress={400}
         style={[styles.noteCard, { backgroundColor: bgColor, borderColor: `${item.color}55` }]}
+        accessibilityLabel={`Note: ${item.title || 'Untitled'}${item.isPinned ? ', pinned' : ''}`}
+        accessibilityRole="button"
+        accessibilityHint="Tap to edit, long press for options"
       >
         {/* Colored top accent bar */}
         <View style={[styles.noteAccentBar, { backgroundColor: item.color }]} />

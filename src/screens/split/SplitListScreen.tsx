@@ -47,8 +47,8 @@ export default function SplitListScreen() {
   const [friendBalances, setFriendBalances] = useState<
     { friend: SplitFriend; totalPending: number }[]
   >([]);
-  // We keep activeTab solely for fallbacks/logic if needed, but UI represents state via scrollX
-  const [activeTab, setActiveTab] = useState<'splits' | 'friends'>('splits');
+  // UI tab state driven by scrollX; setter syncs for potential future use
+  const [, setActiveTab] = useState<'splits' | 'friends'>('splits');
   const [refreshing, setRefreshing] = useState(false);
 
   const tabScrollRef = useRef<Animated.ScrollView>(null);
@@ -101,15 +101,14 @@ export default function SplitListScreen() {
   }, 0);
 
   // Animated Pill Indicator
-  const TAB_CONTAINER_PADDING = SPACING.md;
-  const TAB_GAP = SPACING.sm;
-  const TAB_WIDTH = (SCREEN_WIDTH - TAB_CONTAINER_PADDING * 2 - TAB_GAP) / 2;
+  const TAB_CONTAINER_WIDTH = SCREEN_WIDTH - SPACING.md * 2;
+  const TAB_WIDTH = TAB_CONTAINER_WIDTH / 2;
 
   const indicatorStyle = useAnimatedStyle(() => {
     const translateX = interpolate(
       scrollX.value,
       [0, SCREEN_WIDTH],
-      [0, TAB_WIDTH + TAB_GAP],
+      [0, TAB_WIDTH],
       Extrapolation.CLAMP,
     );
     return {
@@ -499,17 +498,19 @@ function createStyles(colors: ThemeColors) {
     // Tabs
     tabContainer: {
       flexDirection: 'row',
-      paddingHorizontal: SPACING.md,
-      paddingVertical: SPACING.sm,
-      gap: SPACING.sm,
+      marginHorizontal: SPACING.md,
+      marginVertical: SPACING.sm,
       position: 'relative',
+      backgroundColor: colors.bgElevated,
+      borderRadius: RADIUS.md,
+      overflow: 'hidden',
     },
     tabIndicatorPill: {
       position: 'absolute',
-      left: SPACING.md,
-      top: SPACING.sm,
-      bottom: SPACING.sm,
-      width: (SCREEN_WIDTH - SPACING.md * 2 - SPACING.sm) / 2,
+      left: 0,
+      top: 0,
+      bottom: 0,
+      width: (SCREEN_WIDTH - SPACING.md * 2) / 2,
       backgroundColor: colors.primary,
       borderRadius: RADIUS.md,
       zIndex: 0,
@@ -519,7 +520,7 @@ function createStyles(colors: ThemeColors) {
       paddingVertical: 10,
       alignItems: 'center',
       borderRadius: RADIUS.md,
-      backgroundColor: colors.bgElevated,
+      backgroundColor: 'transparent',
       zIndex: 1,
     },
     tabText: {

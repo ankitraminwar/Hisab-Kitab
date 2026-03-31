@@ -58,9 +58,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: SPACING.md,
-    paddingTop: SPACING.xl,
-    paddingBottom: SPACING.md,
-    height: 100,
+    paddingTop: SPACING.md,
+    paddingBottom: SPACING.sm,
+    minHeight: 56,
   },
   leftContainer: {
     flexDirection: 'row',

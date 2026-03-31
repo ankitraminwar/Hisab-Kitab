@@ -62,17 +62,17 @@ export default function BudgetsScreen() {
   const totalBudget = budgets.reduce((s, b) => s + b.limitAmount, 0);
   const totalSpent = budgets.reduce((s, b) => s + b.spent, 0);
 
-  const prevMonth = () => {
+  const prevMonth = useCallback(() => {
     const d = new Date(year, parseInt(month) - 2);
     setYear(d.getFullYear());
     setMonth(String(d.getMonth() + 1).padStart(2, '0'));
-  };
+  }, [year, month]);
 
-  const nextMonth = () => {
+  const nextMonth = useCallback(() => {
     const d = new Date(year, parseInt(month));
     setYear(d.getFullYear());
     setMonth(String(d.getMonth() + 1).padStart(2, '0'));
-  };
+  }, [year, month]);
 
   const monthName = format(new Date(year, parseInt(month) - 1), 'MMMM yyyy');
 
@@ -80,17 +80,32 @@ export default function BudgetsScreen() {
     <SafeAreaView style={styles.container} edges={['top']}>
       <Animated.View entering={FadeInDown.duration(400)} style={styles.header}>
         <Text style={styles.title}>Budgets</Text>
-        <TouchableOpacity onPress={() => setShowAdd(true)} style={styles.addButton}>
+        <TouchableOpacity
+          onPress={() => setShowAdd(true)}
+          style={styles.addButton}
+          accessibilityLabel="Add budget"
+          accessibilityRole="button"
+        >
           <Ionicons name="add" size={24} color={colors.primary} />
         </TouchableOpacity>
       </Animated.View>
 
       <Animated.View entering={FadeInDown.duration(400).delay(100)} style={styles.monthSelector}>
-        <TouchableOpacity onPress={prevMonth} style={styles.monthButton}>
+        <TouchableOpacity
+          onPress={prevMonth}
+          style={styles.monthButton}
+          accessibilityLabel="Previous month"
+          accessibilityRole="button"
+        >
           <Ionicons name="chevron-back" size={20} color={colors.textPrimary} />
         </TouchableOpacity>
         <Text style={styles.monthText}>{monthName}</Text>
-        <TouchableOpacity onPress={nextMonth} style={styles.monthButton}>
+        <TouchableOpacity
+          onPress={nextMonth}
+          style={styles.monthButton}
+          accessibilityLabel="Next month"
+          accessibilityRole="button"
+        >
           <Ionicons name="chevron-forward" size={20} color={colors.textPrimary} />
         </TouchableOpacity>
       </Animated.View>
@@ -202,7 +217,12 @@ const BudgetCard = ({
 
   return (
     <>
-      <TouchableOpacity onPress={() => setShowEdit(true)} activeOpacity={0.7}>
+      <TouchableOpacity
+        onPress={() => setShowEdit(true)}
+        activeOpacity={0.7}
+        accessibilityLabel={`${category?.name || 'Unknown'} budget, ${formatCurrency(budget.spent)} of ${formatCurrency(budget.limitAmount)} spent`}
+        accessibilityRole="button"
+      >
         <Card style={cardStyles.card}>
           <View style={cardStyles.header}>
             <View style={cardStyles.categoryInfo}>
@@ -519,7 +539,7 @@ const modalStyles = (colors: ThemeColors) =>
       ...TYPOGRAPHY.body,
       marginBottom: SPACING.xl,
     },
-    actions: { flexDirection: 'row', gap: SPACING.md },
+    actions: { flexDirection: 'row', gap: SPACING.md, marginBottom: SPACING.md },
     flex1: { flex: 1 },
   });
 

@@ -41,6 +41,8 @@ export const Button: React.FC<ButtonProps> = ({
           : 'transparent';
   const contentColor =
     variant === 'primary' || variant === 'danger' ? colors.textInverse : colors.textPrimary;
+  const disabledContentColor =
+    variant === 'primary' || variant === 'danger' ? colors.textMuted : colors.textMuted;
 
   const handlePress = () => {
     if (disabled || loading) return;
@@ -70,18 +72,22 @@ export const Button: React.FC<ButtonProps> = ({
       accessibilityHint={accessibilityHint}
     >
       {loading ? (
-        <ActivityIndicator size="small" color={contentColor} />
+        <ActivityIndicator size="small" color={disabled ? disabledContentColor : contentColor} />
       ) : (
         <>
           {icon && (
             <Ionicons
               name={icon as IoniconsName}
               size={18}
-              color={contentColor}
+              color={disabled ? disabledContentColor : contentColor}
               style={{ marginRight: 8 }}
             />
           )}
-          <Text style={[styles.buttonText, { color: contentColor }]}>{title}</Text>
+          <Text
+            style={[styles.buttonText, { color: disabled ? disabledContentColor : contentColor }]}
+          >
+            {title}
+          </Text>
         </>
       )}
     </TouchableOpacity>

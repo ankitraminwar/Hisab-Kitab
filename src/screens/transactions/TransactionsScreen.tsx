@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { FlashList } from '@shopify/flash-list';
-import { format } from 'date-fns';
+import { endOfMonth, format, startOfMonth, subDays, subMonths } from 'date-fns';
 import { useRouter, type Href } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
@@ -257,6 +257,27 @@ export default function TransactionsScreen() {
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [activeFilter, setActiveFilter] = useState<'type' | 'category' | 'account' | null>(null);
 
+  // Quick date filter
+  type QuickDateFilter = 'all' | '7d' | 'thisMonth' | 'lastMonth';
+  const [quickDate, setQuickDate] = useState<QuickDateFilter>('all');
+
+  const getDateRange = useCallback((filter: QuickDateFilter) => {
+    const today = new Date();
+    const fmt = (d: Date) => format(d, 'yyyy-MM-dd');
+    switch (filter) {
+      case '7d':
+        return { dateFrom: fmt(subDays(today, 7)), dateTo: fmt(today) };
+      case 'thisMonth':
+        return { dateFrom: fmt(startOfMonth(today)), dateTo: fmt(endOfMonth(today)) };
+      case 'lastMonth': {
+        const prev = subMonths(today, 1);
+        return { dateFrom: fmt(startOfMonth(prev)), dateTo: fmt(endOfMonth(prev)) };
+      }
+      default:
+        return { dateFrom: undefined, dateTo: undefined };
+    }
+  }, []);
+
   // Debounce search input
   const handleSearchChange = useCallback((text: string) => {
     setSearch(text);
@@ -272,15 +293,17 @@ export default function TransactionsScreen() {
     };
   }, []);
 
-  const buildFilters = useCallback(
-    () => ({
+  const buildFilters = useCallback(() => {
+    const range = getDateRange(quickDate);
+    return {
       type: filterType,
       categoryId: filterCat,
       accountId: filterAcc,
       search: debouncedSearch.trim() || undefined,
-    }),
-    [filterType, filterCat, filterAcc, debouncedSearch],
-  );
+      dateFrom: range.dateFrom,
+      dateTo: range.dateTo,
+    };
+  }, [filterType, filterCat, filterAcc, debouncedSearch, quickDate, getDateRange]);
 
   const loadData = useCallback(
     async (offset = 0, replace = true) => {
@@ -352,12 +375,18 @@ export default function TransactionsScreen() {
     return items;
   }, [transactions]);
 
-  const activeFilterCount = [filterType, filterCat, filterAcc].filter(Boolean).length;
+  const activeFilterCount = [
+    filterType,
+    filterCat,
+    filterAcc,
+    quickDate !== 'all' ? quickDate : undefined,
+  ].filter(Boolean).length;
 
   const clearAllFilters = () => {
     setFilterType(undefined);
     setFilterCat(undefined);
     setFilterAcc(undefined);
+    setQuickDate('all');
   };
 
   const renderItem = useCallback(
@@ -564,6 +593,35 @@ export default function TransactionsScreen() {
               <Ionicons name="chevron-down" size={12} color={colors.textMuted} />
             )}
           </TouchableOpacity>
+
+          {/* Quick date filter chips */}
+          <View style={styles.filterDivider} />
+          {(
+            [
+              { key: '7d' as const, label: 'Last 7 Days', icon: 'calendar-outline' },
+              { key: 'thisMonth' as const, label: 'This Month', icon: 'today-outline' },
+              { key: 'lastMonth' as const, label: 'Last Month', icon: 'time-outline' },
+            ] as const
+          ).map((df) => (
+            <TouchableOpacity
+              key={df.key}
+              style={[styles.filterChip, quickDate === df.key && styles.filterChipActive]}
+              onPress={() => setQuickDate(quickDate === df.key ? 'all' : df.key)}
+              accessibilityLabel={`Filter by ${df.label}`}
+              accessibilityRole="button"
+            >
+              <Ionicons
+                name={df.icon as never}
+                size={13}
+                color={quickDate === df.key ? colors.primary : colors.textMuted}
+              />
+              <Text
+                style={[styles.filterChipText, quickDate === df.key && { color: colors.primary }]}
+              >
+                {df.label}
+              </Text>
+            </TouchableOpacity>
+          ))}
         </ScrollView>
       </Animated.View>
 
@@ -813,6 +871,12 @@ const createStyles = (colors: ThemeColors) =>
       backgroundColor: colors.expense + '10',
       borderWidth: 1,
       borderColor: colors.expense + '20',
+    },
+    filterDivider: {
+      width: 1,
+      height: 24,
+      backgroundColor: colors.border,
+      marginHorizontal: 2,
     },
     filterOption: {
       flexDirection: 'row',

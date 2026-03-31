@@ -15,17 +15,26 @@ import {
   subYears,
 } from 'date-fns';
 import { router, type Href } from 'expo-router';
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import Animated, { FadeInDown } from 'react-native-reanimated';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Dimensions, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import Animated, {
+  Extrapolation,
+  interpolate,
+  runOnJS,
+  useAnimatedScrollHandler,
+  useAnimatedStyle,
+  useSharedValue,
+} from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { PeriodTabs } from '../../components/common/PeriodTabs';
+import { EmptyState } from '../../components/common';
 import { ScreenHeader } from '../../components/common/ScreenHeader';
 import { useTheme, type ThemeColors } from '../../hooks/useTheme';
 import { TransactionService } from '../../services/transactionService';
 import { useAppStore } from '../../store/appStore';
 import { RADIUS, SPACING, TYPOGRAPHY, formatCompact, formatCurrency } from '../../utils/constants';
+
+const SCREEN_WIDTH = Dimensions.get('window').width;
 
 type CategoryDatum = {
   categoryId: string;
@@ -90,6 +99,159 @@ export default function ReportsScreen() {
 
   const [period, setPeriod] = useState<Period>('Monthly');
   const [anchor, setAnchor] = useState(new Date());
+  const [showAllCategories, setShowAllCategories] = useState(false);
+
+  // Swipe tab state
+  const tabScrollRef = useRef<Animated.ScrollView>(null);
+  const scrollX = useSharedValue(0);
+
+  const scrollHandler = useAnimatedScrollHandler({
+    onScroll: (event) => {
+      scrollX.value = event.contentOffset.x;
+    },
+    onMomentumEnd: (event) => {
+      const idx = Math.round(event.contentOffset.x / SCREEN_WIDTH);
+      runOnJS(setPeriod)(PERIOD_TABS[idx] as Period);
+    },
+  });
+
+  const handleTabPress = (tab: Period) => {
+    const idx = PERIOD_TABS.indexOf(tab);
+    setPeriod(tab);
+    setAnchor(new Date());
+    tabScrollRef.current?.scrollTo({ x: idx * SCREEN_WIDTH, animated: true });
+  };
+
+  // Animated tab indicator
+  const TAB_CONTAINER_WIDTH = SCREEN_WIDTH - SPACING.md * 2;
+  const TAB_WIDTH = TAB_CONTAINER_WIDTH / 3;
+
+  const indicatorStyle = useAnimatedStyle(() => {
+    const translateX = interpolate(
+      scrollX.value,
+      [0, SCREEN_WIDTH, SCREEN_WIDTH * 2],
+      [0, TAB_WIDTH, TAB_WIDTH * 2],
+      Extrapolation.CLAMP,
+    );
+    return { transform: [{ translateX }] };
+  });
+
+  // Pre-create animated text styles for each tab (can't call hooks in a loop)
+  const textStyle0 = useAnimatedStyle(() => {
+    const active = interpolate(
+      scrollX.value,
+      [-SCREEN_WIDTH * 0.5, 0, SCREEN_WIDTH * 0.5],
+      [0, 1, 0],
+      Extrapolation.CLAMP,
+    );
+    return { color: active > 0.5 ? colors.textInverse : colors.textSecondary };
+  });
+  const textStyle1 = useAnimatedStyle(() => {
+    const active = interpolate(
+      scrollX.value,
+      [SCREEN_WIDTH * 0.5, SCREEN_WIDTH, SCREEN_WIDTH * 1.5],
+      [0, 1, 0],
+      Extrapolation.CLAMP,
+    );
+    return { color: active > 0.5 ? colors.textInverse : colors.textSecondary };
+  });
+  const textStyle2 = useAnimatedStyle(() => {
+    const active = interpolate(
+      scrollX.value,
+      [SCREEN_WIDTH * 1.5, SCREEN_WIDTH * 2, SCREEN_WIDTH * 2.5],
+      [0, 1, 0],
+      Extrapolation.CLAMP,
+    );
+    return { color: active > 0.5 ? colors.textInverse : colors.textSecondary };
+  });
+  const tabTextStyles = [textStyle0, textStyle1, textStyle2];
+
+  return (
+    <SafeAreaView style={styles.container} edges={['top']}>
+      <ScreenHeader
+        title="Financial Analytics"
+        rightAction={{
+          icon: 'share-outline',
+          onPress: () => {
+            const range = getDateRange(period, anchor);
+            router.push(
+              `/reports/preview?from=${encodeURIComponent(range.from)}&to=${encodeURIComponent(range.to)}&label=${encodeURIComponent(range.label)}&period=${encodeURIComponent(period.toLowerCase())}&focus=pdf` as Href,
+            );
+          },
+        }}
+      />
+
+      {/* Animated Liquid Tabs */}
+      <View style={styles.tabContainer}>
+        <Animated.View style={[styles.tabIndicatorPill, indicatorStyle]} />
+        {PERIOD_TABS.map((tab, idx) => (
+          <TouchableOpacity
+            key={tab}
+            style={styles.tabBtn}
+            onPress={() => handleTabPress(tab as Period)}
+            activeOpacity={0.8}
+          >
+            <Animated.Text style={[styles.tabText, tabTextStyles[idx]]}>{tab}</Animated.Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+
+      {/* Horizontal paging scroll for tab content */}
+      <Animated.ScrollView
+        ref={tabScrollRef}
+        horizontal
+        pagingEnabled
+        showsHorizontalScrollIndicator={false}
+        scrollEventThrottle={16}
+        onScroll={scrollHandler}
+        style={{ flex: 1 }}
+        bounces={false}
+        // Start on Monthly (index 1)
+        contentOffset={{ x: SCREEN_WIDTH, y: 0 }}
+      >
+        {PERIOD_TABS.map((tab) => (
+          <ReportContent
+            key={tab}
+            period={tab as Period}
+            isActive={period === tab}
+            colors={colors}
+            styles={styles}
+            dataRevision={dataRevision}
+            showAllCategories={showAllCategories}
+            onToggleShowAll={() => setShowAllCategories((prev) => !prev)}
+            onAnchorChange={(a) => {
+              if (period === tab) setAnchor(a);
+            }}
+          />
+        ))}
+      </Animated.ScrollView>
+    </SafeAreaView>
+  );
+}
+
+/* ---------- Sub-components ---------- */
+
+// ─── Report Content (one per tab page) ────────────────────────────────────────
+const ReportContent: React.FC<{
+  period: Period;
+  isActive: boolean;
+  colors: ThemeColors;
+  styles: ReturnType<typeof createStyles>;
+  dataRevision: number;
+  showAllCategories: boolean;
+  onToggleShowAll: () => void;
+  onAnchorChange: (anchor: Date) => void;
+}> = ({
+  period,
+  isActive,
+  colors,
+  styles,
+  dataRevision,
+  showAllCategories,
+  onToggleShowAll,
+  onAnchorChange,
+}) => {
+  const [anchor, setAnchor] = useState(new Date());
   const [expenseBreakdown, setExpenseBreakdown] = useState<CategoryDatum[]>([]);
   const [stats, setStats] = useState({ income: 0, expense: 0 });
   const [prevStats, setPrevStats] = useState({ income: 0, expense: 0 });
@@ -112,89 +274,98 @@ export default function ReportsScreen() {
   }, [range, prevRange]);
 
   useEffect(() => {
-    void loadData();
-  }, [loadData, dataRevision]);
+    if (isActive) {
+      void loadData();
+    }
+  }, [loadData, dataRevision, isActive]);
 
   const savings = stats.income - stats.expense;
   const savingsRate = stats.income > 0 ? (savings / stats.income) * 100 : 0;
-
   const incomeTrend =
     prevStats.income > 0 ? ((stats.income - prevStats.income) / prevStats.income) * 100 : 0;
   const expenseTrend =
     prevStats.expense > 0 ? ((stats.expense - prevStats.expense) / prevStats.expense) * 100 : 0;
+  const hasData = stats.income > 0 || stats.expense > 0;
 
-  const handlePeriodChange = (tab: string) => {
-    setPeriod(tab as Period);
-    setAnchor(new Date());
-  };
+  const navigatePeriod = useCallback(
+    (direction: 1 | -1) => {
+      setAnchor((prev) => {
+        const next = shiftAnchor(period, prev, direction);
+        onAnchorChange(next);
+        return next;
+      });
+    },
+    [period, onAnchorChange],
+  );
 
-  const openPreview = () => {
-    router.push(
-      `/reports/preview?from=${encodeURIComponent(range.from)}&to=${encodeURIComponent(range.to)}&label=${encodeURIComponent(range.label)}&period=${encodeURIComponent(period.toLowerCase())}&focus=pdf` as Href,
-    );
-  };
+  const displayedCategories = showAllCategories ? expenseBreakdown : expenseBreakdown.slice(0, 5);
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      <ScreenHeader
-        title="Financial Analytics"
-        rightAction={{
-          icon: 'share-outline',
-          onPress: openPreview,
-        }}
-      />
-
-      {/* Period Tabs */}
-      <PeriodTabs tabs={PERIOD_TABS} activeTab={period} onTabChange={handlePeriodChange} />
-
+    <ScrollView
+      style={{ width: SCREEN_WIDTH }}
+      contentContainerStyle={styles.scroll}
+      showsVerticalScrollIndicator={false}
+    >
       {/* Period Navigation */}
       <View style={styles.periodNav}>
         <TouchableOpacity
-          onPress={() => setAnchor(shiftAnchor(period, anchor, -1))}
+          onPress={() => navigatePeriod(-1)}
           hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          accessibilityLabel="Previous period"
+          accessibilityRole="button"
         >
           <Ionicons name="chevron-back" size={22} color={colors.textPrimary} />
         </TouchableOpacity>
         <Text style={styles.periodLabel}>{range.label}</Text>
         <TouchableOpacity
-          onPress={() => setAnchor(shiftAnchor(period, anchor, 1))}
+          onPress={() => navigatePeriod(1)}
           hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          accessibilityLabel="Next period"
+          accessibilityRole="button"
         >
           <Ionicons name="chevron-forward" size={22} color={colors.textPrimary} />
         </TouchableOpacity>
       </View>
 
-      <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
-        {/* Summary Cards */}
-        <Animated.View entering={FadeInDown.duration(400)} style={styles.summaryRow}>
-          <SummaryCard
-            label="Income"
-            value={formatCompact(stats.income)}
-            trendLabel={`${Math.abs(incomeTrend).toFixed(0)}%`}
-            trendUp={incomeTrend >= 0}
-            colors={colors}
-            tintColor={colors.primary}
+      {!hasData ? (
+        <View style={{ paddingVertical: SPACING.xxl }}>
+          <EmptyState
+            icon="bar-chart-outline"
+            title="No data for this period"
+            subtitle={`No income or expenses recorded for ${range.label}. Try selecting a different time period.`}
           />
-          <SummaryCard
-            label="Expenses"
-            value={formatCompact(stats.expense)}
-            trendLabel={`${Math.abs(expenseTrend).toFixed(0)}%`}
-            trendUp={expenseTrend <= 0}
-            colors={colors}
-            tintColor={colors.expense}
-          />
-          <SummaryCard
-            label="Savings"
-            value={formatCompact(savings)}
-            trendLabel={`${Math.abs(savingsRate).toFixed(0)}%`}
-            trendUp={savings >= 0}
-            colors={colors}
-            tintColor={colors.income}
-          />
-        </Animated.View>
+        </View>
+      ) : (
+        <>
+          {/* Summary Cards */}
+          <View style={styles.summaryRow}>
+            <SummaryCard
+              label="Income"
+              value={formatCompact(stats.income)}
+              trendLabel={`${Math.abs(incomeTrend).toFixed(0)}%`}
+              trendUp={incomeTrend >= 0}
+              colors={colors}
+              tintColor={colors.primary}
+            />
+            <SummaryCard
+              label="Expenses"
+              value={formatCompact(stats.expense)}
+              trendLabel={`${Math.abs(expenseTrend).toFixed(0)}%`}
+              trendUp={expenseTrend <= 0}
+              colors={colors}
+              tintColor={colors.expense}
+            />
+            <SummaryCard
+              label="Savings"
+              value={formatCompact(savings)}
+              trendLabel={`${Math.abs(savingsRate).toFixed(0)}%`}
+              trendUp={savings >= 0}
+              colors={colors}
+              tintColor={colors.income}
+            />
+          </View>
 
-        {/* Income vs Expenses */}
-        <Animated.View entering={FadeInDown.duration(400).delay(100)}>
+          {/* Income vs Expenses */}
           <View style={styles.card}>
             <Text style={styles.cardTitle}>Income vs Expenses</Text>
             <View style={{ gap: 20, marginTop: 8 }}>
@@ -226,27 +397,28 @@ export default function ReportsScreen() {
               />
             </View>
           </View>
-        </Animated.View>
 
-        {/* Top Spending Categories */}
-        {expenseBreakdown.length > 0 && (
-          <Animated.View entering={FadeInDown.duration(400).delay(200)}>
-            <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>Top Spending Categories</Text>
-              <TouchableOpacity>
-                <Text style={[styles.viewAll, { color: colors.primary }]}>View All</Text>
-              </TouchableOpacity>
-            </View>
-            <View style={{ gap: SPACING.sm }}>
-              {expenseBreakdown.slice(0, 5).map((item, index) => {
-                const percentage = stats.expense > 0 ? (item.total / stats.expense) * 100 : 0;
-                const catColor = item.categoryColor || colors.primary;
-                return (
-                  <Animated.View
-                    key={item.categoryId}
-                    entering={FadeInDown.duration(400).delay(300 + index * 60)}
-                  >
-                    <View style={styles.catCard}>
+          {/* Spending Categories */}
+          {expenseBreakdown.length > 0 && (
+            <>
+              <View style={styles.sectionHeader}>
+                <Text style={styles.sectionTitle}>
+                  {showAllCategories ? 'All' : 'Top'} Spending Categories
+                </Text>
+                {expenseBreakdown.length > 5 && (
+                  <TouchableOpacity onPress={onToggleShowAll}>
+                    <Text style={[styles.viewAll, { color: colors.primary }]}>
+                      {showAllCategories ? 'Show Less' : 'View All'}
+                    </Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+              <View style={{ gap: SPACING.sm }}>
+                {displayedCategories.map((item) => {
+                  const percentage = stats.expense > 0 ? (item.total / stats.expense) * 100 : 0;
+                  const catColor = item.categoryColor || colors.primary;
+                  return (
+                    <View key={item.categoryId} style={styles.catCard}>
                       <View
                         style={[
                           styles.catIcon,
@@ -280,20 +452,17 @@ export default function ReportsScreen() {
                         </View>
                       </View>
                     </View>
-                  </Animated.View>
-                );
-              })}
-            </View>
-          </Animated.View>
-        )}
-
-        <View style={{ height: 100 }} />
-      </ScrollView>
-    </SafeAreaView>
+                  );
+                })}
+              </View>
+            </>
+          )}
+        </>
+      )}
+      <View style={{ height: 100 }} />
+    </ScrollView>
   );
-}
-
-/* ---------- Sub-components ---------- */
+};
 
 const SummaryCard: React.FC<{
   label: string;
@@ -397,6 +566,40 @@ const createStyles = (colors: ThemeColors) =>
   StyleSheet.create({
     container: { flex: 1, backgroundColor: colors.bg },
     scroll: { paddingHorizontal: SPACING.md },
+
+    // Tabs
+    tabContainer: {
+      flexDirection: 'row',
+      marginHorizontal: SPACING.md,
+      marginVertical: SPACING.sm,
+      position: 'relative',
+      backgroundColor: colors.bgElevated,
+      borderRadius: RADIUS.md,
+      overflow: 'hidden',
+    },
+    tabIndicatorPill: {
+      position: 'absolute',
+      left: 0,
+      top: 0,
+      bottom: 0,
+      width: (SCREEN_WIDTH - SPACING.md * 2) / 3,
+      backgroundColor: colors.primary,
+      borderRadius: RADIUS.md,
+      zIndex: 0,
+    },
+    tabBtn: {
+      flex: 1,
+      paddingVertical: 10,
+      alignItems: 'center',
+      borderRadius: RADIUS.md,
+      backgroundColor: 'transparent',
+      zIndex: 1,
+    },
+    tabText: {
+      ...TYPOGRAPHY.body,
+      fontWeight: '600',
+    },
+
     periodNav: {
       flexDirection: 'row',
       alignItems: 'center',

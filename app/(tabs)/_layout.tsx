@@ -2,7 +2,15 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { Tabs, useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
-import { Platform, Pressable, StyleSheet, Text, ToastAndroid, View } from 'react-native';
+import {
+  Platform,
+  Pressable,
+  StyleSheet,
+  Text,
+  ToastAndroid,
+  View,
+  type ViewStyle,
+} from 'react-native';
 import Animated, {
   FadeInDown,
   FadeOutDown,
@@ -11,7 +19,7 @@ import Animated, {
   withSpring,
 } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useTheme } from '../../src/hooks/useTheme';
+import { useTheme, type ThemeColors } from '../../src/hooks/useTheme';
 
 const SPRING_CONFIG = { damping: 12, stiffness: 180 };
 
@@ -95,15 +103,18 @@ export default function TabsLayout() {
   }, [toastMsg]);
 
   // A custom wrapper for the bottom tabs to intercept onLongPress
-  const CustomTabBarButton = (props: any, name: string) => {
+  const CustomTabBarButton = (props: Record<string, unknown>, name: string) => {
     return (
       <Pressable
-        {...props}
+        {...(props as object)}
         onLongPress={() => showToast(name)}
-        style={[props.style, { flex: 1, alignItems: 'center', justifyContent: 'center' }]}
+        style={[
+          props.style as ViewStyle,
+          { flex: 1, alignItems: 'center', justifyContent: 'center' },
+        ]}
         android_ripple={{ color: colors.primary + '20', borderless: true, radius: 24 }}
       >
-        {props.children}
+        {props.children as React.ReactNode}
       </Pressable>
     );
   };
@@ -241,7 +252,7 @@ const fabStyles = StyleSheet.create({
   },
 });
 
-const createStyles = (colors: any, bottomInset: number, isDark: boolean) =>
+const createStyles = (colors: ThemeColors, bottomInset: number, isDark: boolean) =>
   StyleSheet.create({
     tabBar: {
       backgroundColor: colors.bgCard,

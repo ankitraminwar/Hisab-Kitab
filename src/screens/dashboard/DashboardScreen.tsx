@@ -303,7 +303,7 @@ export default function DashboardScreen() {
       -1,
       false,
     );
-  }, []);
+  }, [blobRotation1, blobRotation2]);
 
   const animatedBlobStyle = useAnimatedStyle(() => {
     return { transform: [{ rotate: `${blobRotation1.value}deg` }, { scale: 1.1 }] };
@@ -583,7 +583,7 @@ export default function DashboardScreen() {
         {/* Quick Actions (Horizontal Scroll) */}
         <Animated.View
           entering={FadeInRight.duration(500).delay(200)}
-          style={{ marginVertical: SPACING.md }}
+          style={{ marginVertical: SPACING.sm }}
         >
           <Text style={[styles.sectionTitle, { marginLeft: SPACING.xs }]}>Quick Actions</Text>
           <View>
@@ -598,7 +598,7 @@ export default function DashboardScreen() {
                 gap: SPACING.md,
               }}
             >
-              {QUICKS.map((q, idx) => (
+              {QUICKS.map((q) => (
                 <TouchableOpacity
                   key={q.id}
                   style={[styles.quickTile, { backgroundColor: colors.bgCard }]}
@@ -607,6 +607,8 @@ export default function DashboardScreen() {
                     router.push(q.path as Href);
                   }}
                   activeOpacity={0.7}
+                  accessibilityLabel={`Open ${q.title}`}
+                  accessibilityRole="button"
                 >
                   <View style={[styles.quickTileIconWrap, { backgroundColor: q.color + '15' }]}>
                     <Ionicons name={q.icon} size={28} color={q.color} />
@@ -760,7 +762,7 @@ export default function DashboardScreen() {
           )}
         </Animated.View>
 
-        <View style={{ height: 120 }} />
+        <View style={{ height: 100 }} />
       </ScrollView>
     </SafeAreaView>
   );
@@ -770,16 +772,16 @@ export default function DashboardScreen() {
 const createStyles = (colors: ThemeColors) =>
   StyleSheet.create({
     container: { flex: 1, backgroundColor: colors.bg },
-    scroll: { paddingHorizontal: SPACING.lg, paddingTop: SPACING.md },
+    scroll: { paddingHorizontal: SPACING.md, paddingTop: SPACING.sm },
 
     // Header
     header: {
       flexDirection: 'row',
       justifyContent: 'space-between',
       alignItems: 'center',
-      marginBottom: SPACING.xl,
+      marginBottom: SPACING.md,
     },
-    headerLeft: { flexDirection: 'row', alignItems: 'center', gap: 14 },
+    headerLeft: { flexDirection: 'row', alignItems: 'center', gap: 12 },
     avatarWrap: {
       width: 44,
       height: 44,
@@ -801,7 +803,7 @@ const createStyles = (colors: ThemeColors) =>
 
     // Hero
     heroCard: {
-      padding: SPACING.xl,
+      padding: SPACING.lg,
       borderRadius: RADIUS.xl,
       overflow: 'hidden',
       elevation: 12,
@@ -813,11 +815,11 @@ const createStyles = (colors: ThemeColors) =>
     heroBlob: { position: 'absolute', backgroundColor: colors.heroOverlay },
     heroLabel: { ...TYPOGRAPHY.label, color: colors.heroTextMuted, letterSpacing: 1 },
     heroAmount: {
-      fontSize: 42,
+      fontSize: 36,
       fontWeight: '900',
       color: colors.heroText,
       letterSpacing: -1.5,
-      marginVertical: SPACING.md,
+      marginVertical: SPACING.sm,
     },
     heroStatsContainer: {
       flexDirection: 'row',
@@ -851,10 +853,10 @@ const createStyles = (colors: ThemeColors) =>
 
     // Quick Actions
     quickTile: {
-      width: 90,
-      height: 105,
-      borderRadius: RADIUS.xl,
-      padding: SPACING.md,
+      width: 80,
+      height: 95,
+      borderRadius: RADIUS.lg,
+      padding: SPACING.sm,
       alignItems: 'center',
       justifyContent: 'center',
       shadowColor: colors.shadow,
@@ -866,12 +868,12 @@ const createStyles = (colors: ThemeColors) =>
       borderColor: colors.borderLight,
     },
     quickTileIconWrap: {
-      width: 46,
-      height: 46,
-      borderRadius: 23,
+      width: 42,
+      height: 42,
+      borderRadius: 21,
       alignItems: 'center',
       justifyContent: 'center',
-      marginBottom: 10,
+      marginBottom: 8,
     },
     quickTileText: {
       ...TYPOGRAPHY.caption,
@@ -912,8 +914,8 @@ const createStyles = (colors: ThemeColors) =>
 
     // Savings
     savingsCard: {
-      padding: SPACING.xl,
-      marginBottom: SPACING.xl,
+      padding: SPACING.lg,
+      marginBottom: SPACING.md,
       shadowColor: colors.shadow,
       shadowOpacity: 0.05,
       shadowRadius: 10,
@@ -923,14 +925,14 @@ const createStyles = (colors: ThemeColors) =>
     savingsAmount: { ...TYPOGRAPHY.h2, color: colors.textPrimary, fontWeight: '800' },
     savingsBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: RADIUS.full },
     savingsRate: { fontWeight: '800', fontSize: 14 },
-    savingsSub: { ...TYPOGRAPHY.caption, color: colors.textMuted, marginTop: 10 },
+    savingsSub: { ...TYPOGRAPHY.caption, color: colors.textMuted, marginTop: 8 },
 
     // Donut chart card
     donutCard: {
       alignItems: 'center',
-      paddingVertical: SPACING.xl,
-      paddingHorizontal: SPACING.lg,
-      marginBottom: SPACING.xl,
+      paddingVertical: SPACING.lg,
+      paddingHorizontal: SPACING.md,
+      marginBottom: SPACING.md,
       shadowOpacity: 0.05,
       shadowRadius: 10,
       elevation: 4,
@@ -938,8 +940,8 @@ const createStyles = (colors: ThemeColors) =>
     legendGrid: {
       flexDirection: 'row',
       flexWrap: 'wrap',
-      marginTop: SPACING.xl,
-      gap: SPACING.lg,
+      marginTop: SPACING.lg,
+      gap: SPACING.md,
       justifyContent: 'center',
     },
     legendItem: { flexDirection: 'row', alignItems: 'center', gap: 8, minWidth: '40%' },
