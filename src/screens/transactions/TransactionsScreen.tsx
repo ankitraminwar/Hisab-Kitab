@@ -10,7 +10,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { AmountText, Button, CustomModal, SearchBar } from '../../components/common';
 import { showToast } from '../../components/common/Toast';
 import { SwipeableTransactionItem } from '../../components/common/SwipeableTransactionItem';
-import { FilterBottomSheet } from '../../components/common/FilterBottomSheet';
+import { FilterBottomSheet, type AppliedFilters } from '../../components/common/FilterBottomSheet';
 import { useTheme, type ThemeColors } from '../../hooks/useTheme';
 import { AccountService, CategoryService } from '../../services/dataServices';
 import { triggerBackgroundSync } from '../../services/syncService';
@@ -30,6 +30,13 @@ type ListItem =
   | { type: 'transaction'; data: Transaction; key: string };
 
 const PAGE_SIZE = 20;
+
+const QUICK_DATE_LABELS: Record<string, string> = {
+  '7d': 'Last 7 Days',
+  thisMonth: 'This Month',
+  lastMonth: 'Last Month',
+  thisYear: 'This Year',
+};
 
 // ─── Transaction Preview Sheet ────────────────────────────────────────────────
 const TransactionPreviewSheet: React.FC<{
@@ -247,7 +254,7 @@ export default function TransactionsScreen() {
   const filterSheetRef = useRef<BottomSheetLib>(null);
 
   // Quick date filter
-  type QuickDateFilter = 'all' | '7d' | 'thisMonth' | 'lastMonth';
+  type QuickDateFilter = 'all' | '7d' | 'thisMonth' | 'lastMonth' | 'thisYear';
   const [quickDate, setQuickDate] = useState<QuickDateFilter>('all');
 
   const getDateRange = useCallback((filter: QuickDateFilter) => {
@@ -261,6 +268,11 @@ export default function TransactionsScreen() {
       case 'lastMonth': {
         const prev = subMonths(today, 1);
         return { dateFrom: fmt(startOfMonth(prev)), dateTo: fmt(endOfMonth(prev)) };
+      }
+      case 'thisYear': {
+        const jan1 = new Date(today.getFullYear(), 0, 1);
+        const dec31 = new Date(today.getFullYear(), 11, 31);
+        return { dateFrom: fmt(jan1), dateTo: fmt(dec31) };
       }
       default:
         return { dateFrom: undefined, dateTo: undefined };
@@ -378,6 +390,14 @@ export default function TransactionsScreen() {
     setQuickDate('all');
   };
 
+  const handleApplyFilters = useCallback((filters: AppliedFilters) => {
+    setFilterType(filters.type ?? undefined);
+    setFilterCat(filters.categoryId ?? undefined);
+    setFilterAcc(filters.accountId ?? undefined);
+    setQuickDate((filters.quickDate as QuickDateFilter) ?? 'all');
+    filterSheetRef.current?.close();
+  }, []);
+
   const renderItem = useCallback(
     ({ item }: { item: ListItem }) => {
       if (item.type === 'header') {
@@ -467,124 +487,92 @@ export default function TransactionsScreen() {
         />
       </Animated.View>
 
-      {/* Filter Chips */}
-      <Animated.View entering={FadeInDown.duration(400).delay(150)}>
+      {/* Compact Filter Bar */}
+      <Animated.View entering={FadeInDown.duration(400).delay(150)} style={styles.filterBar}>
+        {/* Active filter tags (scrollable, shown only when filters active) */}
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.filterRow}
+          contentContainerStyle={styles.activeTagsRow}
+          style={{ flex: 1 }}
         >
-          {activeFilterCount > 0 && (
-            <TouchableOpacity style={styles.clearChip} onPress={clearAllFilters}>
-              <Ionicons name="close-circle" size={14} color={colors.expense} />
-              <Text style={[styles.filterChipText, { color: colors.expense }]}>Clear</Text>
-            </TouchableOpacity>
-          )}
-          <TouchableOpacity
-            style={[styles.filterChip, filterType && styles.filterChipActive]}
-            onPress={openFilterSheet}
-          >
-            <Ionicons
-              name="swap-vertical"
-              size={13}
-              color={filterType ? colors.primary : colors.textMuted}
-            />
-            <Text style={[styles.filterChipText, filterType && { color: colors.primary }]}>
-              {filterType ? filterType?.charAt(0)?.toUpperCase() + filterType?.slice(1) : 'Type'}
-            </Text>
-            {filterType ? (
+          {filterType && (
+            <View style={styles.activeTag}>
+              <Ionicons name="swap-vertical" size={11} color={colors.primary} />
+              <Text style={styles.activeTagText}>
+                {filterType.charAt(0).toUpperCase() + filterType.slice(1)}
+              </Text>
               <TouchableOpacity
                 onPress={() => setFilterType(undefined)}
-                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
               >
-                <Ionicons name="close-circle" size={14} color={colors.primary} />
+                <Ionicons name="close" size={12} color={colors.primary} />
               </TouchableOpacity>
-            ) : (
-              <Ionicons name="chevron-down" size={12} color={colors.textMuted} />
-            )}
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.filterChip, filterCat && styles.filterChipActive]}
-            onPress={openFilterSheet}
-          >
-            <Ionicons
-              name="pricetag"
-              size={13}
-              color={filterCat ? colors.primary : colors.textMuted}
-            />
-            <Text style={[styles.filterChipText, filterCat && { color: colors.primary }]}>
-              {filterCat
-                ? (categories.find((c) => c.id === filterCat)?.name ?? 'Category')
-                : 'Category'}
-            </Text>
-            {filterCat ? (
+            </View>
+          )}
+          {filterCat && (
+            <View style={styles.activeTag}>
+              <Ionicons name="pricetag" size={11} color={colors.primary} />
+              <Text style={styles.activeTagText}>
+                {categories.find((c) => c.id === filterCat)?.name ?? 'Category'}
+              </Text>
               <TouchableOpacity
                 onPress={() => setFilterCat(undefined)}
-                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
               >
-                <Ionicons name="close-circle" size={14} color={colors.primary} />
+                <Ionicons name="close" size={12} color={colors.primary} />
               </TouchableOpacity>
-            ) : (
-              <Ionicons name="chevron-down" size={12} color={colors.textMuted} />
-            )}
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.filterChip, filterAcc && styles.filterChipActive]}
-            onPress={openFilterSheet}
-          >
-            <Ionicons
-              name="wallet"
-              size={13}
-              color={filterAcc ? colors.primary : colors.textMuted}
-            />
-            <Text style={[styles.filterChipText, filterAcc && { color: colors.primary }]}>
-              {filterAcc
-                ? (accounts.find((a) => a.id === filterAcc)?.name ?? 'Account')
-                : 'Account'}
-            </Text>
-            {filterAcc ? (
+            </View>
+          )}
+          {filterAcc && (
+            <View style={styles.activeTag}>
+              <Ionicons name="wallet" size={11} color={colors.primary} />
+              <Text style={styles.activeTagText}>
+                {accounts.find((a) => a.id === filterAcc)?.name ?? 'Account'}
+              </Text>
               <TouchableOpacity
                 onPress={() => setFilterAcc(undefined)}
-                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
               >
-                <Ionicons name="close-circle" size={14} color={colors.primary} />
+                <Ionicons name="close" size={12} color={colors.primary} />
               </TouchableOpacity>
-            ) : (
-              <Ionicons name="chevron-down" size={12} color={colors.textMuted} />
-            )}
-          </TouchableOpacity>
-
-          {/* Quick date filter chips */}
-          <View style={styles.filterDivider} />
-          {(
-            [
-              { key: '7d' as const, label: 'Last 7 Days', icon: 'calendar-outline' },
-              { key: 'thisMonth' as const, label: 'This Month', icon: 'today-outline' },
-              { key: 'lastMonth' as const, label: 'Last Month', icon: 'time-outline' },
-            ] as const
-          ).map((df) => (
-            <TouchableOpacity
-              key={df.key}
-              style={[styles.filterChip, quickDate === df.key && styles.filterChipActive]}
-              onPress={() => setQuickDate(quickDate === df.key ? 'all' : df.key)}
-              accessibilityLabel={`Filter by ${df.label}`}
-              accessibilityRole="button"
-            >
-              <Ionicons
-                name={df.icon as never}
-                size={13}
-                color={quickDate === df.key ? colors.primary : colors.textMuted}
-              />
-              <Text
-                style={[styles.filterChipText, quickDate === df.key && { color: colors.primary }]}
+            </View>
+          )}
+          {quickDate !== 'all' && (
+            <View style={styles.activeTag}>
+              <Ionicons name="calendar-outline" size={11} color={colors.primary} />
+              <Text style={styles.activeTagText}>{QUICK_DATE_LABELS[quickDate] ?? quickDate}</Text>
+              <TouchableOpacity
+                onPress={() => setQuickDate('all')}
+                hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
               >
-                {df.label}
-              </Text>
-            </TouchableOpacity>
-          ))}
+                <Ionicons name="close" size={12} color={colors.primary} />
+              </TouchableOpacity>
+            </View>
+          )}
         </ScrollView>
+
+        {/* Filter button — always visible */}
+        <TouchableOpacity
+          style={[styles.filterBtn, activeFilterCount > 0 && styles.filterBtnActive]}
+          onPress={openFilterSheet}
+          accessibilityLabel={`Open filters${activeFilterCount > 0 ? `, ${activeFilterCount} active` : ''}`}
+          accessibilityRole="button"
+        >
+          <Ionicons
+            name="options-outline"
+            size={15}
+            color={activeFilterCount > 0 ? colors.primary : colors.textSecondary}
+          />
+          <Text style={[styles.filterBtnText, activeFilterCount > 0 && { color: colors.primary }]}>
+            Filters
+          </Text>
+          {activeFilterCount > 0 && (
+            <View style={styles.filterBadge}>
+              <Text style={styles.filterBadgeText}>{activeFilterCount}</Text>
+            </View>
+          )}
+        </TouchableOpacity>
       </Animated.View>
 
       {/* Transaction List */}
@@ -658,12 +646,7 @@ export default function TransactionsScreen() {
         filterCat={filterCat ?? null}
         filterAcc={filterAcc ?? null}
         quickDate={quickDate}
-        onFilterType={(t) => setFilterType(t ?? undefined)}
-        onFilterCat={(c) => setFilterCat(c ?? undefined)}
-        onFilterAcc={(a) => setFilterAcc(a ?? undefined)}
-        onQuickDate={(d) => setQuickDate(d as QuickDateFilter)}
-        onClearAll={clearAllFilters}
-        onClose={() => filterSheetRef.current?.close()}
+        onApply={handleApplyFilters}
       />
 
       {/* Transaction Preview Sheet */}
@@ -702,47 +685,69 @@ const createStyles = (colors: ThemeColors) =>
     },
     title: { ...TYPOGRAPHY.h2, color: colors.textPrimary, fontWeight: '800' },
     searchWrap: { paddingHorizontal: SPACING.md, marginBottom: SPACING.sm },
-    filterRow: {
-      gap: SPACING.sm,
+    /* Compact filter bar */
+    filterBar: {
+      flexDirection: 'row',
+      alignItems: 'center',
       paddingHorizontal: SPACING.md,
       paddingBottom: SPACING.sm,
+      gap: SPACING.sm,
     },
-    filterChip: {
+    activeTagsRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: SPACING.xs,
+      paddingRight: SPACING.xs,
+    },
+    activeTag: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 4,
+      paddingHorizontal: 10,
+      paddingVertical: 5,
+      borderRadius: RADIUS.full,
+      backgroundColor: colors.primary + '15',
+      borderWidth: 1,
+      borderColor: colors.primary + '30',
+    },
+    activeTagText: {
+      fontSize: 11,
+      fontWeight: '700',
+      color: colors.primary,
+    },
+    filterBtn: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: 5,
-      paddingHorizontal: 14,
-      paddingVertical: 8,
-      borderRadius: RADIUS.xl,
+      paddingHorizontal: 12,
+      paddingVertical: 7,
+      borderRadius: RADIUS.full,
       backgroundColor: colors.bgCard,
       borderWidth: 1,
       borderColor: colors.border,
     },
-    filterChipActive: {
-      borderColor: colors.primary + '30',
+    filterBtnActive: {
+      borderColor: colors.primary + '40',
       backgroundColor: colors.primary + '10',
     },
-    filterChipText: {
-      ...TYPOGRAPHY.caption,
+    filterBtnText: {
+      fontSize: 12,
+      fontWeight: '700',
       color: colors.textSecondary,
-      fontWeight: '600',
     },
-    clearChip: {
-      flexDirection: 'row',
+    filterBadge: {
+      minWidth: 16,
+      height: 16,
+      borderRadius: 8,
+      backgroundColor: colors.primary,
       alignItems: 'center',
-      gap: 4,
-      paddingHorizontal: 12,
-      paddingVertical: 8,
-      borderRadius: RADIUS.xl,
-      backgroundColor: colors.expense + '10',
-      borderWidth: 1,
-      borderColor: colors.expense + '20',
+      justifyContent: 'center',
+      paddingHorizontal: 4,
     },
-    filterDivider: {
-      width: 1,
-      height: 24,
-      backgroundColor: colors.border,
-      marginHorizontal: 2,
+    filterBadgeText: {
+      fontSize: 9,
+      fontWeight: '800',
+      color: colors.heroText,
     },
     monthHeader: {
       flexDirection: 'row',
