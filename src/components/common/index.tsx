@@ -167,12 +167,17 @@ export const EmptyState: React.FC<EmptyStateProps> = ({
   return (
     <View style={styles.emptyState}>
       <View style={styles.emptyIcon}>
-        <Ionicons name={icon as IoniconsName} size={32} color={colors.textMuted} />
+        <Ionicons name={icon as IoniconsName} size={36} color={colors.primary} />
       </View>
       <Text style={styles.emptyTitle}>{title}</Text>
       {subtitle && <Text style={styles.emptySubtitle}>{subtitle}</Text>}
       {action && (
-        <TouchableOpacity style={styles.emptyAction} onPress={onAction}>
+        <TouchableOpacity
+          style={styles.emptyAction}
+          onPress={onAction}
+          accessibilityLabel={action}
+          accessibilityRole="button"
+        >
           <Text style={styles.emptyActionText}>{action}</Text>
         </TouchableOpacity>
       )}
@@ -232,7 +237,7 @@ export const FAB: React.FC<FABProps> = ({ onPress, icon = 'add' }) => {
       accessibilityLabel="Add new"
     >
       <View style={styles.fabInner}>
-        <Ionicons name={icon as IoniconsName} size={28} color="#fff" />
+        <Ionicons name={icon as IoniconsName} size={28} color={colors.heroText} />
       </View>
     </TouchableOpacity>
   );
@@ -322,7 +327,7 @@ export const CustomSwitch: React.FC<CustomSwitchProps> = ({ value, onValueChange
           }),
         },
       ],
-      backgroundColor: value ? '#FFFFFF' : colors.textMuted,
+      backgroundColor: value ? colors.heroText : colors.textMuted,
     };
   });
 
@@ -487,36 +492,37 @@ function createStyles(colors: ThemeColors, isDark: boolean) {
       gap: SPACING.sm,
     },
     emptyIcon: {
-      width: 64,
-      height: 64,
-      borderRadius: 32,
-      backgroundColor: colors.bgElevated,
+      width: 72,
+      height: 72,
+      borderRadius: 36,
+      backgroundColor: colors.primary + '12',
       alignItems: 'center',
       justifyContent: 'center',
-      marginBottom: SPACING.sm,
+      marginBottom: SPACING.md,
     },
     emptyTitle: {
-      ...TYPOGRAPHY.bodyMedium,
-      color: colors.textSecondary,
+      ...TYPOGRAPHY.h3,
+      color: colors.textPrimary,
+      fontWeight: '700',
     },
     emptySubtitle: {
-      ...TYPOGRAPHY.caption,
+      ...TYPOGRAPHY.body,
       color: colors.textMuted,
       textAlign: 'center',
+      maxWidth: 280,
+      lineHeight: 22,
     },
     emptyAction: {
-      marginTop: SPACING.sm,
-      paddingHorizontal: SPACING.lg,
-      paddingVertical: SPACING.sm,
-      backgroundColor: colors.primary + '20',
+      marginTop: SPACING.md,
+      paddingHorizontal: SPACING.xl,
+      paddingVertical: SPACING.sm + 2,
+      backgroundColor: colors.primary,
       borderRadius: RADIUS.full,
-      borderWidth: 1,
-      borderColor: colors.primary + '40',
     },
     emptyActionText: {
-      ...TYPOGRAPHY.caption,
-      color: colors.primary,
-      fontWeight: '600',
+      ...TYPOGRAPHY.bodyMedium,
+      color: colors.heroText,
+      fontWeight: '700',
     },
     searchContainer: {
       flexDirection: 'row',
@@ -599,7 +605,7 @@ function createStyles(colors: ThemeColors, isDark: boolean) {
     },
     popupOverlay: {
       flex: 1,
-      backgroundColor: 'rgba(0,0,0,0.6)',
+      backgroundColor: colors.overlay,
       alignItems: 'center',
       justifyContent: 'center',
       padding: SPACING.xl,
@@ -640,3 +646,13 @@ function createStyles(colors: ThemeColors, isDark: boolean) {
 
 export * from './CustomModal';
 export * from './PopupProvider';
+export * from './SpeedDialFAB';
+export * from './AppBottomSheet';
+export * from './InputField';
+export * from './ListItem';
+export * from './Skeleton';
+export * from './AnimatedEmptyState';
+export * from './InsightCard';
+export * from './SwipeableTransactionItem';
+export * from './FilterBottomSheet';
+export * from './Toast';

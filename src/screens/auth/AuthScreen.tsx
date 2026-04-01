@@ -55,6 +55,7 @@ const IconInput: React.FC<{
   keyboardType?: 'email-address' | 'default';
   autoCapitalize?: 'none' | 'words' | 'sentences';
   colors: ThemeColors;
+  isDark?: boolean;
 }> = ({
   icon,
   placeholder,
@@ -65,9 +66,9 @@ const IconInput: React.FC<{
   keyboardType = 'default',
   autoCapitalize = 'none',
   colors,
+  isDark = false,
 }) => {
   const [showPassword, setShowPassword] = useState(false);
-  const isDark = colors.bg === '#0F0F1A';
 
   return (
     <View style={{ gap: 8 }}>
@@ -216,7 +217,7 @@ const SocialButton: React.FC<{
 // ─── Main Component ───────────────────────────────────────────────────────────
 export default function AuthScreen({ mode }: { mode: Mode }) {
   const router = useRouter();
-  const { colors } = useTheme();
+  const { colors, isDark } = useTheme();
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -324,7 +325,7 @@ export default function AuthScreen({ mode }: { mode: Mode }) {
                 </View>
               </View>
               <View style={styles.forgotBadge}>
-                <Ionicons name="key-outline" size={16} color="#fff" />
+                <Ionicons name="key-outline" size={16} color={colors.textInverse} />
               </View>
             </View>
 
@@ -342,6 +343,7 @@ export default function AuthScreen({ mode }: { mode: Mode }) {
                 onChangeText={setEmail}
                 keyboardType="email-address"
                 colors={colors}
+                isDark={isDark}
               />
             </View>
 
@@ -408,6 +410,7 @@ export default function AuthScreen({ mode }: { mode: Mode }) {
                 onChangeText={setPassword}
                 secureTextEntry
                 colors={colors}
+                isDark={isDark}
               />
             </View>
 
@@ -468,7 +471,7 @@ export default function AuthScreen({ mode }: { mode: Mode }) {
           {/* Hero area */}
           <View style={[styles.authHero, mode === 'signup' && styles.authHeroCentered]}>
             <View style={styles.signupIconBox}>
-              <Ionicons name="wallet" size={32} color="#fff" />
+              <Ionicons name="wallet" size={32} color={colors.textInverse} />
             </View>
             {mode === 'login' && <Text style={styles.heroWelcome}>Welcome</Text>}
           </View>
@@ -490,6 +493,7 @@ export default function AuthScreen({ mode }: { mode: Mode }) {
                 onChangeText={setName}
                 autoCapitalize="words"
                 colors={colors}
+                isDark={isDark}
               />
             )}
 
@@ -501,6 +505,7 @@ export default function AuthScreen({ mode }: { mode: Mode }) {
               onChangeText={setEmail}
               keyboardType="email-address"
               colors={colors}
+              isDark={isDark}
             />
 
             <IconInput
@@ -511,6 +516,7 @@ export default function AuthScreen({ mode }: { mode: Mode }) {
               onChangeText={setPassword}
               secureTextEntry
               colors={colors}
+              isDark={isDark}
             />
 
             {mode === 'login' && (

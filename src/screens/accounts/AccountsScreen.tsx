@@ -92,14 +92,19 @@ export default function AccountsScreen() {
             <Text style={styles.title}>My Accounts</Text>
             <Text style={styles.subtitle}>Organize your finances effortlessly</Text>
           </View>
-          <TouchableOpacity onPress={() => setShowAdd(true)} style={styles.addBtn}>
+          <TouchableOpacity
+            onPress={() => setShowAdd(true)}
+            style={styles.addBtn}
+            accessibilityLabel="Add account"
+            accessibilityRole="button"
+          >
             <LinearGradient
               colors={[colors.primary, '#6D28D9']}
               style={styles.addBtnGradient}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
             >
-              <Ionicons name="add" size={24} color="#FFF" />
+              <Ionicons name="add" size={24} color={colors.heroText} />
             </LinearGradient>
           </TouchableOpacity>
         </Animated.View>
@@ -120,7 +125,7 @@ export default function AccountsScreen() {
             style={styles.netWorthCardWrap}
           >
             <LinearGradient
-              colors={isDark ? ['#1E1E2E', '#2D2D44'] : ['#FFFFFF', '#F8FAFC']}
+              colors={[colors.bgCard, colors.bgElevated]}
               style={styles.netWorthCard}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
@@ -290,11 +295,23 @@ const AccountCreditCard: React.FC<{
           <Ionicons name={account.icon as IoniconsName} size={20} color={c1} />
         </View>
         <View style={{ flexDirection: 'row', gap: 8 }}>
-          <TouchableOpacity onPress={onEdit} style={styles.deleteAction} hitSlop={10}>
-            <Ionicons name="pencil" size={18} color="rgba(255,255,255,0.8)" />
+          <TouchableOpacity
+            onPress={onEdit}
+            style={styles.deleteAction}
+            hitSlop={10}
+            accessibilityLabel="Edit account"
+            accessibilityRole="button"
+          >
+            <Ionicons name="pencil" size={18} color={colors.heroTextMuted} />
           </TouchableOpacity>
-          <TouchableOpacity onPress={onDelete} style={styles.deleteAction} hitSlop={10}>
-            <Ionicons name="trash" size={18} color="rgba(255,255,255,0.8)" />
+          <TouchableOpacity
+            onPress={onDelete}
+            style={styles.deleteAction}
+            hitSlop={10}
+            accessibilityLabel="Delete account"
+            accessibilityRole="button"
+          >
+            <Ionicons name="trash" size={18} color={colors.heroTextMuted} />
           </TouchableOpacity>
         </View>
       </View>
@@ -399,9 +416,9 @@ const AddAccountModal: React.FC<{
               <Ionicons
                 name={item.icon as IoniconsName}
                 size={16}
-                color={type === item.key ? '#fff' : colors.textMuted}
+                color={type === item.key ? colors.heroText : colors.textMuted}
               />
-              <Text style={[styles.typeLabel, type === item.key && { color: '#fff' }]}>
+              <Text style={[styles.typeLabel, type === item.key && { color: colors.heroText }]}>
                 {item.label}
               </Text>
             </TouchableOpacity>
@@ -538,9 +555,9 @@ const EditAccountModal: React.FC<{
               <Ionicons
                 name={item.icon as IoniconsName}
                 size={16}
-                color={type === item.key ? '#fff' : colors.textMuted}
+                color={type === item.key ? colors.heroText : colors.textMuted}
               />
-              <Text style={[styles.typeLabel, type === item.key && { color: '#fff' }]}>
+              <Text style={[styles.typeLabel, type === item.key && { color: colors.heroText }]}>
                 {item.label}
               </Text>
             </TouchableOpacity>
@@ -720,7 +737,7 @@ function createStyles(colors: ThemeColors) {
       padding: SPACING.xl,
       borderWidth: 1,
       borderColor: colors.border,
-      shadowColor: '#000',
+      shadowColor: colors.shadow,
       shadowOffset: { width: 0, height: 8 },
       shadowOpacity: 0.05,
       shadowRadius: 16,
@@ -801,7 +818,7 @@ function createStyles(colors: ThemeColors) {
       width: 150,
       height: 150,
       borderRadius: 75,
-      backgroundColor: 'rgba(255,255,255,0.1)',
+      backgroundColor: colors.heroOverlay,
       top: -50,
       right: -20,
     },
@@ -810,7 +827,7 @@ function createStyles(colors: ThemeColors) {
       width: 200,
       height: 200,
       borderRadius: 100,
-      backgroundColor: 'rgba(255,255,255,0.05)',
+      backgroundColor: colors.heroOverlay,
       bottom: -80,
       left: -40,
     },
@@ -824,13 +841,13 @@ function createStyles(colors: ThemeColors) {
       width: 40,
       height: 40,
       borderRadius: 12,
-      backgroundColor: 'rgba(255,255,255,0.9)',
+      backgroundColor: colors.heroText,
       alignItems: 'center',
       justifyContent: 'center',
     },
     deleteAction: {
       padding: 6,
-      backgroundColor: 'rgba(0,0,0,0.2)',
+      backgroundColor: colors.overlayLight,
       borderRadius: 20,
     },
     cardMiddle: {
@@ -839,14 +856,14 @@ function createStyles(colors: ThemeColors) {
     },
     cardBalanceLabel: {
       fontSize: 12,
-      color: 'rgba(255,255,255,0.7)',
+      color: colors.heroTextMuted,
       textTransform: 'uppercase',
       letterSpacing: 0.5,
     },
     cardBalanceValue: {
       fontSize: 32,
       fontWeight: '800',
-      color: '#FFF',
+      color: colors.heroText,
       marginTop: 4,
       letterSpacing: 1,
     },
@@ -859,26 +876,26 @@ function createStyles(colors: ThemeColors) {
     cardName: {
       fontSize: 16,
       fontWeight: '700',
-      color: '#FFF',
+      color: colors.heroText,
       maxWidth: 180,
     },
     cardType: {
       fontSize: 12,
-      color: 'rgba(255,255,255,0.7)',
+      color: colors.heroTextMuted,
       marginTop: 2,
     },
     defaultPill: {
       paddingHorizontal: 10,
       paddingVertical: 4,
       borderRadius: 12,
-      backgroundColor: 'rgba(255,255,255,0.2)',
+      backgroundColor: colors.overlayLight,
       borderWidth: 1,
-      borderColor: 'rgba(255,255,255,0.4)',
+      borderColor: colors.heroTextMuted,
     },
     defaultPillText: {
       fontSize: 10,
       fontWeight: '800',
-      color: '#FFF',
+      color: colors.heroText,
       textTransform: 'uppercase',
     },
     emptyWrap: {

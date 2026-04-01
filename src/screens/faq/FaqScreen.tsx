@@ -30,7 +30,7 @@ const QUICK_START_STEPS: HelpStep[] = [
   {
     title: '2. Add your first transaction',
     steps: [
-      'Tap the + button on the dashboard or the Transactions screen.',
+      'Tap the + FAB button (bottom centre) to open quick actions: Add Expense, Split Expense, Add Note, or Add Budget.',
       'Choose Expense, Income, or Transfer, then enter amount, account, and category.',
       'Enable Recurring to repeat the transaction daily, weekly, or monthly automatically.',
     ],
@@ -38,9 +38,9 @@ const QUICK_START_STEPS: HelpStep[] = [
   {
     title: '3. Track your monthly progress',
     steps: [
-      'Use the Dashboard for balance overview, donut chart, savings ring, and quick actions.',
-      'Use Budgets to set monthly spending limits per category and get alerts.',
-      'Use Reports to review trends, category breakdown, and exportable financial reports.',
+      'Use the Dashboard for balance overview, spending donut chart, savings ring, and quick actions.',
+      'Use Budgets to set monthly spending limits per category and get alerts at 80%.',
+      'Use Reports to review income/expense trend charts, category breakdown, and exportable financial reports.',
     ],
   },
 ];
@@ -53,6 +53,8 @@ const FLOW_GUIDES: HelpStep[] = [
       'Income increases the selected account balance.',
       'Transfer moves the same amount from one account to another — both balances update.',
       'Recurring transactions auto-generate future entries on the chosen schedule.',
+      'Swipe a transaction card left to reveal Edit and Delete action buttons.',
+      'Tap a transaction card to open a quick preview with Edit and Delete options.',
     ],
   },
   {
@@ -73,6 +75,15 @@ const FLOW_GUIDES: HelpStep[] = [
     ],
   },
   {
+    title: 'Filtering and searching transactions',
+    steps: [
+      'Use the search bar on the Transactions screen to find by category, account, or notes.',
+      'Tap the filter icon to open the filter sheet and filter by type, category, account, or date range.',
+      'Quick date chips (Last 7 Days, This Month, Last Month) appear in the filter bar for fast access.',
+      'Active filters are shown as chips below the search bar — tap one to remove it.',
+    ],
+  },
+  {
     title: 'Backup and sync flow',
     steps: [
       'Every change is saved locally first — the app works fully offline.',
@@ -85,7 +96,7 @@ const FLOW_GUIDES: HelpStep[] = [
 const FAQ_DATA: FaqItem[] = [
   {
     q: 'How do I add a transaction?',
-    a: 'Tap the + button on the dashboard or transactions screen. Choose the type, enter amount, select account and category, add notes if needed, then save.',
+    a: 'Tap the + FAB button at the bottom centre of any tab screen. Choose Add Expense from the quick-action menu, select the type, enter the amount, pick an account and category, then save.',
   },
   {
     q: 'How does transfer work?',
@@ -128,6 +139,18 @@ const FAQ_DATA: FaqItem[] = [
     a: 'Yes. The app is offline-first — data is stored on your device immediately. If you are signed in, sync uploads changes in the background when internet is available.',
   },
   {
+    q: 'How do I edit or delete a transaction?',
+    a: 'Swipe a transaction card left to reveal the Edit (blue) and Delete (red) buttons. You can also tap the card to open a quick preview and then choose Edit or Delete from there.',
+  },
+  {
+    q: 'How do I filter transactions?',
+    a: 'On the Transactions screen, tap the filter icon (top right) to open the filter sheet. You can filter by transaction type, category, account, or a custom date range. Use the quick-date chips (Last 7 Days, This Month) for instant filtering.',
+  },
+  {
+    q: 'How do reports and trend charts work?',
+    a: 'The Reports screen shows Income vs Expenses bars, an Expense Trend line chart, and an Income Trend line chart for the selected period. Swipe between Weekly, Monthly, and Yearly tabs, or tap the arrows to navigate periods. Low/Avg/High stats appear below each chart.',
+  },
+  {
     q: 'How do I back up my data?',
     a: 'Go to Settings → Export Data. CSV is good for spreadsheets, PDF creates a formatted report, and JSON is best for full backup and restore.',
   },
@@ -136,8 +159,8 @@ const FAQ_DATA: FaqItem[] = [
     a: 'Go to Settings → Import Backup and choose a JSON file previously exported from the app. Imported records are merged into your existing local data.',
   },
   {
-    q: 'How do reports and email summaries work?',
-    a: 'The Reports screen shows trends, category breakdown, and net worth inside the app. Email Monthly Report sends a formatted PDF summary to your signed-in email address.',
+    q: 'How do I send a report by email?',
+    a: 'In the Reports screen, tap the share icon (top right) to generate a PDF for the current period. Email Monthly Report in Settings sends a formatted PDF summary to your signed-in email address.',
   },
   {
     q: 'How do I secure the app?',
@@ -216,11 +239,13 @@ export default function FaqScreen() {
             end={{ x: 1, y: 1 }}
             style={styles.heroCard}
           >
-            <View style={[styles.heroIconWrap, { backgroundColor: 'rgba(255,255,255,0.15)' }]}>
-              <Ionicons name="help-circle" size={34} color="#FFF" />
+            <View style={[styles.heroIconWrap, { backgroundColor: colors.heroOverlay }]}>
+              <Ionicons name="help-circle" size={34} color={colors.heroText} />
             </View>
-            <Text style={[styles.heroTitle, { color: '#FFF' }]}>Understand the app faster</Text>
-            <Text style={[styles.heroSubtitle, { color: 'rgba(255,255,255,0.8)' }]}>
+            <Text style={[styles.heroTitle, { color: colors.heroText }]}>
+              Understand the app faster
+            </Text>
+            <Text style={[styles.heroSubtitle, { color: colors.heroTextMuted }]}>
               Start with the basic flows below, then open the questions for more detail.
             </Text>
           </LinearGradient>

@@ -20,7 +20,7 @@ Offline-first personal finance manager for Android/iOS. Expo + React Native + Ty
 | State       | Zustand ^4.4.0 (`src/store/appStore.ts` — Auth/UI/Data slices) + React Query ^5 |
 | Styling     | StyleSheet with dynamic theme via `useTheme()` hook                             |
 | Animations  | react-native-reanimated ~4.1.1, expo-linear-gradient                            |
-| Charts      | @shopify/react-native-skia ^2.2.12, react-native-svg                            |
+| Charts      | react-native-wagmi-charts ^2.9.1, react-native-svg, @shopify/react-native-skia ^2.2.12 |
 | Lists       | @shopify/flash-list 2.0.2 (v2 — no `estimatedItemSize` prop)                    |
 | Widgets     | react-native-android-widget ^0.20.1                                             |
 | SMS parsing | react-native-get-sms-android ^2.1.0                                             |
@@ -49,14 +49,14 @@ app/                             # Expo Router file-based routes
   index.tsx                      # Redirects to /(tabs)/
   login.tsx                      # Auth entry — renders AuthScreen in login mode
   (tabs)/
-    _layout.tsx                  # Animated tab bar: Dashboard, History, [FAB], Budgets, Profile
+    _layout.tsx                  # Animated tab bar: Dashboard, History, [SpeedDialFAB], Budgets, Profile
     index.tsx                    # Dashboard tab
     transactions.tsx             # History tab
     budgets.tsx                  # Budgets tab
     profile.tsx                  # Profile/Settings shortcut tab
     goals.tsx                    # Goals screen (hidden tab: href: null)
     reports.tsx                  # Reports screen (hidden tab: href: null)
-    add-placeholder.tsx          # Placeholder for center FAB tab slot
+    add-placeholder.tsx          # Placeholder for center FAB tab slot (triggers SpeedDialFAB)
   auth/                          # login (index), signup, forgot-password, reset-password
   transactions/
     add.tsx                      # Add transaction modal
@@ -175,7 +175,9 @@ stitch_designs/                  # Reference UI mockups (PNG) — light + dark p
 - **Animations**: `Animated.View` with `FadeInDown` from reanimated for staggered section entry.
 - **useCallback for async effects**: Any `async` function used inside a `useEffect` dependency array must be wrapped in `useCallback` to satisfy the eslint `exhaustive-deps` rule.
 - **Fire-and-forget promises**: Use `.catch(console.warn)` instead of `void`. Example: `triggerBackgroundSync('reason').catch(console.warn)`.
-- **formatCurrency**: Uses a module-level cached `Intl.NumberFormat` instance for performance.
+- **formatCurrency**: Uses a module-level cached `Intl.NumberFormat` instance for performance. Cannot be used in Reanimated worklets — use `formatCurrencyWorklet` (pure string math) instead.
+- **Unified FAB**: Tab layout renders a `SpeedDialFAB` (with `hideMainButton`) triggered by the center tab button. 4 actions: Add Expense, Split Expense, Add Note, Add Budget. Individual screens no longer have standalone FABs.
+- **Toast**: Compact pill-style (icon + single-line text, max 80% width, rounded). Configured in `src/components/common/Toast.tsx`.
 - **Error boundaries**: `ScreenErrorBoundary` wraps the root layout to catch render crashes with a user-friendly retry UI.
 - **Deep links**: Root layout handles `hisabkitab://transactions` and `hisabkitab://budgets` deep links, mapping them to the correct tab routes.
 - **CustomPopup auto-dismiss**: Success-type popups automatically close after 3 seconds.
@@ -269,7 +271,8 @@ Run `supabase/schema.sql` in the Supabase SQL editor. Single file — all tables
 - **R8/ProGuard** enabled for production builds — `minifyEnabled` and `shrinkResources` in `android/gradle.properties`.
 - **Lazy loading** — Reports, Budgets, and Goals tabs use `React.lazy()` + `Suspense` to defer heavy chart bundle loading.
 - **Biometric lock** — hardware back button is blocked via `BackHandler` when lock screen is active.
-- **Dashboard donut chart** — Uses SQL-backed `getCategoryBreakdownByDateRange()` for full-month category data, not limited to recent transactions.
+- **Dashboard donut chart** — Uses SQL-backed `getCategoryBreakdownByDateRange()` for full-month category data, not limited to recent transactions. Legend shows category name, compact amount, and tinted % badge.
+- **InteractiveLineChart** — wagmi-charts wrapper with worklet-safe currency formatter, period change badge, and Low/Avg/High stats row.
 - **Split expense percent validation** uses `0.01` epsilon (not `0.5`) and transaction picker is limited to 100 items.
 
 ## Code Review Standards

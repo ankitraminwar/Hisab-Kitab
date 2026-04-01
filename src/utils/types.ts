@@ -265,3 +265,46 @@ export interface SyncQueueItem {
   createdAt: string;
   updatedAt: string;
 }
+
+// ─── FAB Speed Dial ─────────────────────────────────────────────────────────
+
+export interface FABAction {
+  id: string;
+  label: string;
+  icon: IoniconsName;
+  color: string;
+  onPress: () => void;
+}
+
+export type FABContext = 'dashboard' | 'transactions' | 'budgets' | 'goals' | 'notes' | 'splits';
+
+// ─── Bottom Sheet ───────────────────────────────────────────────────────────
+
+export type ToastType = 'success' | 'error' | 'info';
+
+// ─── Chart Data ─────────────────────────────────────────────────────────────
+
+export interface ChartDataPoint {
+  timestamp: number;
+  value: number;
+}
+
+export interface CategoryBreakdown {
+  categoryId: string;
+  categoryName: string;
+  categoryIcon: string;
+  categoryColor: string;
+  amount: number;
+  percentage: number;
+}
+
+// ─── Spending Insight ───────────────────────────────────────────────────────
+
+export interface SpendingInsight {
+  id: string;
+  type: 'warning' | 'tip' | 'achievement';
+  icon: IoniconsName;
+  title: string;
+  description: string;
+  color: string;
+}

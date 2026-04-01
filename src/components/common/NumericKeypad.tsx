@@ -34,7 +34,11 @@ const KeyButton: React.FC<{
         ? colors.primary
         : colors.bgCard;
   const textColor =
-    variant === 'accent' ? colors.primary : variant === 'action' ? '#FFFFFF' : colors.textPrimary;
+    variant === 'accent'
+      ? colors.primary
+      : variant === 'action'
+        ? colors.textInverse
+        : colors.textPrimary;
   const borderColor = variant === 'default' ? colors.border : 'transparent';
 
   return (

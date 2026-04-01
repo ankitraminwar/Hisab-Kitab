@@ -48,15 +48,9 @@ export const CustomPopup: React.FC<CustomPopupProps> = ({
     type === 'success' ? colors.income : type === 'error' ? colors.expense : colors.primary;
 
   return (
-    <Modal visible={visible} transparent animationType="none">
+    <Modal visible={visible} transparent animationType="fade">
       <View style={styles.popupOverlay}>
-        <View style={StyleSheet.absoluteFill}>
-          <Pressable style={StyleSheet.absoluteFill} onPress={onClose}>
-            <View
-              style={{ flex: 1, backgroundColor: isDark ? 'rgba(0,0,0,0.5)' : 'rgba(0,0,0,0.2)' }}
-            />
-          </Pressable>
-        </View>
+        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
 
         <View style={styles.popupCard}>
           <View style={[styles.popupIconBg, { backgroundColor: iconColor + '20' }]}>
@@ -96,7 +90,7 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
   StyleSheet.create({
     popupOverlay: {
       flex: 1,
-      backgroundColor: 'rgba(0,0,0,0.6)',
+      backgroundColor: colors.overlay,
       alignItems: 'center',
       justifyContent: 'center',
       padding: SPACING.xl,

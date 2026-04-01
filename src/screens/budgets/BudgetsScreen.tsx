@@ -16,15 +16,17 @@ import {
   Button,
   Card,
   CustomModal,
-  EmptyState,
+  AnimatedEmptyState,
   ProgressBar,
   SectionHeader,
 } from '../../components/common';
+import { showToast } from '../../components/common/Toast';
 import { useTheme, type ThemeColors } from '../../hooks/useTheme';
 import { BudgetService, CategoryService } from '../../services/dataService';
 import { triggerBackgroundSync } from '../../services/syncService';
 import { useAppStore } from '../../store/appStore';
 import { RADIUS, SPACING, TYPOGRAPHY, formatCurrency } from '../../utils/constants';
+import { budgetSchema } from '../../utils/validation';
 import type { Budget, Category } from '../../utils/types';
 
 export default function BudgetsScreen() {
@@ -57,22 +59,23 @@ export default function BudgetsScreen() {
     await triggerBackgroundSync('pull-to-refresh');
     await loadData();
     setRefreshing(false);
+    showToast.success('Budgets refreshed');
   };
 
   const totalBudget = budgets.reduce((s, b) => s + b.limitAmount, 0);
   const totalSpent = budgets.reduce((s, b) => s + b.spent, 0);
 
-  const prevMonth = () => {
+  const prevMonth = useCallback(() => {
     const d = new Date(year, parseInt(month) - 2);
     setYear(d.getFullYear());
     setMonth(String(d.getMonth() + 1).padStart(2, '0'));
-  };
+  }, [year, month]);
 
-  const nextMonth = () => {
+  const nextMonth = useCallback(() => {
     const d = new Date(year, parseInt(month));
     setYear(d.getFullYear());
     setMonth(String(d.getMonth() + 1).padStart(2, '0'));
-  };
+  }, [year, month]);
 
   const monthName = format(new Date(year, parseInt(month) - 1), 'MMMM yyyy');
 
@@ -80,17 +83,32 @@ export default function BudgetsScreen() {
     <SafeAreaView style={styles.container} edges={['top']}>
       <Animated.View entering={FadeInDown.duration(400)} style={styles.header}>
         <Text style={styles.title}>Budgets</Text>
-        <TouchableOpacity onPress={() => setShowAdd(true)} style={styles.addButton}>
+        <TouchableOpacity
+          onPress={() => setShowAdd(true)}
+          style={styles.addButton}
+          accessibilityLabel="Add budget"
+          accessibilityRole="button"
+        >
           <Ionicons name="add" size={24} color={colors.primary} />
         </TouchableOpacity>
       </Animated.View>
 
       <Animated.View entering={FadeInDown.duration(400).delay(100)} style={styles.monthSelector}>
-        <TouchableOpacity onPress={prevMonth} style={styles.monthButton}>
+        <TouchableOpacity
+          onPress={prevMonth}
+          style={styles.monthButton}
+          accessibilityLabel="Previous month"
+          accessibilityRole="button"
+        >
           <Ionicons name="chevron-back" size={20} color={colors.textPrimary} />
         </TouchableOpacity>
         <Text style={styles.monthText}>{monthName}</Text>
-        <TouchableOpacity onPress={nextMonth} style={styles.monthButton}>
+        <TouchableOpacity
+          onPress={nextMonth}
+          style={styles.monthButton}
+          accessibilityLabel="Next month"
+          accessibilityRole="button"
+        >
           <Ionicons name="chevron-forward" size={20} color={colors.textPrimary} />
         </TouchableOpacity>
       </Animated.View>
@@ -136,11 +154,11 @@ export default function BudgetsScreen() {
           <SectionHeader title="Category Budgets" />
 
           {budgets.length === 0 ? (
-            <EmptyState
+            <AnimatedEmptyState
               icon="pie-chart-outline"
               title="No budgets set"
               subtitle={`You haven't set any budgets for ${monthName}.`}
-              action="Create Budget"
+              actionLabel="Create Budget"
               onAction={() => setShowAdd(true)}
             />
           ) : (
@@ -202,7 +220,12 @@ const BudgetCard = ({
 
   return (
     <>
-      <TouchableOpacity onPress={() => setShowEdit(true)} activeOpacity={0.7}>
+      <TouchableOpacity
+        onPress={() => setShowEdit(true)}
+        activeOpacity={0.7}
+        accessibilityLabel={`${category?.name || 'Unknown'} budget, ${formatCurrency(budget.spent)} of ${formatCurrency(budget.limitAmount)} spent`}
+        accessibilityRole="button"
+      >
         <Card style={cardStyles.card}>
           <View style={cardStyles.header}>
             <View style={cardStyles.categoryInfo}>
@@ -276,7 +299,15 @@ const AddBudgetModal = ({
   const styles = useMemo(() => modalStyles(colors), [colors]);
 
   const handleSave = async () => {
-    if (!categoryId || !amount || Number(amount) <= 0) return;
+    const result = budgetSchema.safeParse({
+      categoryId,
+      limitAmount: Number(amount),
+      alertAt: 80,
+    });
+    if (!result.success) {
+      showToast.error(result.error.issues[0]?.message ?? 'Invalid input');
+      return;
+    }
     setLoading(true);
     const [year, month] = period.split('-');
 
@@ -290,6 +321,7 @@ const AddBudgetModal = ({
     setLoading(false);
     setAmount('');
     setCategoryId('');
+    showToast.success('Budget created');
     onSave();
   };
 
@@ -373,6 +405,7 @@ const EditBudgetModal = ({
     setLoading(true);
     await BudgetService.update(budget.id, { limitAmount: Number(amount) });
     setLoading(false);
+    showToast.success('Budget updated');
     onSave();
   };
 
@@ -380,6 +413,7 @@ const EditBudgetModal = ({
     setLoading(true);
     await BudgetService.delete(budget.id);
     setLoading(false);
+    showToast.success('Budget deleted');
     onSave();
   };
 
@@ -519,7 +553,7 @@ const modalStyles = (colors: ThemeColors) =>
       ...TYPOGRAPHY.body,
       marginBottom: SPACING.xl,
     },
-    actions: { flexDirection: 'row', gap: SPACING.md },
+    actions: { flexDirection: 'row', gap: SPACING.md, marginBottom: SPACING.md },
     flex1: { flex: 1 },
   });
 
@@ -536,8 +570,8 @@ const createStyles = (colors: ThemeColors) =>
     },
     title: { ...TYPOGRAPHY.h2, color: colors.textPrimary },
     addButton: {
-      width: 40,
-      height: 40,
+      width: 44,
+      height: 44,
       alignItems: 'center',
       justifyContent: 'center',
       borderRadius: RADIUS.full,
@@ -550,7 +584,13 @@ const createStyles = (colors: ThemeColors) =>
       paddingHorizontal: SPACING.md,
       marginBottom: SPACING.md,
     },
-    monthButton: { padding: SPACING.xs },
+    monthButton: {
+      padding: SPACING.sm,
+      minWidth: 44,
+      minHeight: 44,
+      alignItems: 'center' as const,
+      justifyContent: 'center' as const,
+    },
     monthText: {
       ...TYPOGRAPHY.body,
       color: colors.textPrimary,

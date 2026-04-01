@@ -17,12 +17,14 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { CustomPopup } from '../../components/common';
+import { showToast } from '../../components/common/Toast';
 import { CategoryGrid } from '../../components/common/CategoryGrid';
 import { NumericKeypad } from '../../components/common/NumericKeypad';
 import { useTheme, type ThemeColors } from '../../hooks/useTheme';
 import { AccountService, CategoryService, PaymentMethodService } from '../../services/dataServices';
 import { TransactionService } from '../../services/transactionService';
 import { RADIUS, SPACING } from '../../utils/constants';
+import { transactionSchema } from '../../utils/validation';
 import type {
   Account,
   Category,
@@ -211,33 +213,30 @@ export default function AddTransactionScreen() {
 
   const handleDone = async () => {
     const finalAmount = evaluateAmount();
-    if (finalAmount <= 0) {
+
+    // Validate with zod schema
+    const result = transactionSchema.safeParse({
+      amount: finalAmount,
+      type,
+      categoryId: selectedCategory?.id ?? '',
+      accountId: selectedAccount?.id ?? '',
+      toAccountId: type === 'transfer' ? selectedToAccount?.id : undefined,
+      notes: notes.trim() || undefined,
+      date: toISODate(selectedDate),
+      paymentMethod,
+    });
+
+    if (!result.success) {
+      const firstError = result.error.issues[0];
       setPopupConfig({
         visible: true,
-        title: 'Invalid amount',
-        message: 'Enter an amount greater than zero.',
+        title: 'Validation Error',
+        message: firstError?.message ?? 'Please check the form fields.',
         type: 'error',
       });
       return;
     }
-    if (!selectedAccount) {
-      setPopupConfig({
-        visible: true,
-        title: 'Missing account',
-        message: 'Choose an account for this transaction.',
-        type: 'error',
-      });
-      return;
-    }
-    if (!selectedCategory) {
-      setPopupConfig({
-        visible: true,
-        title: 'Missing category',
-        message: 'Choose a category for this transaction.',
-        type: 'error',
-      });
-      return;
-    }
+
     if (type === 'transfer' && !selectedToAccount) {
       setPopupConfig({
         visible: true,
@@ -253,8 +252,8 @@ export default function AddTransactionScreen() {
       const payload = {
         amount: finalAmount,
         type,
-        categoryId: selectedCategory.id,
-        accountId: selectedAccount.id,
+        categoryId: selectedCategory!.id,
+        accountId: selectedAccount!.id,
         toAccountId: type === 'transfer' ? selectedToAccount?.id : undefined,
         notes: notes.trim() || undefined,
         date: toISODate(selectedDate),
@@ -269,6 +268,7 @@ export default function AddTransactionScreen() {
         await TransactionService.create(payload);
       }
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      showToast.success(isEditing ? 'Transaction updated' : 'Transaction added');
       setPopupConfig({
         visible: true,
         title: 'Success',
@@ -606,7 +606,7 @@ export default function AddTransactionScreen() {
                     alignItems: 'center',
                   }}
                 >
-                  <Text style={{ color: '#fff', fontWeight: '700' }}>Add & Select</Text>
+                  <Text style={{ color: colors.heroText, fontWeight: '700' }}>Add & Select</Text>
                 </TouchableOpacity>
               </View>
             )}
@@ -816,7 +816,7 @@ const createStyles = (colors: ThemeColors) =>
     },
     pmOverlay: {
       flex: 1,
-      backgroundColor: 'rgba(0,0,0,0.5)',
+      backgroundColor: colors.overlay,
       justifyContent: 'center',
     },
     toggleWrap: { paddingHorizontal: SPACING.lg, paddingVertical: SPACING.md },

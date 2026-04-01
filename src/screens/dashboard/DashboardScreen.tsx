@@ -19,14 +19,23 @@ import Animated, {
   FadeInDown,
   FadeInRight,
   FadeOutUp,
-  useAnimatedProps,
   useSharedValue,
   withTiming,
+  withRepeat,
+  useAnimatedStyle,
 } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import Svg, { Circle } from 'react-native-svg';
 
-import { Card, EmptyState, ProgressBar, SectionHeader } from '../../components/common';
+import {
+  Card,
+  EmptyState,
+  ProgressBar,
+  SectionHeader,
+  InsightCard,
+  SkeletonTransactionList,
+} from '../../components/common';
+import { showToast } from '../../components/common/Toast';
+import { DonutChart as DonutChartNew } from '../../components/charts/DonutChart';
 import TransactionItem from '../../components/TransactionItem';
 import { useTheme, type ThemeColors } from '../../hooks/useTheme';
 import {
@@ -39,7 +48,7 @@ import { triggerBackgroundSync } from '../../services/syncService';
 import { TransactionService } from '../../services/transactionService';
 import { useAppStore } from '../../store/appStore';
 import { RADIUS, SPACING, TYPOGRAPHY, formatCompact, formatCurrency } from '../../utils/constants';
-import type { Budget } from '../../utils/types';
+import type { Budget, CategoryBreakdown, SpendingInsight } from '../../utils/types';
 
 const GREETINGS = [
   'Namaste 🇮🇳',
@@ -58,133 +67,6 @@ const GREETINGS = [
   'Let’s get started',
   'Ready to go?',
 ];
-
-// ─── AnimatedCircle ────────────────────────────────────────────────────────────
-const AnimatedCircle = Animated.createAnimatedComponent(Circle);
-
-// ─── Donut Chart Component ────────────────────────────────────────────────────
-interface DonutSlice {
-  label: string;
-  value: number;
-  color: string;
-}
-
-const DonutSliceAnimated: React.FC<{
-  cx: number;
-  cy: number;
-  r: number;
-  strokeWidth: number;
-  color: string;
-  dashArray: number;
-  circumference: number;
-  dashOffset: number;
-}> = ({ cx, cy, r, strokeWidth, color, dashArray, circumference, dashOffset }) => {
-  const progress = useSharedValue(0);
-
-  useEffect(() => {
-    progress.value = withTiming(1, {
-      duration: 1200,
-      easing: Easing.out(Easing.cubic),
-    });
-  }, [progress]);
-
-  const animatedProps = useAnimatedProps(() => ({
-    strokeDasharray: `${dashArray * progress.value} ${circumference - dashArray * progress.value}`,
-    strokeDashoffset: dashOffset,
-  }));
-
-  return (
-    <AnimatedCircle
-      cx={cx}
-      cy={cy}
-      r={r}
-      fill="none"
-      stroke={color}
-      strokeWidth={strokeWidth}
-      animatedProps={animatedProps}
-      strokeLinecap="round"
-    />
-  );
-};
-
-const DonutChart: React.FC<{
-  slices: DonutSlice[];
-  size?: number;
-  strokeWidth?: number;
-  centerLabel?: string;
-  centerSublabel?: string;
-  colors: { textPrimary: string; textMuted: string; bgElevated: string };
-  isBalanceHidden: boolean;
-}> = ({
-  slices,
-  size = 200,
-  strokeWidth = 22,
-  centerLabel,
-  centerSublabel,
-  colors,
-  isBalanceHidden,
-}) => {
-  const radius = (size - strokeWidth) / 2;
-  const circumference = 2 * Math.PI * radius;
-  const total = slices.reduce((sum, s) => sum + s.value, 0);
-  let cumulativeOffset = 0;
-
-  return (
-    <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
-      <Svg width={size} height={size} style={{ transform: [{ rotate: '-90deg' }] }}>
-        <Circle
-          cx={size / 2}
-          cy={size / 2}
-          r={radius}
-          fill="none"
-          stroke={colors.bgElevated}
-          strokeWidth={strokeWidth}
-        />
-        {slices.map((slice, index) => {
-          const pct = total > 0 ? slice.value / total : 0;
-          const dashArray = pct * circumference;
-          const dashOffset = -cumulativeOffset * circumference;
-          cumulativeOffset += pct;
-          return (
-            <DonutSliceAnimated
-              key={index}
-              cx={size / 2}
-              cy={size / 2}
-              r={radius}
-              strokeWidth={strokeWidth}
-              color={slice.color}
-              dashArray={dashArray}
-              circumference={circumference}
-              dashOffset={dashOffset}
-            />
-          );
-        })}
-      </Svg>
-      <View style={StyleSheet.absoluteFill as object}>
-        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-          {centerLabel && (
-            <Text style={{ fontSize: 24, fontWeight: '800', color: colors.textPrimary }}>
-              {isBalanceHidden ? '••••' : centerLabel}
-            </Text>
-          )}
-          {centerSublabel && (
-            <Text
-              style={{
-                fontSize: 10,
-                fontWeight: '700',
-                color: colors.textMuted,
-                textTransform: 'uppercase',
-                marginTop: 4,
-              }}
-            >
-              {centerSublabel}
-            </Text>
-          )}
-        </View>
-      </View>
-    </View>
-  );
-};
 
 // ─── Budget Alert Card ────────────────────────────────────────────────────────
 const BudgetAlertCard: React.FC<{
@@ -253,7 +135,7 @@ const BudgetAlertCard: React.FC<{
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 export default function DashboardScreen() {
   const router = useRouter();
-  const { colors, isDark } = useTheme();
+  const { colors } = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const dashboardStats = useAppStore((s) => s.dashboardStats);
   const setDashboardStats = useAppStore((s) => s.setDashboardStats);
@@ -269,9 +151,11 @@ export default function DashboardScreen() {
   const setCategories = useAppStore((s) => s.setCategories);
 
   const [refreshing, setRefreshing] = useState(false);
-  const [spendingSlices, setSpendingSlices] = useState<DonutSlice[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [categoryBreakdownData, setCategoryBreakdownData] = useState<CategoryBreakdown[]>([]);
   const [totalSpent, setTotalSpent] = useState(0);
   const [isBalanceHidden, setIsBalanceHidden] = useState(false);
+  const [insights, setInsights] = useState<SpendingInsight[]>([]);
 
   const [greetingIndex, setGreetingIndex] = useState(0);
   const [canScrollLeft, setCanScrollLeft] = useState(false);
@@ -286,6 +170,29 @@ export default function DashboardScreen() {
     }, 3000);
     return () => clearInterval(t);
   }, []);
+
+  const blobRotation1 = useSharedValue(0);
+  const blobRotation2 = useSharedValue(0);
+
+  useEffect(() => {
+    blobRotation1.value = withRepeat(
+      withTiming(360, { duration: 15000, easing: Easing.linear }),
+      -1,
+      false,
+    );
+    blobRotation2.value = withRepeat(
+      withTiming(-360, { duration: 20000, easing: Easing.linear }),
+      -1,
+      false,
+    );
+  }, [blobRotation1, blobRotation2]);
+
+  const animatedBlobStyle = useAnimatedStyle(() => {
+    return { transform: [{ rotate: `${blobRotation1.value}deg` }, { scale: 1.1 }] };
+  });
+  const animatedBlobStyle2 = useAnimatedStyle(() => {
+    return { transform: [{ rotate: `${blobRotation2.value}deg` }, { scale: 1.2 }] };
+  });
 
   const loadData = useCallback(async () => {
     const now = new Date();
@@ -330,15 +237,85 @@ export default function DashboardScreen() {
       dateTo,
       'expense',
     );
-    const slices: DonutSlice[] = categoryBreakdown.slice(0, 4).map((entry, i) => ({
-      label: entry.categoryName ?? 'Other',
-      value: entry.total,
-      color: CHART_COLORS[i % CHART_COLORS.length],
-    }));
-    setSpendingSlices(slices);
     setTotalSpent(monthStats.expense);
+
+    // Build CategoryBreakdown data for the new DonutChart
+    const breakdownData: CategoryBreakdown[] = categoryBreakdown.slice(0, 6).map((entry, i) => ({
+      categoryId: entry.categoryId || `cat-${i}`,
+      categoryName: entry.categoryName ?? 'Other',
+      categoryIcon: 'ellipse',
+      categoryColor: CHART_COLORS[i % CHART_COLORS.length],
+      percentage: monthStats.expense > 0 ? (entry.total / monthStats.expense) * 100 : 0,
+      amount: entry.total,
+    }));
+    setCategoryBreakdownData(breakdownData);
+
+    // Generate spending insights
+    const newInsights: SpendingInsight[] = [];
+
+    // Insight: Top spending category
+    if (categoryBreakdown.length > 0) {
+      const top = categoryBreakdown[0];
+      const topPercent =
+        monthStats.expense > 0 ? Math.round((top.total / monthStats.expense) * 100) : 0;
+      if (topPercent > 40) {
+        newInsights.push({
+          id: 'top-category',
+          type: 'warning',
+          icon: 'pie-chart',
+          title: `${top.categoryName} dominates spending`,
+          description: `${top.categoryName} accounts for ${topPercent}% of your expenses this month.`,
+          color: colors.warning,
+        });
+      }
+    }
+
+    // Insight: Savings rate
+    const sRate =
+      monthStats.income > 0
+        ? ((monthStats.income - monthStats.expense) / monthStats.income) * 100
+        : 0;
+    if (sRate > 30) {
+      newInsights.push({
+        id: 'good-savings',
+        type: 'achievement',
+        icon: 'trophy',
+        title: 'Great savings rate!',
+        description: `You're saving ${sRate.toFixed(0)}% of your income. Keep it up!`,
+        color: colors.income,
+      });
+    } else if (sRate < 10 && monthStats.income > 0) {
+      newInsights.push({
+        id: 'low-savings',
+        type: 'tip',
+        icon: 'bulb',
+        title: 'Savings opportunity',
+        description: `You can save ${formatCurrency(Math.max(0, monthStats.income * 0.2 - (monthStats.income - monthStats.expense)))} more by cutting discretionary spending.`,
+        color: colors.primary,
+      });
+    }
+
+    // Insight: Budget alerts count
+    const overBudgets = bdgts.filter((b) => b.limitAmount > 0 && b.spent / b.limitAmount >= 0.9);
+    if (overBudgets.length > 0) {
+      newInsights.push({
+        id: 'budget-alert',
+        type: 'warning',
+        icon: 'alert-circle',
+        title: `${overBudgets.length} budget${overBudgets.length > 1 ? 's' : ''} near limit`,
+        description: 'Review your budgets to avoid overspending this month.',
+        color: colors.expense,
+      });
+    }
+
+    setInsights(newInsights.slice(0, 3));
+    setIsLoading(false);
   }, [
     CHART_COLORS,
+    colors.expense,
+    colors.income,
+    colors.primary,
+    colors.warning,
     setAccounts,
     setCategories,
     setBudgets,
@@ -356,6 +333,7 @@ export default function DashboardScreen() {
     await triggerBackgroundSync('pull-to-refresh');
     await loadData();
     setRefreshing(false);
+    showToast.success('Dashboard refreshed');
   };
 
   const toggleHideBalance = () => {
@@ -451,14 +429,24 @@ export default function DashboardScreen() {
             {syncInProgress && (
               <ActivityIndicator size="small" color={colors.primary} style={{ marginRight: 8 }} />
             )}
-            <TouchableOpacity onPress={toggleHideBalance} style={styles.iconBtn}>
+            <TouchableOpacity
+              onPress={toggleHideBalance}
+              style={styles.iconBtn}
+              accessibilityLabel={isBalanceHidden ? 'Show balance' : 'Hide balance'}
+              accessibilityRole="button"
+            >
               <Ionicons
                 name={isBalanceHidden ? 'eye-off' : 'eye'}
                 size={22}
                 color={colors.textSecondary}
               />
             </TouchableOpacity>
-            <TouchableOpacity onPress={() => router.push('/notifications')} style={styles.iconBtn}>
+            <TouchableOpacity
+              onPress={() => router.push('/notifications')}
+              style={styles.iconBtn}
+              accessibilityLabel="Notifications"
+              accessibilityRole="button"
+            >
               <Ionicons name="notifications" size={22} color={colors.textSecondary} />
               {unreadNotificationsCount > 0 && (
                 <View
@@ -490,22 +478,24 @@ export default function DashboardScreen() {
         <Animated.View entering={FadeInDown.duration(500).delay(100)}>
           <TouchableOpacity activeOpacity={0.9} onPress={() => router.push('/accounts' as Href)}>
             <LinearGradient
-              colors={isDark ? ['#6D28D9', '#4C1D95'] : ['#8B5CF6', '#6D28D9']}
+              colors={[colors.primary, colors.primaryDark]}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
               style={styles.heroCard}
             >
               {/* Complex Glassy Blobs */}
-              <View
+              <Animated.View
                 style={[
                   styles.heroBlob,
                   { right: -40, top: -40, width: 160, height: 160, borderRadius: 80 },
+                  animatedBlobStyle,
                 ]}
               />
-              <View
+              <Animated.View
                 style={[
                   styles.heroBlob,
                   { left: -30, bottom: -40, width: 120, height: 120, borderRadius: 60 },
+                  animatedBlobStyle2,
                 ]}
               />
 
@@ -541,10 +531,23 @@ export default function DashboardScreen() {
           </TouchableOpacity>
         </Animated.View>
 
+        {/* Actionable Insights */}
+        {insights.length > 0 && (
+          <Animated.View
+            entering={FadeInDown.duration(500).delay(150)}
+            style={{ marginTop: SPACING.md }}
+          >
+            <Text style={styles.sectionTitle}>Insights</Text>
+            {insights.map((insight) => (
+              <InsightCard key={insight.id} insight={insight} />
+            ))}
+          </Animated.View>
+        )}
+
         {/* Quick Actions (Horizontal Scroll) */}
         <Animated.View
           entering={FadeInRight.duration(500).delay(200)}
-          style={{ marginVertical: SPACING.md }}
+          style={{ marginVertical: SPACING.sm }}
         >
           <Text style={[styles.sectionTitle, { marginLeft: SPACING.xs }]}>Quick Actions</Text>
           <View>
@@ -559,7 +562,7 @@ export default function DashboardScreen() {
                 gap: SPACING.md,
               }}
             >
-              {QUICKS.map((q, idx) => (
+              {QUICKS.map((q) => (
                 <TouchableOpacity
                   key={q.id}
                   style={[styles.quickTile, { backgroundColor: colors.bgCard }]}
@@ -568,6 +571,8 @@ export default function DashboardScreen() {
                     router.push(q.path as Href);
                   }}
                   activeOpacity={0.7}
+                  accessibilityLabel={`Open ${q.title}`}
+                  accessibilityRole="button"
                 >
                   <View style={[styles.quickTileIconWrap, { backgroundColor: q.color + '15' }]}>
                     <Ionicons name={q.icon} size={28} color={q.color} />
@@ -658,36 +663,26 @@ export default function DashboardScreen() {
             </TouchableOpacity>
           </View>
           <Card style={styles.donutCard}>
-            <DonutChart
-              slices={
-                spendingSlices.length > 0
-                  ? spendingSlices
-                  : [{ label: 'No data', value: 1, color: colors.bgElevated }]
-              }
-              centerLabel={formatCompact(totalSpent)}
-              centerSublabel="Total Spent"
-              colors={colors}
-              isBalanceHidden={isBalanceHidden}
-            />
-            <View style={styles.legendGrid}>
-              {spendingSlices.map((slice, idx) => (
-                <View key={idx} style={styles.legendItem}>
-                  <View
-                    style={[
-                      styles.legendDot,
+            <DonutChartNew
+              data={
+                categoryBreakdownData.length > 0
+                  ? categoryBreakdownData
+                  : [
                       {
-                        backgroundColor: slice.color,
-                        shadowColor: slice.color,
-                        shadowOffset: { width: 0, height: 2 },
-                        shadowOpacity: 0.5,
-                        shadowRadius: 3,
+                        categoryId: 'none',
+                        categoryName: 'No data',
+                        categoryIcon: 'ellipse',
+                        categoryColor: colors.bgElevated,
+                        percentage: 100,
+                        amount: 0,
                       },
-                    ]}
-                  />
-                  <Text style={styles.legendText}>{slice.label}</Text>
-                </View>
-              ))}
-            </View>
+                    ]
+              }
+              size={200}
+              strokeWidth={22}
+              centerLabel="Total Spent"
+              centerValue={isBalanceHidden ? '••••' : formatCompact(totalSpent)}
+            />
           </Card>
         </Animated.View>
 
@@ -698,7 +693,9 @@ export default function DashboardScreen() {
             action="See All"
             onAction={() => router.push('/transactions')}
           />
-          {recentTransactions.length === 0 ? (
+          {isLoading ? (
+            <SkeletonTransactionList count={3} />
+          ) : recentTransactions.length === 0 ? (
             <EmptyState
               icon="receipt"
               title="No transactions yet"
@@ -721,7 +718,7 @@ export default function DashboardScreen() {
           )}
         </Animated.View>
 
-        <View style={{ height: 120 }} />
+        <View style={{ height: 100 }} />
       </ScrollView>
     </SafeAreaView>
   );
@@ -731,16 +728,16 @@ export default function DashboardScreen() {
 const createStyles = (colors: ThemeColors) =>
   StyleSheet.create({
     container: { flex: 1, backgroundColor: colors.bg },
-    scroll: { paddingHorizontal: SPACING.lg, paddingTop: SPACING.md },
+    scroll: { paddingHorizontal: SPACING.md, paddingTop: SPACING.sm },
 
     // Header
     header: {
       flexDirection: 'row',
       justifyContent: 'space-between',
       alignItems: 'center',
-      marginBottom: SPACING.xl,
+      marginBottom: SPACING.md,
     },
-    headerLeft: { flexDirection: 'row', alignItems: 'center', gap: 14 },
+    headerLeft: { flexDirection: 'row', alignItems: 'center', gap: 12 },
     avatarWrap: {
       width: 44,
       height: 44,
@@ -754,6 +751,8 @@ const createStyles = (colors: ThemeColors) =>
     headerActions: { flexDirection: 'row', alignItems: 'center', gap: 10 },
     iconBtn: {
       padding: 8,
+      minWidth: 44,
+      minHeight: 44,
       backgroundColor: colors.bgElevated,
       borderRadius: RADIUS.full,
       alignItems: 'center',
@@ -762,7 +761,7 @@ const createStyles = (colors: ThemeColors) =>
 
     // Hero
     heroCard: {
-      padding: SPACING.xl,
+      padding: SPACING.lg,
       borderRadius: RADIUS.xl,
       overflow: 'hidden',
       elevation: 12,
@@ -771,19 +770,19 @@ const createStyles = (colors: ThemeColors) =>
       shadowOpacity: 0.25,
       shadowRadius: 16,
     },
-    heroBlob: { position: 'absolute', backgroundColor: 'rgba(255,255,255,0.07)' },
-    heroLabel: { ...TYPOGRAPHY.label, color: 'rgba(255,255,255,0.7)', letterSpacing: 1 },
+    heroBlob: { position: 'absolute', backgroundColor: colors.heroOverlay },
+    heroLabel: { ...TYPOGRAPHY.label, color: colors.heroTextMuted, letterSpacing: 1 },
     heroAmount: {
-      fontSize: 42,
+      fontSize: 36,
       fontWeight: '900',
-      color: '#fff',
+      color: colors.heroText,
       letterSpacing: -1.5,
-      marginVertical: SPACING.md,
+      marginVertical: SPACING.sm,
     },
     heroStatsContainer: {
       flexDirection: 'row',
       alignItems: 'center',
-      backgroundColor: 'rgba(0,0,0,0.2)',
+      backgroundColor: colors.overlayLight,
       borderRadius: RADIUS.lg,
       padding: SPACING.md,
       backdropFilter: 'blur(10px)',
@@ -802,7 +801,7 @@ const createStyles = (colors: ThemeColors) =>
       color: 'rgba(255,255,255,0.6)',
       textTransform: 'uppercase',
     },
-    heroStatValue: { fontSize: 16, fontWeight: '800', color: '#fff', marginTop: 2 },
+    heroStatValue: { fontSize: 16, fontWeight: '800', color: colors.heroText, marginTop: 2 },
     heroStatDivider: {
       width: 1,
       height: 40,
@@ -812,13 +811,13 @@ const createStyles = (colors: ThemeColors) =>
 
     // Quick Actions
     quickTile: {
-      width: 90,
-      height: 105,
-      borderRadius: RADIUS.xl,
-      padding: SPACING.md,
+      width: 80,
+      height: 95,
+      borderRadius: RADIUS.lg,
+      padding: SPACING.sm,
       alignItems: 'center',
       justifyContent: 'center',
-      shadowColor: '#000',
+      shadowColor: colors.shadow,
       shadowOffset: { width: 0, height: 2 },
       shadowOpacity: 0.05,
       shadowRadius: 6,
@@ -827,12 +826,12 @@ const createStyles = (colors: ThemeColors) =>
       borderColor: colors.borderLight,
     },
     quickTileIconWrap: {
-      width: 46,
-      height: 46,
-      borderRadius: 23,
+      width: 42,
+      height: 42,
+      borderRadius: 21,
       alignItems: 'center',
       justifyContent: 'center',
-      marginBottom: 10,
+      marginBottom: 8,
     },
     quickTileText: {
       ...TYPOGRAPHY.caption,
@@ -850,7 +849,7 @@ const createStyles = (colors: ThemeColors) =>
       alignItems: 'center',
       justifyContent: 'center',
       opacity: 0.8,
-      shadowColor: '#000',
+      shadowColor: colors.shadow,
       shadowOpacity: 0.1,
       shadowRadius: 4,
       elevation: 2,
@@ -873,9 +872,9 @@ const createStyles = (colors: ThemeColors) =>
 
     // Savings
     savingsCard: {
-      padding: SPACING.xl,
-      marginBottom: SPACING.xl,
-      shadowColor: '#000',
+      padding: SPACING.lg,
+      marginBottom: SPACING.md,
+      shadowColor: colors.shadow,
       shadowOpacity: 0.05,
       shadowRadius: 10,
       elevation: 4,
@@ -884,14 +883,13 @@ const createStyles = (colors: ThemeColors) =>
     savingsAmount: { ...TYPOGRAPHY.h2, color: colors.textPrimary, fontWeight: '800' },
     savingsBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: RADIUS.full },
     savingsRate: { fontWeight: '800', fontSize: 14 },
-    savingsSub: { ...TYPOGRAPHY.caption, color: colors.textMuted, marginTop: 10 },
+    savingsSub: { ...TYPOGRAPHY.caption, color: colors.textMuted, marginTop: 8 },
 
     // Donut chart card
     donutCard: {
-      alignItems: 'center',
-      paddingVertical: SPACING.xl,
-      paddingHorizontal: SPACING.lg,
-      marginBottom: SPACING.xl,
+      paddingVertical: SPACING.lg,
+      paddingHorizontal: SPACING.md,
+      marginBottom: SPACING.md,
       shadowOpacity: 0.05,
       shadowRadius: 10,
       elevation: 4,
@@ -899,8 +897,8 @@ const createStyles = (colors: ThemeColors) =>
     legendGrid: {
       flexDirection: 'row',
       flexWrap: 'wrap',
-      marginTop: SPACING.xl,
-      gap: SPACING.lg,
+      marginTop: SPACING.lg,
+      gap: SPACING.md,
       justifyContent: 'center',
     },
     legendItem: { flexDirection: 'row', alignItems: 'center', gap: 8, minWidth: '40%' },

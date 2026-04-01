@@ -1,10 +1,28 @@
+import { type BottomTabBarButtonProps } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
+import * as Haptics from 'expo-haptics';
 import { Tabs, useRouter } from 'expo-router';
-import React from 'react';
-import { Pressable, StyleSheet } from 'react-native';
-import Animated, { useAnimatedStyle, useSharedValue, withSpring } from 'react-native-reanimated';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import {
+  Platform,
+  Pressable,
+  StyleSheet,
+  Text,
+  ToastAndroid,
+  View,
+  type ViewStyle,
+} from 'react-native';
+import Animated, {
+  FadeInDown,
+  FadeOutDown,
+  useAnimatedStyle,
+  useSharedValue,
+  withSpring,
+} from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useTheme } from '../../src/hooks/useTheme';
+import { SpeedDialFAB } from '../../src/components/common';
+import { useTheme, type ThemeColors } from '../../src/hooks/useTheme';
+import type { FABAction } from '../../src/utils/types';
 
 const SPRING_CONFIG = { damping: 12, stiffness: 180 };
 
@@ -27,8 +45,7 @@ const TabIcon: React.FC<{ name: string; color: string; focused: boolean }> = ({
   );
 };
 
-const CenterFAB: React.FC = () => {
-  const router = useRouter();
+const CenterFAB: React.FC<{ onPress: () => void }> = ({ onPress }) => {
   const { colors } = useTheme();
   const scale = useSharedValue(1);
 
@@ -44,12 +61,21 @@ const CenterFAB: React.FC = () => {
       onPressOut={() => {
         scale.value = withSpring(1, { damping: 10, stiffness: 300 });
       }}
-      onPress={() => router.push('/transactions/add')}
+      onPress={() => {
+        void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+        onPress();
+      }}
+      accessibilityLabel="Open quick actions"
+      accessibilityRole="button"
     >
       <Animated.View
-        style={[fabStyles.container, { backgroundColor: colors.primary }, animatedStyle]}
+        style={[
+          fabStyles.container,
+          { backgroundColor: colors.primary, shadowColor: colors.primary },
+          animatedStyle,
+        ]}
       >
-        <Ionicons name="add" size={28} color="#fff" />
+        <Ionicons name="add" size={28} color={colors.heroText} />
       </Animated.View>
     </Pressable>
   );
@@ -58,96 +84,198 @@ const CenterFAB: React.FC = () => {
 export default function TabsLayout() {
   const { colors } = useTheme();
   const { bottom } = useSafeAreaInsets();
+  const router = useRouter();
   const styles = React.useMemo(() => createStyles(colors, bottom), [colors, bottom]);
 
+  const [toastMsg, setToastMsg] = useState<string | null>(null);
+  const [fabOpen, setFabOpen] = useState(false);
+
+  const fabActions: FABAction[] = useMemo(
+    () => [
+      {
+        id: 'add-expense',
+        label: 'Add Expense',
+        icon: 'arrow-down-circle',
+        color: colors.expense,
+        onPress: () => router.push('/transactions/add'),
+      },
+      {
+        id: 'split-expense',
+        label: 'Split Expense',
+        icon: 'people',
+        color: colors.primary,
+        onPress: () => router.push('/splits'),
+      },
+      {
+        id: 'add-note',
+        label: 'Add Note',
+        icon: 'document-text',
+        color: '#3B82F6',
+        onPress: () => router.push('/notes'),
+      },
+      {
+        id: 'add-budget',
+        label: 'Add Budget',
+        icon: 'business',
+        color: '#F59E0B',
+        onPress: () => router.push('/budgets'),
+      },
+    ],
+    [colors.expense, colors.primary, router],
+  );
+
+  const toggleFab = useCallback(() => {
+    setFabOpen((prev) => !prev);
+  }, []);
+
+  const showToast = (msg: string) => {
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy).catch(() => {});
+    if (Platform.OS === 'android') {
+      ToastAndroid.show(msg, ToastAndroid.SHORT);
+    } else {
+      setToastMsg(msg);
+    }
+  };
+
+  useEffect(() => {
+    if (toastMsg) {
+      const timer = setTimeout(() => setToastMsg(null), 2000);
+      return () => clearTimeout(timer);
+    }
+  }, [toastMsg]);
+
+  // A custom wrapper for the bottom tabs to intercept onLongPress
+  const CustomTabBarButton = (props: BottomTabBarButtonProps, name: string) => {
+    const { onLongPress, style, children, ref: _ref, ...rest } = props;
+    return (
+      <Pressable
+        {...rest}
+        onLongPress={(e) => {
+          showToast(name);
+          onLongPress?.(e);
+        }}
+        style={[style as ViewStyle, { flex: 1, alignItems: 'center', justifyContent: 'center' }]}
+        android_ripple={{ color: colors.primary + '20', borderless: true, radius: 24 }}
+      >
+        {children as React.ReactNode}
+      </Pressable>
+    );
+  };
+
   return (
-    <Tabs
-      screenOptions={{
-        headerShown: false,
-        tabBarStyle: styles.tabBar,
-        tabBarActiveTintColor: colors.primary,
-        tabBarInactiveTintColor: colors.textMuted,
-        tabBarLabelStyle: { fontSize: 10, fontWeight: '600', marginBottom: 2 },
-        tabBarItemStyle: { paddingTop: 4 },
-      }}
-    >
-      <Tabs.Screen
-        name="index"
-        options={{
-          title: 'Dashboard',
-          tabBarIcon: ({ color, focused }) => (
-            <TabIcon name={focused ? 'grid' : 'grid-outline'} color={color} focused={focused} />
-          ),
+    <View style={{ flex: 1 }}>
+      <Tabs
+        screenOptions={{
+          headerShown: false,
+          tabBarStyle: styles.tabBar,
+          tabBarActiveTintColor: colors.primary,
+          tabBarInactiveTintColor: colors.textMuted,
+          tabBarLabelStyle: { fontSize: 10, fontWeight: '600', marginBottom: 2 },
+          tabBarItemStyle: { paddingTop: 4 },
         }}
-      />
-      <Tabs.Screen
-        name="transactions"
-        options={{
-          title: 'History',
-          tabBarIcon: ({ color, focused }) => (
-            <TabIcon
-              name={focused ? 'receipt' : 'receipt-outline'}
-              color={color}
-              focused={focused}
-            />
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="add-placeholder"
-        options={{
-          title: '',
-          tabBarButton: () => <CenterFAB />,
-        }}
-        listeners={{
-          tabPress: (e) => {
-            e.preventDefault();
-          },
-        }}
-      />
-      <Tabs.Screen
-        name="budgets"
-        options={{
-          title: 'Budgets',
-          tabBarIcon: ({ color, focused }) => (
-            <TabIcon
-              name={focused ? 'business' : 'business-outline'}
-              color={color}
-              focused={focused}
-            />
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="profile"
-        options={{
-          title: 'Profile',
-          tabBarIcon: ({ color, focused }) => (
-            <TabIcon name={focused ? 'person' : 'person-outline'} color={color} focused={focused} />
-          ),
-        }}
-      />
-      {/* Hidden tabs accessible via navigation but not shown in tab bar */}
-      <Tabs.Screen
-        name="goals"
-        options={{
-          href: null,
-        }}
-      />
-      <Tabs.Screen
-        name="reports"
-        options={{
-          href: null,
-        }}
-      />
-    </Tabs>
+      >
+        <Tabs.Screen
+          name="index"
+          options={{
+            title: 'Dashboard',
+            tabBarIcon: ({ color, focused }) => (
+              <TabIcon name={focused ? 'grid' : 'grid-outline'} color={color} focused={focused} />
+            ),
+            tabBarButton: (props) => CustomTabBarButton(props, 'Dashboard'),
+          }}
+        />
+        <Tabs.Screen
+          name="transactions"
+          options={{
+            title: 'History',
+            tabBarIcon: ({ color, focused }) => (
+              <TabIcon
+                name={focused ? 'receipt' : 'receipt-outline'}
+                color={color}
+                focused={focused}
+              />
+            ),
+            tabBarButton: (props) => CustomTabBarButton(props, 'History'),
+          }}
+        />
+        <Tabs.Screen
+          name="add-placeholder"
+          options={{
+            title: '',
+            tabBarButton: () => <CenterFAB onPress={toggleFab} />,
+          }}
+          listeners={{
+            tabPress: (e) => {
+              e.preventDefault();
+            },
+          }}
+        />
+        <Tabs.Screen
+          name="budgets"
+          options={{
+            title: 'Budgets',
+            tabBarIcon: ({ color, focused }) => (
+              <TabIcon
+                name={focused ? 'business' : 'business-outline'}
+                color={color}
+                focused={focused}
+              />
+            ),
+            tabBarButton: (props) => CustomTabBarButton(props, 'Budgets'),
+          }}
+        />
+        <Tabs.Screen
+          name="profile"
+          options={{
+            title: 'Profile',
+            tabBarIcon: ({ color, focused }) => (
+              <TabIcon
+                name={focused ? 'person' : 'person-outline'}
+                color={color}
+                focused={focused}
+              />
+            ),
+            tabBarButton: (props) => CustomTabBarButton(props, 'Profile'),
+          }}
+        />
+        {/* Hidden tabs accessible via navigation but not shown in tab bar */}
+        <Tabs.Screen
+          name="goals"
+          options={{
+            href: null,
+          }}
+        />
+        <Tabs.Screen
+          name="reports"
+          options={{
+            href: null,
+          }}
+        />
+      </Tabs>
+
+      {/* Unified Speed Dial FAB */}
+      <SpeedDialFAB actions={fabActions} isOpen={fabOpen} onToggle={toggleFab} hideMainButton />
+
+      {/* iOS Custom Toast */}
+      {Platform.OS === 'ios' && toastMsg && (
+        <View style={styles.toastContainer} pointerEvents="none">
+          <Animated.View
+            entering={FadeInDown.springify()}
+            exiting={FadeOutDown}
+            style={styles.toast}
+          >
+            <Text style={styles.toastText}>{toastMsg}</Text>
+          </Animated.View>
+        </View>
+      )}
+    </View>
   );
 }
 
 const iconStyles = StyleSheet.create({
   container: {
-    width: 36,
-    height: 28,
+    width: 44, // increased touch target internally
+    height: 36,
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: 10,
@@ -170,7 +298,7 @@ const fabStyles = StyleSheet.create({
   },
 });
 
-const createStyles = (colors: { bgCard: string; border: string }, bottomInset: number) =>
+const createStyles = (colors: ThemeColors, bottomInset: number) =>
   StyleSheet.create({
     tabBar: {
       backgroundColor: colors.bgCard,
@@ -178,5 +306,28 @@ const createStyles = (colors: { bgCard: string; border: string }, bottomInset: n
       borderTopWidth: 1,
       height: 60 + bottomInset,
       paddingBottom: bottomInset > 0 ? bottomInset : 8,
+    },
+    toastContainer: {
+      position: 'absolute',
+      bottom: 80 + bottomInset,
+      left: 0,
+      right: 0,
+      alignItems: 'center',
+      zIndex: 1000,
+    },
+    toast: {
+      backgroundColor: colors.bgElevated,
+      paddingHorizontal: 16,
+      paddingVertical: 8,
+      borderRadius: 20,
+      shadowColor: colors.shadow,
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.2,
+      shadowRadius: 4,
+    },
+    toastText: {
+      color: colors.textPrimary,
+      fontSize: 12,
+      fontWeight: '600',
     },
   });

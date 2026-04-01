@@ -6,6 +6,14 @@ const LOCAL_ONLY_COLUMNS = new Set([
   'server_id',
   'version_hash',
   'sync_status', // migration v1 duplicate — base schema uses camelCase syncStatus
+  // JOIN / computed columns from SQLite queries — not real columns in Supabase
+  'accountName',
+  'categoryName',
+  'categoryIcon',
+  'categoryColor',
+  'categoryType',
+  'toAccountName',
+  'paymentMethodName',
 ]);
 
 const baseLocalToRemote: Record<string, string> = {
@@ -129,7 +137,7 @@ const toBooleanIfNeeded = (key: string, value: unknown) => {
 const REMOTE_NOT_NULL_DEFAULTS: Partial<Record<SyncableTable, Record<string, unknown>>> = {
   accounts: { is_default: false, color: '#7C3AED', icon: 'wallet' },
   categories: { is_custom: false },
-  transactions: { tags: '[]', is_recurring: false },
+  transactions: { tags: '[]', is_recurring: false, amount: 0, type: 'expense' },
   budgets: { alert_at: 80 },
   goals: { is_completed: false, icon: 'flag', color: '#7C3AED' },
   liabilities: { interest_rate: 0 },

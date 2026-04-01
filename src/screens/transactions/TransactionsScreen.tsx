@@ -1,13 +1,16 @@
 import { Ionicons } from '@expo/vector-icons';
 import { FlashList } from '@shopify/flash-list';
-import { format } from 'date-fns';
+import type BottomSheetLib from '@gorhom/bottom-sheet';
+import { endOfMonth, format, startOfMonth, subDays, subMonths } from 'date-fns';
 import { useRouter, type Href } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { AmountText, Button, CustomModal, SearchBar } from '../../components/common';
-import TransactionItem from '../../components/TransactionItem';
+import { showToast } from '../../components/common/Toast';
+import { SwipeableTransactionItem } from '../../components/common/SwipeableTransactionItem';
+import { FilterBottomSheet, type AppliedFilters } from '../../components/common/FilterBottomSheet';
 import { useTheme, type ThemeColors } from '../../hooks/useTheme';
 import { AccountService, CategoryService } from '../../services/dataServices';
 import { triggerBackgroundSync } from '../../services/syncService';
@@ -28,20 +31,12 @@ type ListItem =
 
 const PAGE_SIZE = 20;
 
-// ─── Filter Bottom Sheet ──────────────────────────────────────────────────────
-const FilterSheet: React.FC<{
-  visible: boolean;
-  title: string;
-  onClose: () => void;
-  colors: ReturnType<typeof useTheme>['colors'];
-  children: React.ReactNode;
-}> = ({ visible, title, onClose, children }) => (
-  <CustomModal visible={visible} title={title} onClose={onClose}>
-    <ScrollView showsVerticalScrollIndicator={false} style={{ paddingBottom: 32 }}>
-      {children}
-    </ScrollView>
-  </CustomModal>
-);
+const QUICK_DATE_LABELS: Record<string, string> = {
+  '7d': 'Last 7 Days',
+  thisMonth: 'This Month',
+  lastMonth: 'Last Month',
+  thisYear: 'This Year',
+};
 
 // ─── Transaction Preview Sheet ────────────────────────────────────────────────
 const TransactionPreviewSheet: React.FC<{
@@ -186,6 +181,7 @@ const TransactionPreviewSheet: React.FC<{
               onPress={() => {
                 void (async () => {
                   await TransactionService.delete(transaction.id);
+                  showToast.success('Transaction deleted');
                   setConfirmDelete(false);
                   onDelete(transaction.id);
                 })();
@@ -255,7 +251,33 @@ export default function TransactionsScreen() {
 
   const [categories, setCategories] = useState<Category[]>([]);
   const [accounts, setAccounts] = useState<Account[]>([]);
-  const [activeFilter, setActiveFilter] = useState<'type' | 'category' | 'account' | null>(null);
+  const filterSheetRef = useRef<BottomSheetLib>(null);
+
+  // Quick date filter
+  type QuickDateFilter = 'all' | '7d' | 'thisMonth' | 'lastMonth' | 'thisYear';
+  const [quickDate, setQuickDate] = useState<QuickDateFilter>('all');
+
+  const getDateRange = useCallback((filter: QuickDateFilter) => {
+    const today = new Date();
+    const fmt = (d: Date) => format(d, 'yyyy-MM-dd');
+    switch (filter) {
+      case '7d':
+        return { dateFrom: fmt(subDays(today, 7)), dateTo: fmt(today) };
+      case 'thisMonth':
+        return { dateFrom: fmt(startOfMonth(today)), dateTo: fmt(endOfMonth(today)) };
+      case 'lastMonth': {
+        const prev = subMonths(today, 1);
+        return { dateFrom: fmt(startOfMonth(prev)), dateTo: fmt(endOfMonth(prev)) };
+      }
+      case 'thisYear': {
+        const jan1 = new Date(today.getFullYear(), 0, 1);
+        const dec31 = new Date(today.getFullYear(), 11, 31);
+        return { dateFrom: fmt(jan1), dateTo: fmt(dec31) };
+      }
+      default:
+        return { dateFrom: undefined, dateTo: undefined };
+    }
+  }, []);
 
   // Debounce search input
   const handleSearchChange = useCallback((text: string) => {
@@ -272,15 +294,17 @@ export default function TransactionsScreen() {
     };
   }, []);
 
-  const buildFilters = useCallback(
-    () => ({
+  const buildFilters = useCallback(() => {
+    const range = getDateRange(quickDate);
+    return {
       type: filterType,
       categoryId: filterCat,
       accountId: filterAcc,
       search: debouncedSearch.trim() || undefined,
-    }),
-    [filterType, filterCat, filterAcc, debouncedSearch],
-  );
+      dateFrom: range.dateFrom,
+      dateTo: range.dateTo,
+    };
+  }, [filterType, filterCat, filterAcc, debouncedSearch, quickDate, getDateRange]);
 
   const loadData = useCallback(
     async (offset = 0, replace = true) => {
@@ -352,13 +376,27 @@ export default function TransactionsScreen() {
     return items;
   }, [transactions]);
 
-  const activeFilterCount = [filterType, filterCat, filterAcc].filter(Boolean).length;
+  const activeFilterCount = [
+    filterType,
+    filterCat,
+    filterAcc,
+    quickDate !== 'all' ? quickDate : undefined,
+  ].filter(Boolean).length;
 
   const clearAllFilters = () => {
     setFilterType(undefined);
     setFilterCat(undefined);
     setFilterAcc(undefined);
+    setQuickDate('all');
   };
+
+  const handleApplyFilters = useCallback((filters: AppliedFilters) => {
+    setFilterType(filters.type ?? undefined);
+    setFilterCat(filters.categoryId ?? undefined);
+    setFilterAcc(filters.accountId ?? undefined);
+    setQuickDate((filters.quickDate as QuickDateFilter) ?? 'all');
+    filterSheetRef.current?.close();
+  }, []);
 
   const renderItem = useCallback(
     ({ item }: { item: ListItem }) => {
@@ -378,55 +416,28 @@ export default function TransactionsScreen() {
         );
       }
       return (
-        <View style={styles.txCardWrapper}>
-          <TransactionItem
-            item={item.data}
-            onPress={() => setPreviewTx(item.data)}
-            onLongPress={() => setPreviewTx(item.data)}
-          />
-        </View>
+        <SwipeableTransactionItem
+          transaction={item.data}
+          onPress={() => setPreviewTx(item.data)}
+          onEdit={() => {
+            router.push(`/transactions/${item.data.id}?edit=1` as Href);
+          }}
+          onDelete={() => {
+            void (async () => {
+              await TransactionService.delete(item.data.id);
+              showToast.success('Transaction deleted');
+              await loadData(0, true);
+            })();
+          }}
+        />
       );
     },
-    [styles, colors],
+    [styles, colors, loadData, router],
   );
 
-  const renderFilterOption = (
-    label: string,
-    isSelected: boolean,
-    onPress: () => void,
-    icon?: string,
-    iconColor?: string,
-    id?: string,
-  ) => (
-    <TouchableOpacity
-      key={id ?? label}
-      style={[styles.filterOption, isSelected && styles.filterOptionActive]}
-      onPress={onPress}
-      activeOpacity={0.7}
-    >
-      <View style={styles.filterOptionLeft}>
-        {icon && (
-          <View
-            style={[
-              styles.filterOptionIcon,
-              { backgroundColor: (iconColor ?? colors.primary) + '15' },
-            ]}
-          >
-            <Ionicons name={icon as never} size={18} color={iconColor ?? colors.primary} />
-          </View>
-        )}
-        <Text
-          style={[
-            styles.filterOptionText,
-            isSelected && { color: colors.primary, fontWeight: '700' },
-          ]}
-        >
-          {label}
-        </Text>
-      </View>
-      {isSelected && <Ionicons name="checkmark-circle" size={20} color={colors.primary} />}
-    </TouchableOpacity>
-  );
+  const openFilterSheet = useCallback(() => {
+    filterSheetRef.current?.snapToIndex(0);
+  }, []);
 
   const unreadNotificationsCount = useAppStore((s) => s.unreadNotificationsCount);
 
@@ -435,7 +446,12 @@ export default function TransactionsScreen() {
       {/* Header */}
       <Animated.View entering={FadeInDown.duration(400)} style={styles.header}>
         <Text style={styles.title}>Transactions</Text>
-        <TouchableOpacity style={styles.menuBtn} onPress={() => router.push('/notifications')}>
+        <TouchableOpacity
+          style={styles.menuBtn}
+          onPress={() => router.push('/notifications')}
+          accessibilityLabel="Notifications"
+          accessibilityRole="button"
+        >
           <Ionicons name="notifications-outline" size={22} color={colors.textSecondary} />
           {unreadNotificationsCount > 0 && (
             <View
@@ -471,222 +487,93 @@ export default function TransactionsScreen() {
         />
       </Animated.View>
 
-      {/* Filter Chips */}
-      <Animated.View entering={FadeInDown.duration(400).delay(150)}>
+      {/* Compact Filter Bar */}
+      <Animated.View entering={FadeInDown.duration(400).delay(150)} style={styles.filterBar}>
+        {/* Active filter tags (scrollable, shown only when filters active) */}
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.filterRow}
+          contentContainerStyle={styles.activeTagsRow}
+          style={{ flex: 1 }}
         >
-          {activeFilterCount > 0 && (
-            <TouchableOpacity style={styles.clearChip} onPress={clearAllFilters}>
-              <Ionicons name="close-circle" size={14} color={colors.expense} />
-              <Text style={[styles.filterChipText, { color: colors.expense }]}>Clear</Text>
-            </TouchableOpacity>
-          )}
-          <TouchableOpacity
-            style={[styles.filterChip, filterType && styles.filterChipActive]}
-            onPress={() => setActiveFilter('type')}
-          >
-            <Ionicons
-              name="swap-vertical"
-              size={13}
-              color={filterType ? colors.primary : colors.textMuted}
-            />
-            <Text style={[styles.filterChipText, filterType && { color: colors.primary }]}>
-              {filterType ? filterType?.charAt(0)?.toUpperCase() + filterType?.slice(1) : 'Type'}
-            </Text>
-            {filterType ? (
+          {filterType && (
+            <View style={styles.activeTag}>
+              <Ionicons name="swap-vertical" size={11} color={colors.primary} />
+              <Text style={styles.activeTagText}>
+                {filterType.charAt(0).toUpperCase() + filterType.slice(1)}
+              </Text>
               <TouchableOpacity
                 onPress={() => setFilterType(undefined)}
-                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
               >
-                <Ionicons name="close-circle" size={14} color={colors.primary} />
+                <Ionicons name="close" size={12} color={colors.primary} />
               </TouchableOpacity>
-            ) : (
-              <Ionicons name="chevron-down" size={12} color={colors.textMuted} />
-            )}
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.filterChip, filterCat && styles.filterChipActive]}
-            onPress={() => setActiveFilter('category')}
-          >
-            <Ionicons
-              name="pricetag"
-              size={13}
-              color={filterCat ? colors.primary : colors.textMuted}
-            />
-            <Text style={[styles.filterChipText, filterCat && { color: colors.primary }]}>
-              {filterCat
-                ? (categories.find((c) => c.id === filterCat)?.name ?? 'Category')
-                : 'Category'}
-            </Text>
-            {filterCat ? (
+            </View>
+          )}
+          {filterCat && (
+            <View style={styles.activeTag}>
+              <Ionicons name="pricetag" size={11} color={colors.primary} />
+              <Text style={styles.activeTagText}>
+                {categories.find((c) => c.id === filterCat)?.name ?? 'Category'}
+              </Text>
               <TouchableOpacity
                 onPress={() => setFilterCat(undefined)}
-                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
               >
-                <Ionicons name="close-circle" size={14} color={colors.primary} />
+                <Ionicons name="close" size={12} color={colors.primary} />
               </TouchableOpacity>
-            ) : (
-              <Ionicons name="chevron-down" size={12} color={colors.textMuted} />
-            )}
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.filterChip, filterAcc && styles.filterChipActive]}
-            onPress={() => setActiveFilter('account')}
-          >
-            <Ionicons
-              name="wallet"
-              size={13}
-              color={filterAcc ? colors.primary : colors.textMuted}
-            />
-            <Text style={[styles.filterChipText, filterAcc && { color: colors.primary }]}>
-              {filterAcc
-                ? (accounts.find((a) => a.id === filterAcc)?.name ?? 'Account')
-                : 'Account'}
-            </Text>
-            {filterAcc ? (
+            </View>
+          )}
+          {filterAcc && (
+            <View style={styles.activeTag}>
+              <Ionicons name="wallet" size={11} color={colors.primary} />
+              <Text style={styles.activeTagText}>
+                {accounts.find((a) => a.id === filterAcc)?.name ?? 'Account'}
+              </Text>
               <TouchableOpacity
                 onPress={() => setFilterAcc(undefined)}
-                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
               >
-                <Ionicons name="close-circle" size={14} color={colors.primary} />
+                <Ionicons name="close" size={12} color={colors.primary} />
               </TouchableOpacity>
-            ) : (
-              <Ionicons name="chevron-down" size={12} color={colors.textMuted} />
-            )}
-          </TouchableOpacity>
+            </View>
+          )}
+          {quickDate !== 'all' && (
+            <View style={styles.activeTag}>
+              <Ionicons name="calendar-outline" size={11} color={colors.primary} />
+              <Text style={styles.activeTagText}>{QUICK_DATE_LABELS[quickDate] ?? quickDate}</Text>
+              <TouchableOpacity
+                onPress={() => setQuickDate('all')}
+                hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+              >
+                <Ionicons name="close" size={12} color={colors.primary} />
+              </TouchableOpacity>
+            </View>
+          )}
         </ScrollView>
+
+        {/* Filter button — always visible */}
+        <TouchableOpacity
+          style={[styles.filterBtn, activeFilterCount > 0 && styles.filterBtnActive]}
+          onPress={openFilterSheet}
+          accessibilityLabel={`Open filters${activeFilterCount > 0 ? `, ${activeFilterCount} active` : ''}`}
+          accessibilityRole="button"
+        >
+          <Ionicons
+            name="options-outline"
+            size={15}
+            color={activeFilterCount > 0 ? colors.primary : colors.textSecondary}
+          />
+          <Text style={[styles.filterBtnText, activeFilterCount > 0 && { color: colors.primary }]}>
+            Filters
+          </Text>
+          {activeFilterCount > 0 && (
+            <View style={styles.filterBadge}>
+              <Text style={styles.filterBadgeText}>{activeFilterCount}</Text>
+            </View>
+          )}
+        </TouchableOpacity>
       </Animated.View>
-
-      {/* Type Filter Sheet */}
-      <FilterSheet
-        visible={activeFilter === 'type'}
-        title="Transaction Type"
-        onClose={() => setActiveFilter(null)}
-        colors={colors}
-      >
-        {renderFilterOption(
-          'All Types',
-          !filterType,
-          () => {
-            setFilterType(undefined);
-            setActiveFilter(null);
-          },
-          'list',
-          colors.textSecondary,
-        )}
-        {renderFilterOption(
-          'Expense',
-          filterType === 'expense',
-          () => {
-            setFilterType('expense');
-            setActiveFilter(null);
-          },
-          'arrow-up-circle',
-          colors.expense,
-        )}
-        {renderFilterOption(
-          'Income',
-          filterType === 'income',
-          () => {
-            setFilterType('income');
-            setActiveFilter(null);
-          },
-          'arrow-down-circle',
-          colors.income,
-        )}
-        {renderFilterOption(
-          'Transfer',
-          filterType === 'transfer',
-          () => {
-            setFilterType('transfer');
-            setActiveFilter(null);
-          },
-          'swap-horizontal-outline',
-          colors.transfer,
-        )}
-      </FilterSheet>
-
-      {/* Category Filter Sheet */}
-      <FilterSheet
-        visible={activeFilter === 'category'}
-        title="Category"
-        onClose={() => setActiveFilter(null)}
-        colors={colors}
-      >
-        {renderFilterOption(
-          'All Categories',
-          !filterCat,
-          () => {
-            setFilterCat(undefined);
-            setActiveFilter(null);
-          },
-          'grid',
-          colors.textSecondary,
-        )}
-        {categories.map((c) =>
-          renderFilterOption(
-            c.name,
-            filterCat === c.id,
-            () => {
-              setFilterCat(c.id);
-              setActiveFilter(null);
-            },
-            c.icon,
-            c.color,
-            c.id,
-          ),
-        )}
-      </FilterSheet>
-
-      {/* Account Filter Sheet */}
-      <FilterSheet
-        visible={activeFilter === 'account'}
-        title="Account"
-        onClose={() => setActiveFilter(null)}
-        colors={colors}
-      >
-        {renderFilterOption(
-          'All Accounts',
-          !filterAcc,
-          () => {
-            setFilterAcc(undefined);
-            setActiveFilter(null);
-          },
-          'wallet',
-          colors.textSecondary,
-        )}
-        {accounts.map((a) =>
-          renderFilterOption(
-            a.name,
-            filterAcc === a.id,
-            () => {
-              setFilterAcc(a.id);
-              setActiveFilter(null);
-            },
-            a.icon,
-            a.color,
-            a.id,
-          ),
-        )}
-      </FilterSheet>
-
-      {/* Transaction Preview Sheet */}
-      <TransactionPreviewSheet
-        transaction={previewTx}
-        visible={previewTx !== null}
-        onClose={() => setPreviewTx(null)}
-        onEdit={(id) => {
-          setPreviewTx(null);
-          router.push(`/transactions/${id}?edit=1` as Href);
-        }}
-        onDelete={() => setPreviewTx(null)}
-        colors={colors}
-      />
 
       {/* Transaction List */}
       <FlashList<ListItem>
@@ -749,6 +636,31 @@ export default function TransactionsScreen() {
           ) : null
         }
       />
+
+      {/* Filter Bottom Sheet */}
+      <FilterBottomSheet
+        ref={filterSheetRef}
+        categories={categories}
+        accounts={accounts}
+        filterType={filterType ?? null}
+        filterCat={filterCat ?? null}
+        filterAcc={filterAcc ?? null}
+        quickDate={quickDate}
+        onApply={handleApplyFilters}
+      />
+
+      {/* Transaction Preview Sheet */}
+      <TransactionPreviewSheet
+        transaction={previewTx}
+        visible={previewTx !== null}
+        onClose={() => setPreviewTx(null)}
+        onEdit={(id) => {
+          setPreviewTx(null);
+          router.push(`/transactions/${id}?edit=1` as Href);
+        }}
+        onDelete={() => setPreviewTx(null)}
+        colors={colors}
+      />
     </SafeAreaView>
   );
 }
@@ -765,77 +677,77 @@ const createStyles = (colors: ThemeColors) =>
       paddingVertical: SPACING.sm,
     },
     menuBtn: {
-      width: 40,
-      height: 40,
+      width: 44,
+      height: 44,
       alignItems: 'center',
       justifyContent: 'center',
-      borderRadius: 20,
+      borderRadius: 22,
     },
     title: { ...TYPOGRAPHY.h2, color: colors.textPrimary, fontWeight: '800' },
     searchWrap: { paddingHorizontal: SPACING.md, marginBottom: SPACING.sm },
-    filterRow: {
-      gap: SPACING.sm,
+    /* Compact filter bar */
+    filterBar: {
+      flexDirection: 'row',
+      alignItems: 'center',
       paddingHorizontal: SPACING.md,
       paddingBottom: SPACING.sm,
+      gap: SPACING.sm,
     },
-    filterChip: {
+    activeTagsRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: SPACING.xs,
+      paddingRight: SPACING.xs,
+    },
+    activeTag: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 4,
+      paddingHorizontal: 10,
+      paddingVertical: 5,
+      borderRadius: RADIUS.full,
+      backgroundColor: colors.primary + '15',
+      borderWidth: 1,
+      borderColor: colors.primary + '30',
+    },
+    activeTagText: {
+      fontSize: 11,
+      fontWeight: '700',
+      color: colors.primary,
+    },
+    filterBtn: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: 5,
-      paddingHorizontal: 14,
-      paddingVertical: 8,
-      borderRadius: RADIUS.xl,
+      paddingHorizontal: 12,
+      paddingVertical: 7,
+      borderRadius: RADIUS.full,
       backgroundColor: colors.bgCard,
       borderWidth: 1,
       borderColor: colors.border,
     },
-    filterChipActive: {
-      borderColor: colors.primary + '30',
+    filterBtnActive: {
+      borderColor: colors.primary + '40',
       backgroundColor: colors.primary + '10',
     },
-    filterChipText: {
-      ...TYPOGRAPHY.caption,
+    filterBtnText: {
+      fontSize: 12,
+      fontWeight: '700',
       color: colors.textSecondary,
-      fontWeight: '600',
     },
-    clearChip: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 4,
-      paddingHorizontal: 12,
-      paddingVertical: 8,
-      borderRadius: RADIUS.xl,
-      backgroundColor: colors.expense + '10',
-      borderWidth: 1,
-      borderColor: colors.expense + '20',
-    },
-    filterOption: {
-      flexDirection: 'row',
-      justifyContent: 'space-between',
-      alignItems: 'center',
-      paddingVertical: 14,
-      paddingHorizontal: 4,
-      borderBottomWidth: 1,
-      borderBottomColor: colors.border,
-    },
-    filterOptionActive: {
-      backgroundColor: colors.primary + '08',
-      marginHorizontal: -4,
-      paddingHorizontal: 8,
-      borderRadius: RADIUS.sm,
-    },
-    filterOptionLeft: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-    filterOptionIcon: {
-      width: 36,
-      height: 36,
-      borderRadius: 10,
+    filterBadge: {
+      minWidth: 16,
+      height: 16,
+      borderRadius: 8,
+      backgroundColor: colors.primary,
       alignItems: 'center',
       justifyContent: 'center',
+      paddingHorizontal: 4,
     },
-    filterOptionText: {
-      ...TYPOGRAPHY.body,
-      color: colors.textPrimary,
-      fontWeight: '500',
+    filterBadgeText: {
+      fontSize: 9,
+      fontWeight: '800',
+      color: colors.heroText,
     },
     monthHeader: {
       flexDirection: 'row',
@@ -853,14 +765,6 @@ const createStyles = (colors: ThemeColors) =>
       textTransform: 'uppercase',
     },
     monthTotal: { fontSize: 12, fontWeight: '700' },
-    txCardWrapper: {
-      backgroundColor: colors.bgCard,
-      borderRadius: RADIUS.lg,
-      borderWidth: 1,
-      borderColor: colors.border,
-      marginBottom: SPACING.sm,
-      overflow: 'hidden',
-    },
     emptyState: { alignItems: 'center', paddingVertical: 60, gap: SPACING.sm },
     emptyIcon: {
       width: 72,
@@ -890,7 +794,7 @@ const createStyles = (colors: ThemeColors) =>
       borderRadius: RADIUS.full,
       marginTop: SPACING.sm,
     },
-    emptyCtaText: { fontSize: 14, fontWeight: '700', color: '#fff' },
+    emptyCtaText: { fontSize: 14, fontWeight: '700', color: colors.heroText },
     loadingMore: { alignItems: 'center', paddingVertical: SPACING.md },
     loadingMoreText: { ...TYPOGRAPHY.caption, color: colors.textMuted },
   });

@@ -4,6 +4,7 @@ import { differenceInDays, format } from 'date-fns';
 import { useEffect, useMemo, useState } from 'react';
 import {
   Platform,
+  RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
@@ -13,11 +14,19 @@ import {
 } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Button, Card, CustomModal, EmptyState, ProgressBar } from '../../components/common';
+import {
+  Button,
+  Card,
+  CustomModal,
+  AnimatedEmptyState,
+  ProgressBar,
+} from '../../components/common';
+import { showToast } from '../../components/common/Toast';
 import { useTheme, type ThemeColors } from '../../hooks/useTheme';
 import { GoalService } from '../../services/dataService';
 import { useAppStore } from '../../store/appStore';
 import { RADIUS, SPACING, TYPOGRAPHY, formatCurrency } from '../../utils/constants';
+import { goalSchema, fundGoalSchema } from '../../utils/validation';
 import type { Goal } from '../../utils/types';
 
 const GOAL_COLORS = ['#7C3AED', '#06B6D4', '#22C55E', '#F97316', '#F43F5E', '#EAB308', '#EC4899'];
@@ -44,6 +53,7 @@ export default function GoalsScreen() {
   const [selectedGoal, setSelectedGoal] = useState<Goal | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Goal | null>(null);
   const [fundAmount, setFundAmount] = useState('');
+  const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => {
     void loadGoals();
@@ -67,9 +77,15 @@ export default function GoalsScreen() {
   };
 
   const handleFund = async () => {
-    if (!selectedGoal || !fundAmount || Number(fundAmount) <= 0) return;
+    if (!selectedGoal) return;
+    const result = fundGoalSchema.safeParse({ amount: Number(fundAmount) });
+    if (!result.success) {
+      showToast.error(result.error.issues[0]?.message ?? 'Invalid amount');
+      return;
+    }
 
     await GoalService.addFunds(selectedGoal.id, Number(fundAmount));
+    showToast.success('Funds added');
     setFundAmount('');
     setSelectedGoal(null);
     void loadGoals();
@@ -83,12 +99,34 @@ export default function GoalsScreen() {
     <SafeAreaView style={styles.container} edges={['top']}>
       <Animated.View entering={FadeInDown.duration(400)} style={styles.header}>
         <Text style={styles.title}>Savings Goals</Text>
-        <TouchableOpacity onPress={() => setShowAdd(true)} style={styles.addButton}>
+        <TouchableOpacity
+          onPress={() => setShowAdd(true)}
+          style={styles.addButton}
+          accessibilityLabel="Add goal"
+          accessibilityRole="button"
+        >
           <Ionicons name="add" size={24} color={colors.primary} />
         </TouchableOpacity>
       </Animated.View>
 
-      <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        contentContainerStyle={styles.scroll}
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={async () => {
+              setRefreshing(true);
+              try {
+                await loadGoals();
+              } finally {
+                setRefreshing(false);
+              }
+            }}
+            tintColor={colors.primary}
+          />
+        }
+      >
         {goals.length > 0 && (
           <Animated.View entering={FadeInDown.duration(400).delay(100)}>
             <Card style={styles.summaryCard}>
@@ -111,11 +149,11 @@ export default function GoalsScreen() {
 
         <Animated.View entering={FadeInDown.duration(400).delay(200)}>
           {goals.length === 0 ? (
-            <EmptyState
+            <AnimatedEmptyState
               icon="flag-outline"
               title="No goals set"
               subtitle="Set a savings goal to start tracking your progress."
-              action="Create Goal"
+              actionLabel="Create Goal"
               onAction={() => setShowAdd(true)}
             />
           ) : (
@@ -156,6 +194,7 @@ export default function GoalsScreen() {
             onPress={() => {
               if (deleteTarget) {
                 void GoalService.delete(deleteTarget.id).then(() => {
+                  showToast.success('Goal deleted');
                   setDeleteTarget(null);
                   void loadGoals();
                 });
@@ -274,82 +313,97 @@ const GoalCard = ({
     : 'No deadline';
 
   return (
-    <Card style={{ ...styles.card, ...(isCompleted ? { opacity: 0.7 } : {}) }}>
-      <View style={styles.header}>
-        <View style={styles.iconInfo}>
-          <View
-            style={[styles.iconContainer, { backgroundColor: `${goal.color || colors.primary}15` }]}
-          >
-            <Ionicons
-              name={(goal.icon || 'flag') as never}
-              size={20}
-              color={goal.color || colors.primary}
-            />
+    <View
+      accessible
+      accessibilityLabel={`Goal: ${goal.name}, ${Math.round(progress * 100)}% complete, ${formatCurrency(goal.currentAmount)} of ${formatCurrency(goal.targetAmount)}`}
+      accessibilityRole="summary"
+    >
+      <Card style={{ ...styles.card, ...(isCompleted ? { opacity: 0.7 } : {}) }}>
+        <View style={styles.header}>
+          <View style={styles.iconInfo}>
+            <View
+              style={[
+                styles.iconContainer,
+                { backgroundColor: `${goal.color || colors.primary}15` },
+              ]}
+            >
+              <Ionicons
+                name={(goal.icon || 'flag') as never}
+                size={20}
+                color={goal.color || colors.primary}
+              />
+            </View>
+            <View>
+              <Text style={styles.name}>{goal.name}</Text>
+              <Text style={styles.deadline}>
+                {isCompleted ? 'Completed 🎉' : `${daysLeft} days left`}
+              </Text>
+            </View>
           </View>
-          <View>
-            <Text style={styles.name}>{goal.name}</Text>
-            <Text style={styles.deadline}>
-              {isCompleted ? 'Completed 🎉' : `${daysLeft} days left`}
+        </View>
+
+        <View style={styles.progressContainer}>
+          <View style={styles.progressLabels}>
+            <Text style={styles.current}>{formatCurrency(goal.currentAmount)}</Text>
+            <Text style={styles.target}>
+              {Math.round(progress * 100)}% of {formatCurrency(goal.targetAmount)}
             </Text>
           </View>
+          <ProgressBar
+            progress={progress}
+            color={isCompleted ? colors.income : goal.color || colors.primary}
+            height={8}
+          />
         </View>
-      </View>
 
-      <View style={styles.progressContainer}>
-        <View style={styles.progressLabels}>
-          <Text style={styles.current}>{formatCurrency(goal.currentAmount)}</Text>
-          <Text style={styles.target}>
-            {Math.round(progress * 100)}% of {formatCurrency(goal.targetAmount)}
-          </Text>
-        </View>
-        <ProgressBar
-          progress={progress}
-          color={isCompleted ? colors.income : goal.color || colors.primary}
-          height={8}
-        />
-      </View>
-
-      {!isCompleted && (
-        <View style={{ flexDirection: 'row', gap: SPACING.sm }}>
-          <TouchableOpacity
-            style={[styles.fundButton, { backgroundColor: colors.bgElevated, flex: 1 }]}
-            onPress={onFund}
-          >
-            <Ionicons name="add-circle-outline" size={18} color={colors.primary} />
-            <Text style={[styles.fundText, { color: colors.primary }]}>Add Funds</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.fundButton, { backgroundColor: colors.bgElevated }]}
-            onPress={onEdit}
-          >
-            <Ionicons name="pencil-outline" size={18} color={colors.textSecondary} />
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.fundButton, { backgroundColor: colors.bgElevated }]}
-            onPress={onDelete}
-          >
-            <Ionicons name="trash-outline" size={18} color={colors.expense} />
-          </TouchableOpacity>
-        </View>
-      )}
-      {isCompleted && (
-        <View style={{ flexDirection: 'row', gap: SPACING.sm }}>
-          <TouchableOpacity
-            style={[styles.fundButton, { backgroundColor: colors.bgElevated, flex: 1 }]}
-            onPress={onEdit}
-          >
-            <Ionicons name="pencil-outline" size={18} color={colors.textSecondary} />
-            <Text style={[styles.fundText, { color: colors.textSecondary }]}>Edit</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.fundButton, { backgroundColor: colors.bgElevated }]}
-            onPress={onDelete}
-          >
-            <Ionicons name="trash-outline" size={18} color={colors.expense} />
-          </TouchableOpacity>
-        </View>
-      )}
-    </Card>
+        {!isCompleted && (
+          <View style={{ flexDirection: 'row', gap: SPACING.sm }}>
+            <TouchableOpacity
+              style={[styles.fundButton, { backgroundColor: colors.bgElevated, flex: 1 }]}
+              onPress={onFund}
+              accessibilityLabel="Add funds to goal"
+              accessibilityRole="button"
+            >
+              <Ionicons name="add-circle-outline" size={18} color={colors.primary} />
+              <Text style={[styles.fundText, { color: colors.primary }]}>Add Funds</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.fundButton, { backgroundColor: colors.bgElevated }]}
+              onPress={onEdit}
+              accessibilityLabel="Edit goal"
+              accessibilityRole="button"
+            >
+              <Ionicons name="pencil-outline" size={18} color={colors.textSecondary} />
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.fundButton, { backgroundColor: colors.bgElevated }]}
+              onPress={onDelete}
+              accessibilityLabel="Delete goal"
+              accessibilityRole="button"
+            >
+              <Ionicons name="trash-outline" size={18} color={colors.expense} />
+            </TouchableOpacity>
+          </View>
+        )}
+        {isCompleted && (
+          <View style={{ flexDirection: 'row', gap: SPACING.sm }}>
+            <TouchableOpacity
+              style={[styles.fundButton, { backgroundColor: colors.bgElevated, flex: 1 }]}
+              onPress={onEdit}
+            >
+              <Ionicons name="pencil-outline" size={18} color={colors.textSecondary} />
+              <Text style={[styles.fundText, { color: colors.textSecondary }]}>Edit</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.fundButton, { backgroundColor: colors.bgElevated }]}
+              onPress={onDelete}
+            >
+              <Ionicons name="trash-outline" size={18} color={colors.expense} />
+            </TouchableOpacity>
+          </View>
+        )}
+      </Card>
+    </View>
   );
 };
 
@@ -380,7 +434,17 @@ const AddGoalModal = ({
   const [loading, setLoading] = useState(false);
 
   const handleSave = async () => {
-    if (!name || !targetAmount) return;
+    const result = goalSchema.safeParse({
+      name,
+      targetAmount: Number(targetAmount),
+      deadline: deadline.toISOString().slice(0, 10),
+      color,
+      icon,
+    });
+    if (!result.success) {
+      showToast.error(result.error.issues[0]?.message ?? 'Invalid input');
+      return;
+    }
 
     setLoading(true);
     await GoalService.create({
@@ -396,6 +460,7 @@ const AddGoalModal = ({
     setLoading(false);
     setName('');
     setTargetAmount('');
+    showToast.success('Goal created');
     onSave();
   };
 
@@ -533,6 +598,7 @@ const EditGoalModal = ({
         color,
         icon,
       });
+      showToast.success('Goal updated');
       onSave();
     } finally {
       setLoading(false);
@@ -716,9 +782,9 @@ const modalStyles = (colors: ThemeColors) =>
     },
     selector: { flexDirection: 'row', marginBottom: SPACING.md },
     colorOption: {
-      width: 40,
-      height: 40,
-      borderRadius: 20,
+      width: 44,
+      height: 44,
+      borderRadius: 22,
       marginRight: SPACING.md,
     },
     iconOption: {
@@ -754,8 +820,8 @@ const createStyles = (colors: ThemeColors) =>
     },
     title: { ...TYPOGRAPHY.h2, color: colors.textPrimary },
     addButton: {
-      width: 40,
-      height: 40,
+      width: 44,
+      height: 44,
       alignItems: 'center',
       justifyContent: 'center',
       borderRadius: RADIUS.full,

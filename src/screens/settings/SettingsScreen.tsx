@@ -16,6 +16,8 @@ import Animated, { FadeInDown } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { CustomPopup, CustomSwitch } from '../../components/common/index';
+import { ListItem } from '../../components/common/ListItem';
+import { showToast } from '../../components/common/Toast';
 import { ScreenHeader } from '../../components/common/ScreenHeader';
 import { useTheme, type ThemeColors } from '../../hooks/useTheme';
 import { authService, setBiometricPreference } from '../../services/auth';
@@ -84,6 +86,7 @@ export default function SettingsScreen() {
     try {
       const result = await syncService.sync('manual');
       if (result.success) {
+        showToast.success('Data synced successfully');
         setPopupConfig({
           visible: true,
           title: 'Success',
@@ -214,6 +217,27 @@ export default function SettingsScreen() {
     return new Date(lastSyncAt).toLocaleString();
   }, [lastSyncAt]);
 
+  const syncFreshness = useMemo(() => {
+    if (!lastSyncAt)
+      return { label: 'No backup yet', color: colors.expense, icon: 'alert-circle' as const };
+    const hoursSince = (Date.now() - new Date(lastSyncAt).getTime()) / (1000 * 60 * 60);
+    if (hoursSince < 1)
+      return { label: 'Just now', color: colors.income, icon: 'checkmark-circle' as const };
+    if (hoursSince < 24)
+      return { label: 'Today', color: colors.income, icon: 'checkmark-circle' as const };
+    if (hoursSince < 72)
+      return {
+        label: `${Math.floor(hoursSince / 24)}d ago`,
+        color: '#F59E0B',
+        icon: 'time' as const,
+      };
+    return {
+      label: `${Math.floor(hoursSince / 24)}d ago`,
+      color: colors.expense,
+      icon: 'alert-circle' as const,
+    };
+  }, [lastSyncAt, colors]);
+
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <ScreenHeader
@@ -298,6 +322,8 @@ export default function SettingsScreen() {
           <TouchableOpacity
             onPress={() => router.push('/sms-import')}
             style={{ paddingHorizontal: SPACING.lg, paddingBottom: SPACING.lg }}
+            accessibilityLabel="Run manual SMS import check"
+            accessibilityRole="button"
           >
             <Text style={{ fontSize: 13, color: colors.primary, fontWeight: '700' }}>
               Run manual SMS check now
@@ -307,10 +333,24 @@ export default function SettingsScreen() {
           {/* Biometrics Toggle */}
           <View style={styles.prefRow}>
             <View style={styles.prefLeft}>
-              <View style={styles.iconBox}>
-                <Ionicons name="finger-print-outline" size={20} color={colors.primary} />
+              <View
+                style={[
+                  styles.iconBox,
+                  biometricsEnabled && { backgroundColor: colors.income + '20' },
+                ]}
+              >
+                <Ionicons
+                  name={biometricsEnabled ? 'shield-checkmark' : 'finger-print-outline'}
+                  size={20}
+                  color={biometricsEnabled ? colors.income : colors.primary}
+                />
               </View>
-              <Text style={styles.prefTitle}>Biometric Lock</Text>
+              <View>
+                <Text style={styles.prefTitle}>Biometric Lock</Text>
+                <Text style={[styles.prefSub, biometricsEnabled && { color: colors.income }]}>
+                  {biometricsEnabled ? 'Protected' : 'Not enabled'}
+                </Text>
+              </View>
             </View>
             <CustomSwitch
               value={biometricsEnabled}
@@ -325,36 +365,43 @@ export default function SettingsScreen() {
           <Text style={styles.sectionTitle}>DATA & SYNC</Text>
 
           {/* Bank Accounts */}
-          <TouchableOpacity style={styles.prefRow} onPress={() => router.push('/accounts')}>
-            <View style={styles.prefLeft}>
-              <View style={styles.iconBox}>
-                <Ionicons name="card-outline" size={20} color={colors.primary} />
-              </View>
-              <Text style={styles.prefTitle}>Bank Accounts</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={20} color={colors.textMuted} />
-          </TouchableOpacity>
+          <ListItem
+            title="Bank Accounts"
+            leftIcon="card-outline"
+            showChevron
+            onPress={() => router.push('/accounts')}
+          />
 
           {/* Split Expenses */}
-          <TouchableOpacity style={styles.prefRow} onPress={() => router.push('/splits' as Href)}>
-            <View style={styles.prefLeft}>
-              <View style={styles.iconBox}>
-                <Ionicons name="people-outline" size={20} color={colors.primary} />
-              </View>
-              <Text style={styles.prefTitle}>Split Expenses</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={20} color={colors.textMuted} />
-          </TouchableOpacity>
+          <ListItem
+            title="Split Expenses"
+            leftIcon="people-outline"
+            showChevron
+            onPress={() => router.push('/splits' as Href)}
+          />
 
           {/* Cloud Sync */}
           <View style={styles.prefRow}>
             <View style={styles.prefLeft}>
-              <View style={styles.iconBox}>
-                <Ionicons name="cloud-done-outline" size={20} color={colors.primary} />
+              <View style={[styles.iconBox, { backgroundColor: syncFreshness.color + '20' }]}>
+                <Ionicons name={syncFreshness.icon} size={20} color={syncFreshness.color} />
               </View>
               <View>
                 <Text style={styles.prefTitle}>Cloud Backup</Text>
-                <Text style={styles.prefSub}>Last synced: {formattedLastSync}</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <View
+                    style={{
+                      width: 6,
+                      height: 6,
+                      borderRadius: 3,
+                      backgroundColor: syncFreshness.color,
+                    }}
+                  />
+                  <Text style={[styles.prefSub, { color: syncFreshness.color }]}>
+                    {syncFreshness.label}
+                  </Text>
+                  <Text style={styles.prefSub}> · {formattedLastSync}</Text>
+                </View>
               </View>
             </View>
             <TouchableOpacity
@@ -411,26 +458,20 @@ export default function SettingsScreen() {
           </TouchableOpacity>
 
           {/* Import Backup */}
-          <TouchableOpacity style={styles.prefRow} onPress={handleImportBackup}>
-            <View style={styles.prefLeft}>
-              <View style={styles.iconBox}>
-                <Ionicons name="push-outline" size={20} color={colors.primary} />
-              </View>
-              <Text style={styles.prefTitle}>Import Backup</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
-          </TouchableOpacity>
+          <ListItem
+            title="Import Backup"
+            leftIcon="push-outline"
+            showChevron
+            onPress={handleImportBackup}
+          />
 
           {/* Email Monthly Report */}
-          <TouchableOpacity style={styles.prefRow} onPress={handleEmailReport}>
-            <View style={styles.prefLeft}>
-              <View style={styles.iconBox}>
-                <Ionicons name="mail-outline" size={20} color={colors.primary} />
-              </View>
-              <Text style={styles.prefTitle}>Email Monthly Report</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
-          </TouchableOpacity>
+          <ListItem
+            title="Email Monthly Report"
+            leftIcon="mail-outline"
+            showChevron
+            onPress={handleEmailReport}
+          />
         </Animated.View>
 
         <Animated.View entering={FadeInDown.duration(400).delay(300)} style={styles.logoutWrapper}>
@@ -568,7 +609,7 @@ function createStyles(colors: ThemeColors) {
     },
     themeBtnActive: {
       backgroundColor: colors.bgCard,
-      shadowColor: '#000',
+      shadowColor: colors.shadow,
       shadowOffset: { width: 0, height: 1 },
       shadowOpacity: 0.1,
       shadowRadius: 1,

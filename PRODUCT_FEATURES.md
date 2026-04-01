@@ -53,12 +53,13 @@ The dashboard acts as the home control center of the app. It gives users a quick
 Dashboard capabilities include:
 
 - Summary of balance, income, expenses, and net worth
-- Visual spending distribution via chart
+- Visual spending distribution via donut chart with category legend (name, amount, percentage)
 - Recent transactions preview
 - Budget alerts for categories nearing or exceeding limits
-- Quick actions for common flows
+- Unified quick-action FAB (Add Expense, Split Expense, Add Note, Add Budget) available on all tabs
 - Shortcut access to notifications
 - Pull-to-refresh and sync awareness
+- Compact pill-style toast notifications for user feedback
 
 The dashboard is intended to answer three product questions immediately:
 

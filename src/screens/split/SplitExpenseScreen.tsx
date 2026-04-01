@@ -462,7 +462,7 @@ export default function SplitExpenseScreen() {
               </Text>
               <View style={styles.detailHeroMeta}>
                 <View style={styles.detailHeroMetaItem}>
-                  <Ionicons name="calendar-outline" size={14} color="rgba(255,255,255,0.7)" />
+                  <Ionicons name="calendar-outline" size={14} color={colors.heroTextMuted} />
                   <Text style={styles.detailHeroMetaText}>
                     {new Date(existingDate || existingSplit.createdAt).toLocaleDateString('en-IN', {
                       day: 'numeric',
@@ -472,7 +472,7 @@ export default function SplitExpenseScreen() {
                   </Text>
                 </View>
                 <View style={styles.detailHeroMetaItem}>
-                  <Ionicons name="git-branch-outline" size={14} color="rgba(255,255,255,0.7)" />
+                  <Ionicons name="git-branch-outline" size={14} color={colors.heroTextMuted} />
                   <Text style={styles.detailHeroMetaText}>
                     {existingSplit?.splitMethod?.charAt(0)?.toUpperCase() +
                       existingSplit?.splitMethod?.slice(1)}{' '}
@@ -588,7 +588,7 @@ export default function SplitExpenseScreen() {
           onPress={() => void handleSave()}
           disabled={saving}
         >
-          <Ionicons name={saving ? 'hourglass' : 'checkmark'} size={22} color="#fff" />
+          <Ionicons name={saving ? 'hourglass' : 'checkmark'} size={22} color={colors.heroText} />
         </TouchableOpacity>
       </View>
 
@@ -1102,7 +1102,7 @@ function createStyles(colors: ThemeColors) {
       color: colors.textMuted,
       fontWeight: '700',
     },
-    methodBtnTextActive: { color: '#fff' },
+    methodBtnTextActive: { color: colors.heroText },
 
     // Members
     membersHeader: {
@@ -1215,7 +1215,7 @@ function createStyles(colors: ThemeColors) {
     },
     totalLabel: {
       fontSize: 10,
-      color: 'rgba(255,255,255,0.8)',
+      color: colors.heroTextMuted,
       fontWeight: '700',
       textTransform: 'uppercase',
       letterSpacing: 0.5,
@@ -1223,13 +1223,13 @@ function createStyles(colors: ThemeColors) {
     totalAmount: {
       fontSize: 28,
       fontWeight: '800',
-      color: '#fff',
+      color: colors.heroText,
       letterSpacing: -0.5,
       marginTop: 4,
     },
     totalSub: {
       ...TYPOGRAPHY.caption,
-      color: 'rgba(255,255,255,0.6)',
+      color: colors.heroTextMuted,
       marginTop: 2,
     },
     totalAvatars: { flexDirection: 'row' },
@@ -1237,14 +1237,14 @@ function createStyles(colors: ThemeColors) {
       width: 36,
       height: 36,
       borderRadius: 18,
-      backgroundColor: 'rgba(255,255,255,0.25)',
+      backgroundColor: colors.overlayLight,
       alignItems: 'center',
       justifyContent: 'center',
       marginLeft: -6,
       borderWidth: 2,
-      borderColor: 'rgba(255,255,255,0.1)',
+      borderColor: colors.heroOverlay,
     },
-    totalAvatarText: { fontSize: 13, fontWeight: '800', color: '#fff' },
+    totalAvatarText: { fontSize: 13, fontWeight: '800', color: colors.heroText },
 
     // Detail view
     detailHero: {
@@ -1260,17 +1260,17 @@ function createStyles(colors: ThemeColors) {
       width: 120,
       height: 120,
       borderRadius: 60,
-      backgroundColor: 'rgba(255,255,255,0.08)',
+      backgroundColor: colors.heroOverlay,
     },
     detailHeroLabel: {
       fontSize: 16,
       fontWeight: '600',
-      color: 'rgba(255,255,255,0.85)',
+      color: colors.heroTextMuted,
     },
     detailHeroAmount: {
       fontSize: 36,
       fontWeight: '800',
-      color: '#fff',
+      color: colors.heroText,
       letterSpacing: -1,
       marginTop: 4,
     },
@@ -1286,7 +1286,7 @@ function createStyles(colors: ThemeColors) {
     },
     detailHeroMetaText: {
       fontSize: 12,
-      color: 'rgba(255,255,255,0.7)',
+      color: colors.heroTextMuted,
       fontWeight: '500',
     },
 
@@ -1323,7 +1323,7 @@ function createStyles(colors: ThemeColors) {
     },
     modalBackdrop: {
       ...StyleSheet.absoluteFillObject,
-      backgroundColor: 'rgba(0,0,0,0.5)',
+      backgroundColor: colors.overlay,
     },
     modalContent: {
       borderRadius: RADIUS.xl,

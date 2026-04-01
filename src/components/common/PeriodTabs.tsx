@@ -12,6 +12,12 @@ interface PeriodTabsProps {
 export const PeriodTabs: React.FC<PeriodTabsProps> = ({ tabs, activeTab, onTabChange }) => {
   const { colors } = useTheme();
 
+  const handleTabPress = (tab: string) => {
+    if (tab !== activeTab) {
+      onTabChange(tab);
+    }
+  };
+
   return (
     <View style={[styles.container, { borderBottomColor: colors.border }]}>
       {tabs.map((tab) => {
@@ -19,7 +25,7 @@ export const PeriodTabs: React.FC<PeriodTabsProps> = ({ tabs, activeTab, onTabCh
         return (
           <TouchableOpacity
             key={tab}
-            onPress={() => onTabChange(tab)}
+            onPress={() => handleTabPress(tab)}
             style={[
               styles.tab,
               isActive && {
@@ -27,6 +33,9 @@ export const PeriodTabs: React.FC<PeriodTabsProps> = ({ tabs, activeTab, onTabCh
                 borderBottomWidth: 2,
               },
             ]}
+            accessibilityLabel={`${tab} period tab`}
+            accessibilityRole="tab"
+            accessibilityState={{ selected: isActive }}
           >
             <Text
               style={[
@@ -56,8 +65,9 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingTop: SPACING.md,
+    paddingTop: SPACING.sm,
     paddingBottom: SPACING.sm,
+    minHeight: 44,
     borderBottomWidth: 2,
     borderBottomColor: 'transparent',
   },

@@ -10,10 +10,19 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import Animated, { FadeInDown } from 'react-native-reanimated';
+import Animated, {
+  Extrapolation,
+  FadeInDown,
+  interpolate,
+  runOnJS,
+  useAnimatedScrollHandler,
+  useAnimatedStyle,
+  useSharedValue,
+} from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { EmptyState, FAB } from '../../components/common';
+import { AnimatedEmptyState } from '../../components/common';
+import { showToast } from '../../components/common/Toast';
 import { useTheme, type ThemeColors } from '../../hooks/useTheme';
 import { SplitService } from '../../services/splitService';
 import { useAppStore } from '../../store/appStore';
@@ -39,19 +48,26 @@ export default function SplitListScreen() {
   const [friendBalances, setFriendBalances] = useState<
     { friend: SplitFriend; totalPending: number }[]
   >([]);
-  const [activeTab, setActiveTab] = useState<'splits' | 'friends'>('splits');
+  // UI tab state driven by scrollX; setter syncs for potential future use
+  const [, setActiveTab] = useState<'splits' | 'friends'>('splits');
   const [refreshing, setRefreshing] = useState(false);
 
-  const tabScrollRef = useRef<ScrollView>(null);
+  const tabScrollRef = useRef<Animated.ScrollView>(null);
+  const scrollX = useSharedValue(0);
+
+  const scrollHandler = useAnimatedScrollHandler({
+    onScroll: (event) => {
+      scrollX.value = event.contentOffset.x;
+    },
+    onMomentumEnd: (event) => {
+      const idx = Math.round(event.contentOffset.x / SCREEN_WIDTH);
+      runOnJS(setActiveTab)(idx === 1 ? 'friends' : 'splits');
+    },
+  });
 
   const handleTabPress = (tab: 'splits' | 'friends') => {
     setActiveTab(tab);
     tabScrollRef.current?.scrollTo({ x: tab === 'friends' ? SCREEN_WIDTH : 0, animated: true });
-  };
-
-  const handleMomentumScrollEnd = (e: { nativeEvent: { contentOffset: { x: number } } }) => {
-    const x = e.nativeEvent.contentOffset.x;
-    setActiveTab(x >= SCREEN_WIDTH / 2 ? 'friends' : 'splits');
   };
 
   const loadSplits = useCallback(async () => {
@@ -69,6 +85,7 @@ export default function SplitListScreen() {
     setRefreshing(true);
     await loadSplits();
     setRefreshing(false);
+    showToast.success('Splits refreshed');
   };
 
   const totalOwed = splits.reduce((sum, s) => {
@@ -85,6 +102,37 @@ export default function SplitListScreen() {
     return sum + paid;
   }, 0);
 
+  // Animated Pill Indicator
+  const TAB_CONTAINER_WIDTH = SCREEN_WIDTH - SPACING.md * 2;
+  const TAB_WIDTH = TAB_CONTAINER_WIDTH / 2;
+
+  const indicatorStyle = useAnimatedStyle(() => {
+    const translateX = interpolate(
+      scrollX.value,
+      [0, SCREEN_WIDTH],
+      [0, TAB_WIDTH],
+      Extrapolation.CLAMP,
+    );
+    return {
+      transform: [{ translateX }],
+    };
+  });
+
+  const textStyleSplits = useAnimatedStyle(() => {
+    const color = interpolate(scrollX.value, [0, SCREEN_WIDTH / 2], [1, 0], Extrapolation.CLAMP);
+    return { color: color > 0.5 ? colors.textInverse : colors.textSecondary };
+  });
+
+  const textStyleFriends = useAnimatedStyle(() => {
+    const color = interpolate(
+      scrollX.value,
+      [SCREEN_WIDTH / 2, SCREEN_WIDTH],
+      [0, 1],
+      Extrapolation.CLAMP,
+    );
+    return { color: color > 0.5 ? colors.textInverse : colors.textSecondary };
+  });
+
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       {/* Header */}
@@ -96,49 +144,35 @@ export default function SplitListScreen() {
         <View style={{ width: 40 }} />
       </View>
 
+      {/* Modern Liquid Tabs */}
       <View style={styles.tabContainer}>
+        {/* Animated Background Pill */}
+        <Animated.View style={[styles.tabIndicatorPill, indicatorStyle]} />
+
         <TouchableOpacity
-          style={[styles.tabBtn, activeTab === 'splits' && { backgroundColor: colors.primary }]}
+          style={styles.tabBtn}
           onPress={() => handleTabPress('splits')}
+          activeOpacity={0.8}
         >
-          <Text style={[styles.tabText, activeTab === 'splits' && { color: '#fff' }]}>
-            By Split
-          </Text>
+          <Animated.Text style={[styles.tabText, textStyleSplits]}>By Split</Animated.Text>
         </TouchableOpacity>
         <TouchableOpacity
-          style={[styles.tabBtn, activeTab === 'friends' && { backgroundColor: colors.primary }]}
+          style={styles.tabBtn}
           onPress={() => handleTabPress('friends')}
+          activeOpacity={0.8}
         >
-          <Text style={[styles.tabText, activeTab === 'friends' && { color: '#fff' }]}>
-            By Friend
-          </Text>
+          <Animated.Text style={[styles.tabText, textStyleFriends]}>By Friend</Animated.Text>
         </TouchableOpacity>
       </View>
 
-      {/* Swipe indicator dots */}
-      <View style={styles.indicatorRow}>
-        <View
-          style={[
-            styles.indicatorDot,
-            activeTab === 'splits' && { backgroundColor: colors.primary, width: 20 },
-          ]}
-        />
-        <View
-          style={[
-            styles.indicatorDot,
-            activeTab === 'friends' && { backgroundColor: colors.primary, width: 20 },
-          ]}
-        />
-      </View>
-
-      {/* Horizontal paging scroll: each tab is one full-width page */}
-      <ScrollView
+      {/* Horizontal paging scroll */}
+      <Animated.ScrollView
         ref={tabScrollRef}
         horizontal
         pagingEnabled
         showsHorizontalScrollIndicator={false}
         scrollEventThrottle={16}
-        onMomentumScrollEnd={handleMomentumScrollEnd}
+        onScroll={scrollHandler}
         style={{ flex: 1 }}
         bounces={false}
       >
@@ -178,7 +212,7 @@ export default function SplitListScreen() {
           </Animated.View>
 
           {splits.length === 0 ? (
-            <EmptyState
+            <AnimatedEmptyState
               icon="people-outline"
               title="No splits yet"
               subtitle="Split an expense with friends by tapping the + button"
@@ -212,7 +246,7 @@ export default function SplitListScreen() {
           }
         >
           {friendBalances.length === 0 ? (
-            <EmptyState
+            <AnimatedEmptyState
               icon="person-add-outline"
               title="No friends yet"
               subtitle="Share an expense with friends to add them to your balances"
@@ -231,9 +265,7 @@ export default function SplitListScreen() {
           )}
           <View style={{ height: 100 }} />
         </ScrollView>
-      </ScrollView>
-
-      <FAB onPress={() => router.push('/split-expense/new')} />
+      </Animated.ScrollView>
     </SafeAreaView>
   );
 }
@@ -466,21 +498,34 @@ function createStyles(colors: ThemeColors) {
     // Tabs
     tabContainer: {
       flexDirection: 'row',
-      paddingHorizontal: SPACING.md,
-      paddingVertical: SPACING.sm,
-      gap: SPACING.sm,
+      marginHorizontal: SPACING.md,
+      marginVertical: SPACING.sm,
+      position: 'relative',
+      backgroundColor: colors.bgElevated,
+      borderRadius: RADIUS.md,
+      overflow: 'hidden',
+    },
+    tabIndicatorPill: {
+      position: 'absolute',
+      left: 0,
+      top: 0,
+      bottom: 0,
+      width: (SCREEN_WIDTH - SPACING.md * 2) / 2,
+      backgroundColor: colors.primary,
+      borderRadius: RADIUS.md,
+      zIndex: 0,
     },
     tabBtn: {
       flex: 1,
       paddingVertical: 10,
       alignItems: 'center',
       borderRadius: RADIUS.md,
-      backgroundColor: colors.bgElevated,
+      backgroundColor: 'transparent',
+      zIndex: 1,
     },
     tabText: {
       ...TYPOGRAPHY.body,
       fontWeight: '600',
-      color: colors.textSecondary,
     },
     indicatorRow: {
       flexDirection: 'row',

@@ -447,9 +447,11 @@ const AddAssetModal: React.FC<{
             <Ionicons
               name={t.icon as never}
               size={14}
-              color={type === t.key ? '#fff' : colors.textMuted}
+              color={type === t.key ? colors.heroText : colors.textMuted}
             />
-            <Text style={[mStyles.chipText, type === t.key && { color: '#fff' }]}>{t.label}</Text>
+            <Text style={[mStyles.chipText, type === t.key && { color: colors.heroText }]}>
+              {t.label}
+            </Text>
           </TouchableOpacity>
         ))}
       </ScrollView>
@@ -534,7 +536,9 @@ const AddLiabilityModal: React.FC<{
               },
             ]}
           >
-            <Text style={[mStyles.chipText, type === t.key && { color: '#fff' }]}>{t.label}</Text>
+            <Text style={[mStyles.chipText, type === t.key && { color: colors.heroText }]}>
+              {t.label}
+            </Text>
           </TouchableOpacity>
         ))}
       </View>
@@ -632,10 +636,10 @@ const createStyles = (colors: ThemeColors) =>
       width: 128,
       height: 128,
       borderRadius: 64,
-      backgroundColor: 'rgba(255,255,255,0.1)',
+      backgroundColor: colors.heroOverlay,
     },
     heroLabel: {
-      color: 'rgba(255,255,255,0.8)',
+      color: colors.heroTextMuted,
       fontSize: 10,
       fontWeight: '700',
       letterSpacing: 2,
@@ -650,20 +654,20 @@ const createStyles = (colors: ThemeColors) =>
     heroAmount: {
       fontSize: 28,
       fontWeight: '800',
-      color: '#fff',
+      color: colors.heroText,
       letterSpacing: -0.5,
     },
     heroBadge: {
-      backgroundColor: 'rgba(255,255,255,0.2)',
+      backgroundColor: colors.overlayLight,
       paddingHorizontal: 8,
       paddingVertical: 3,
       borderRadius: 4,
       borderWidth: 1,
-      borderColor: 'rgba(255,255,255,0.1)',
+      borderColor: colors.heroOverlay,
     },
-    heroBadgeText: { fontSize: 10, fontWeight: '800', color: '#fff' },
+    heroBadgeText: { fontSize: 10, fontWeight: '800', color: colors.heroText },
     heroSub: {
-      color: 'rgba(255,255,255,0.5)',
+      color: colors.heroTextMuted,
       fontSize: 10,
       marginTop: 8,
       fontStyle: 'italic',
