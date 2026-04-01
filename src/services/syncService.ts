@@ -212,7 +212,10 @@ class SyncService {
     const isDefaultPaymentMethod =
       item.entity === 'payment_methods' && item.recordId.startsWith('pm_');
     const isDefaultCashAccount = item.entity === 'accounts' && item.recordId === 'acc_cash';
-    const isRls = reason.includes('row-level security') || reason.includes('42501');
+    const isRls =
+      reason.includes('row-level security') ||
+      reason.includes('42501') ||
+      reason.includes('permission denied');
     const isFkConstraint = reason.toLowerCase().includes('foreign key');
     return (
       (isDefaultCategory || isDefaultPaymentMethod || isDefaultCashAccount) &&
@@ -351,7 +354,10 @@ class SyncService {
         const isDefaultPm =
           f.item.entity === 'payment_methods' && f.item.recordId.startsWith('pm_');
         const isDefaultCash = f.item.entity === 'accounts' && f.item.recordId === 'acc_cash';
-        const isRls = f.reason.includes('row-level security') || f.reason.includes('42501');
+        const isRls =
+          f.reason.includes('row-level security') ||
+          f.reason.includes('42501') ||
+          f.reason.includes('permission denied');
         const isFkConstraint = f.reason.toLowerCase().includes('foreign key');
         if ((isDefault || isDefaultPm || isDefaultCash) && (isRls || isFkConstraint)) {
           markRecordSyncStatus(f.item.entity as SyncableTable, f.item.recordId, 'synced').catch(
@@ -427,20 +433,21 @@ class SyncService {
 
       if (item.operation === 'delete') {
         const deletedAt = String(payload.deletedAt ?? new Date().toISOString());
-        // Only sync soft-delete to Supabase if the record already exists remotely
+        // Only sync soft-delete to Supabase if the record already exists remotely.
+        // Use UPDATE (not upsert) so we never trigger an INSERT that requires all NOT NULL columns.
         if (
           remoteRecord &&
           new Date(String(remoteRecord.updated_at ?? 0)).getTime() <= new Date(deletedAt).getTime()
         ) {
-          const { error } = await supabase.from(table).upsert(
-            {
-              ...remoteData,
-              user_id: userId,
+          const { error } = await supabase
+            .from(table)
+            .update({
+              deleted_at: deletedAt,
+              updated_at: String(payload.updatedAt ?? deletedAt),
               sync_status: 'synced',
               last_synced_at: deletedAt,
-            },
-            { onConflict: 'id' },
-          );
+            })
+            .eq('id', recordId);
           if (error) {
             throw error;
           }

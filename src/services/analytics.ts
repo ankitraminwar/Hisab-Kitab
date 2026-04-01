@@ -1,5 +1,5 @@
-import analytics from '@react-native-firebase/analytics';
-import crashlytics from '@react-native-firebase/crashlytics';
+import { getAnalytics } from '@react-native-firebase/analytics';
+import { getCrashlytics } from '@react-native-firebase/crashlytics';
 
 /**
  * Thin wrapper around Firebase Analytics.
@@ -14,7 +14,7 @@ export const Analytics = {
   /** Log a screen view. Call from useEffect in screen components. */
   async logScreenView(screenName: string) {
     try {
-      await analytics().logScreenView({ screen_name: screenName, screen_class: screenName });
+      await getAnalytics().logScreenView({ screen_name: screenName, screen_class: screenName });
     } catch {
       // Firebase not configured — silently ignore
     }
@@ -23,7 +23,7 @@ export const Analytics = {
   /** Log a custom event with optional params. */
   async logEvent(name: string, params?: Record<string, string | number | boolean>) {
     try {
-      await analytics().logEvent(name, params);
+      await getAnalytics().logEvent(name, params);
     } catch {
       // Firebase not configured — silently ignore
     }
@@ -32,7 +32,7 @@ export const Analytics = {
   /** Set the current user ID (after login). Pass null on logout. */
   async setUserId(userId: string | null) {
     try {
-      await analytics().setUserId(userId);
+      await getAnalytics().setUserId(userId);
     } catch {
       // Firebase not configured — silently ignore
     }
@@ -41,7 +41,7 @@ export const Analytics = {
   /** Set a user property (e.g. theme preference, currency). */
   async setUserProperty(name: string, value: string) {
     try {
-      await analytics().setUserProperty(name, value);
+      await getAnalytics().setUserProperty(name, value);
     } catch {
       // Firebase not configured — silently ignore
     }
@@ -57,7 +57,7 @@ export const Crashlytics = {
   /** Record a JS error with an optional context label. */
   recordError(error: Error, label?: string) {
     try {
-      crashlytics().recordError(error, label);
+      getCrashlytics().recordError(error, label);
     } catch {
       // Firebase not configured — silently ignore
     }
@@ -66,7 +66,7 @@ export const Crashlytics = {
   /** Associate the current user ID with crash reports. Pass null on logout. */
   async setUserId(userId: string | null) {
     try {
-      await crashlytics().setUserId(userId ?? '');
+      await getCrashlytics().setUserId(userId ?? '');
     } catch {
       // Firebase not configured — silently ignore
     }
@@ -75,7 +75,7 @@ export const Crashlytics = {
   /** Log a breadcrumb message visible in the crash report. */
   log(message: string) {
     try {
-      crashlytics().log(message);
+      getCrashlytics().log(message);
     } catch {
       // Firebase not configured — silently ignore
     }
@@ -84,7 +84,7 @@ export const Crashlytics = {
   /** Set a custom key/value string visible in crash reports. */
   setAttribute(key: string, value: string) {
     try {
-      crashlytics().setAttribute(key, value);
+      getCrashlytics().setAttribute(key, value);
     } catch {
       // Firebase not configured — silently ignore
     }
