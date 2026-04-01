@@ -16,15 +16,17 @@ import {
   Button,
   Card,
   CustomModal,
-  EmptyState,
+  AnimatedEmptyState,
   ProgressBar,
   SectionHeader,
 } from '../../components/common';
+import { showToast } from '../../components/common/Toast';
 import { useTheme, type ThemeColors } from '../../hooks/useTheme';
 import { BudgetService, CategoryService } from '../../services/dataService';
 import { triggerBackgroundSync } from '../../services/syncService';
 import { useAppStore } from '../../store/appStore';
 import { RADIUS, SPACING, TYPOGRAPHY, formatCurrency } from '../../utils/constants';
+import { budgetSchema } from '../../utils/validation';
 import type { Budget, Category } from '../../utils/types';
 
 export default function BudgetsScreen() {
@@ -57,6 +59,7 @@ export default function BudgetsScreen() {
     await triggerBackgroundSync('pull-to-refresh');
     await loadData();
     setRefreshing(false);
+    showToast.success('Budgets refreshed');
   };
 
   const totalBudget = budgets.reduce((s, b) => s + b.limitAmount, 0);
@@ -151,11 +154,11 @@ export default function BudgetsScreen() {
           <SectionHeader title="Category Budgets" />
 
           {budgets.length === 0 ? (
-            <EmptyState
+            <AnimatedEmptyState
               icon="pie-chart-outline"
               title="No budgets set"
               subtitle={`You haven't set any budgets for ${monthName}.`}
-              action="Create Budget"
+              actionLabel="Create Budget"
               onAction={() => setShowAdd(true)}
             />
           ) : (
@@ -296,7 +299,15 @@ const AddBudgetModal = ({
   const styles = useMemo(() => modalStyles(colors), [colors]);
 
   const handleSave = async () => {
-    if (!categoryId || !amount || Number(amount) <= 0) return;
+    const result = budgetSchema.safeParse({
+      categoryId,
+      limitAmount: Number(amount),
+      alertAt: 80,
+    });
+    if (!result.success) {
+      showToast.error(result.error.issues[0]?.message ?? 'Invalid input');
+      return;
+    }
     setLoading(true);
     const [year, month] = period.split('-');
 
@@ -310,6 +321,7 @@ const AddBudgetModal = ({
     setLoading(false);
     setAmount('');
     setCategoryId('');
+    showToast.success('Budget created');
     onSave();
   };
 
@@ -393,6 +405,7 @@ const EditBudgetModal = ({
     setLoading(true);
     await BudgetService.update(budget.id, { limitAmount: Number(amount) });
     setLoading(false);
+    showToast.success('Budget updated');
     onSave();
   };
 
@@ -400,6 +413,7 @@ const EditBudgetModal = ({
     setLoading(true);
     await BudgetService.delete(budget.id);
     setLoading(false);
+    showToast.success('Budget deleted');
     onSave();
   };
 
@@ -556,8 +570,8 @@ const createStyles = (colors: ThemeColors) =>
     },
     title: { ...TYPOGRAPHY.h2, color: colors.textPrimary },
     addButton: {
-      width: 40,
-      height: 40,
+      width: 44,
+      height: 44,
       alignItems: 'center',
       justifyContent: 'center',
       borderRadius: RADIUS.full,
@@ -570,7 +584,13 @@ const createStyles = (colors: ThemeColors) =>
       paddingHorizontal: SPACING.md,
       marginBottom: SPACING.md,
     },
-    monthButton: { padding: SPACING.xs },
+    monthButton: {
+      padding: SPACING.sm,
+      minWidth: 44,
+      minHeight: 44,
+      alignItems: 'center' as const,
+      justifyContent: 'center' as const,
+    },
     monthText: {
       ...TYPOGRAPHY.body,
       color: colors.textPrimary,

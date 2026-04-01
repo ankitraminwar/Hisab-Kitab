@@ -21,7 +21,8 @@ import Animated, {
 } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { EmptyState, FAB } from '../../components/common';
+import { AnimatedEmptyState } from '../../components/common';
+import { showToast } from '../../components/common/Toast';
 import { useTheme, type ThemeColors } from '../../hooks/useTheme';
 import { SplitService } from '../../services/splitService';
 import { useAppStore } from '../../store/appStore';
@@ -84,6 +85,7 @@ export default function SplitListScreen() {
     setRefreshing(true);
     await loadSplits();
     setRefreshing(false);
+    showToast.success('Splits refreshed');
   };
 
   const totalOwed = splits.reduce((sum, s) => {
@@ -210,7 +212,7 @@ export default function SplitListScreen() {
           </Animated.View>
 
           {splits.length === 0 ? (
-            <EmptyState
+            <AnimatedEmptyState
               icon="people-outline"
               title="No splits yet"
               subtitle="Split an expense with friends by tapping the + button"
@@ -244,7 +246,7 @@ export default function SplitListScreen() {
           }
         >
           {friendBalances.length === 0 ? (
-            <EmptyState
+            <AnimatedEmptyState
               icon="person-add-outline"
               title="No friends yet"
               subtitle="Share an expense with friends to add them to your balances"
@@ -264,8 +266,6 @@ export default function SplitListScreen() {
           <View style={{ height: 100 }} />
         </ScrollView>
       </Animated.ScrollView>
-
-      <FAB onPress={() => router.push('/split-expense/new')} />
     </SafeAreaView>
   );
 }

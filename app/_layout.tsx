@@ -18,8 +18,10 @@ import {
 } from 'react-native';
 import { registerWidgetTaskHandler } from 'react-native-android-widget';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
-
+import { BottomSheetModalProvider } from '@gorhom/bottom-sheet';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+
+import { AppToast } from '@/components/common/Toast';
 
 import { PopupProvider, ScreenErrorBoundary } from '@/components/common';
 import {
@@ -337,59 +339,65 @@ export default function RootLayout() {
     <ScreenErrorBoundary>
       <SafeAreaProvider>
         <GestureHandlerRootView style={{ flex: 1 }}>
-          <QueryClientProvider client={queryClient}>
-            <PopupProvider>
-              <StatusBar style={theme === 'dark' ? 'light' : 'dark'} backgroundColor={colors.bg} />
-              <Stack
-                screenOptions={{
-                  headerShown: false,
-                  animation: 'slide_from_right',
-                }}
-              >
-                <Stack.Screen name="login" options={{ headerShown: false }} />
-                <Stack.Screen name="auth" options={{ headerShown: false }} />
-                <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-                <Stack.Screen
-                  name="transactions/add"
-                  options={{
-                    presentation: 'modal',
-                    animation: 'slide_from_bottom',
-                  }}
+          <BottomSheetModalProvider>
+            <QueryClientProvider client={queryClient}>
+              <PopupProvider>
+                <StatusBar
+                  style={theme === 'dark' ? 'light' : 'dark'}
+                  backgroundColor={colors.bg}
                 />
-                <Stack.Screen
-                  name="transactions/[id]"
-                  options={{
-                    presentation: 'modal',
-                    animation: 'slide_from_bottom',
+                <Stack
+                  screenOptions={{
+                    headerShown: false,
+                    animation: 'slide_from_right',
                   }}
-                />
-                <Stack.Screen name="accounts/index" options={{ animation: 'slide_from_right' }} />
-                <Stack.Screen
-                  name="reports/preview"
-                  options={{
-                    presentation: 'modal',
-                    animation: 'slide_from_bottom',
-                  }}
-                />
-                <Stack.Screen name="settings/index" options={{ animation: 'slide_from_right' }} />
-                <Stack.Screen
-                  name="sms-import"
-                  options={{
-                    presentation: 'modal',
-                    animation: 'slide_from_bottom',
-                  }}
-                />
-                <Stack.Screen name="splits/index" options={{ animation: 'slide_from_right' }} />
-                <Stack.Screen
-                  name="split-expense/[id]"
-                  options={{
-                    presentation: 'modal',
-                    animation: 'slide_from_bottom',
-                  }}
-                />
-              </Stack>
-            </PopupProvider>
-          </QueryClientProvider>
+                >
+                  <Stack.Screen name="login" options={{ headerShown: false }} />
+                  <Stack.Screen name="auth" options={{ headerShown: false }} />
+                  <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+                  <Stack.Screen
+                    name="transactions/add"
+                    options={{
+                      presentation: 'modal',
+                      animation: 'slide_from_bottom',
+                    }}
+                  />
+                  <Stack.Screen
+                    name="transactions/[id]"
+                    options={{
+                      presentation: 'modal',
+                      animation: 'slide_from_bottom',
+                    }}
+                  />
+                  <Stack.Screen name="accounts/index" options={{ animation: 'slide_from_right' }} />
+                  <Stack.Screen
+                    name="reports/preview"
+                    options={{
+                      presentation: 'modal',
+                      animation: 'slide_from_bottom',
+                    }}
+                  />
+                  <Stack.Screen name="settings/index" options={{ animation: 'slide_from_right' }} />
+                  <Stack.Screen
+                    name="sms-import"
+                    options={{
+                      presentation: 'modal',
+                      animation: 'slide_from_bottom',
+                    }}
+                  />
+                  <Stack.Screen name="splits/index" options={{ animation: 'slide_from_right' }} />
+                  <Stack.Screen
+                    name="split-expense/[id]"
+                    options={{
+                      presentation: 'modal',
+                      animation: 'slide_from_bottom',
+                    }}
+                  />
+                </Stack>
+              </PopupProvider>
+            </QueryClientProvider>
+            <AppToast />
+          </BottomSheetModalProvider>
         </GestureHandlerRootView>
       </SafeAreaProvider>
     </ScreenErrorBoundary>

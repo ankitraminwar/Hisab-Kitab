@@ -166,7 +166,9 @@ All types defined in `src/utils/types.ts`. No `any` in the codebase.
 | ----------------- | -------------------------------------------------------------------- |
 | `Card`            | Rounded bordered container with optional press + glow                |
 | `Button`          | Primary/secondary/danger/ghost button with loading state             |
-| `FAB`             | Floating action button                                               |
+| `FAB`             | Simple floating action button (single action)                        |
+| `SpeedDialFAB`    | Multi-action FAB with animated overlay, label pills, and `hideMainButton` option |
+| `Toast` (AppToast)| Compact pill-style toast (icon + text, themed) — replaces react-native-toast-message defaults |
 | `EmptyState`      | Centered empty list placeholder with icon, title, action             |
 | `CategoryBadge`   | Circular icon badge with category color                              |
 | `CategoryGrid`    | Responsive grid of selectable category tiles                         |
@@ -221,7 +223,7 @@ function createStyles(colors: ThemeColors) {
 
 File-based routing via expo-router. Route → screen mapping:
 
-- `app/(tabs)/` — Bottom tab bar (Dashboard, History, [FAB center], Budgets, Profile)
+- `app/(tabs)/` — Bottom tab bar (Dashboard, History, [SpeedDialFAB center], Budgets, Profile)
 - `app/(tabs)/goals.tsx` — Goals screen (hidden tab, `href: null` — navigated to directly)
 - `app/(tabs)/reports.tsx` — Reports screen (hidden tab, `href: null` — navigated to directly)
 - `app/transactions/add.tsx` — Add transaction modal

@@ -18,7 +18,8 @@ import Animated, {
 } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { Button, CustomModal, EmptyState } from '../../components/common';
+import { Button, CustomModal, AnimatedEmptyState } from '../../components/common';
+import { showToast } from '../../components/common/Toast';
 import { ScreenHeader } from '../../components/common/ScreenHeader';
 import { useTheme, type ThemeColors } from '../../hooks/useTheme';
 import { NoteService } from '../../services/noteService';
@@ -215,6 +216,7 @@ export default function NotesScreen() {
 
   const handleTogglePin = useCallback(async (note: Note) => {
     await NoteService.togglePin(note.id, note.isPinned);
+    showToast.success(note.isPinned ? 'Note unpinned' : 'Note pinned');
     setShowPinMenu(false);
     setLongPressNote(null);
     void loadNotes();
@@ -231,11 +233,11 @@ export default function NotesScreen() {
 
       {notes.length === 0 ? (
         <Animated.View entering={FadeInDown.duration(300)} style={{ flex: 1, padding: SPACING.lg }}>
-          <EmptyState
+          <AnimatedEmptyState
             icon="document-text-outline"
             title="No notes yet"
             subtitle="Jot down your financial thoughts, reminders, or ideas."
-            action="Create Note"
+            actionLabel="Create Note"
             onAction={() => setShowAdd(true)}
           />
         </Animated.View>
@@ -394,6 +396,7 @@ export default function NotesScreen() {
             onPress={() => {
               if (deleteTargetId) {
                 void NoteService.delete(deleteTargetId).then(() => {
+                  showToast.success('Note deleted');
                   setDeleteTargetId(null);
                   void loadNotes();
                 });
@@ -466,6 +469,7 @@ const NoteEditorModal = ({
           color,
           isPinned,
         });
+        showToast.success('Note updated');
       } else {
         await NoteService.create({
           title: title.trim(),
@@ -473,6 +477,7 @@ const NoteEditorModal = ({
           color,
           isPinned,
         });
+        showToast.success('Note created');
       }
       onSave();
     } catch (e) {
@@ -496,7 +501,12 @@ const NoteEditorModal = ({
           {note ? 'Edit Note' : 'New Note'}
         </Text>
         <View style={{ flexDirection: 'row', gap: SPACING.md }}>
-          <TouchableOpacity onPress={() => setIsPinned(!isPinned)}>
+          <TouchableOpacity
+            onPress={() => setIsPinned(!isPinned)}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            accessibilityLabel={isPinned ? 'Unpin note' : 'Pin note'}
+            accessibilityRole="button"
+          >
             <Ionicons
               name={isPinned ? 'pin' : 'pin-outline'}
               size={22}
@@ -509,6 +519,9 @@ const NoteEditorModal = ({
                 onClose();
                 onDelete(note.id);
               }}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              accessibilityLabel="Delete note"
+              accessibilityRole="button"
             >
               <Ionicons name="trash-outline" size={22} color={colors.expense} />
             </TouchableOpacity>
@@ -560,9 +573,9 @@ const NoteEditorModal = ({
                 key={c}
                 onPress={() => setColor(c)}
                 style={{
-                  width: 40,
-                  height: 40,
-                  borderRadius: 20,
+                  width: 44,
+                  height: 44,
+                  borderRadius: 22,
                   backgroundColor: c,
                   alignItems: 'center',
                   justifyContent: 'center',

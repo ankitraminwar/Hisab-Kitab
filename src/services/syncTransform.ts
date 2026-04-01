@@ -129,7 +129,7 @@ const toBooleanIfNeeded = (key: string, value: unknown) => {
 const REMOTE_NOT_NULL_DEFAULTS: Partial<Record<SyncableTable, Record<string, unknown>>> = {
   accounts: { is_default: false, color: '#7C3AED', icon: 'wallet' },
   categories: { is_custom: false },
-  transactions: { tags: '[]', is_recurring: false },
+  transactions: { tags: '[]', is_recurring: false, amount: 0 },
   budgets: { alert_at: 80 },
   goals: { is_completed: false, icon: 'flag', color: '#7C3AED' },
   liabilities: { interest_rate: 0 },

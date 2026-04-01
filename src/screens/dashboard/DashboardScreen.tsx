@@ -19,16 +19,23 @@ import Animated, {
   FadeInDown,
   FadeInRight,
   FadeOutUp,
-  useAnimatedProps,
   useSharedValue,
   withTiming,
   withRepeat,
   useAnimatedStyle,
 } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import Svg, { Circle } from 'react-native-svg';
 
-import { Card, EmptyState, ProgressBar, SectionHeader } from '../../components/common';
+import {
+  Card,
+  EmptyState,
+  ProgressBar,
+  SectionHeader,
+  InsightCard,
+  SkeletonTransactionList,
+} from '../../components/common';
+import { showToast } from '../../components/common/Toast';
+import { DonutChart as DonutChartNew } from '../../components/charts/DonutChart';
 import TransactionItem from '../../components/TransactionItem';
 import { useTheme, type ThemeColors } from '../../hooks/useTheme';
 import {
@@ -41,7 +48,7 @@ import { triggerBackgroundSync } from '../../services/syncService';
 import { TransactionService } from '../../services/transactionService';
 import { useAppStore } from '../../store/appStore';
 import { RADIUS, SPACING, TYPOGRAPHY, formatCompact, formatCurrency } from '../../utils/constants';
-import type { Budget } from '../../utils/types';
+import type { Budget, CategoryBreakdown, SpendingInsight } from '../../utils/types';
 
 const GREETINGS = [
   'Namaste 🇮🇳',
@@ -60,133 +67,6 @@ const GREETINGS = [
   'Let’s get started',
   'Ready to go?',
 ];
-
-// ─── AnimatedCircle ────────────────────────────────────────────────────────────
-const AnimatedCircle = Animated.createAnimatedComponent(Circle);
-
-// ─── Donut Chart Component ────────────────────────────────────────────────────
-interface DonutSlice {
-  label: string;
-  value: number;
-  color: string;
-}
-
-const DonutSliceAnimated: React.FC<{
-  cx: number;
-  cy: number;
-  r: number;
-  strokeWidth: number;
-  color: string;
-  dashArray: number;
-  circumference: number;
-  dashOffset: number;
-}> = ({ cx, cy, r, strokeWidth, color, dashArray, circumference, dashOffset }) => {
-  const progress = useSharedValue(0);
-
-  useEffect(() => {
-    progress.value = withTiming(1, {
-      duration: 1200,
-      easing: Easing.out(Easing.cubic),
-    });
-  }, [progress]);
-
-  const animatedProps = useAnimatedProps(() => ({
-    strokeDasharray: `${dashArray * progress.value} ${circumference - dashArray * progress.value}`,
-    strokeDashoffset: dashOffset,
-  }));
-
-  return (
-    <AnimatedCircle
-      cx={cx}
-      cy={cy}
-      r={r}
-      fill="none"
-      stroke={color}
-      strokeWidth={strokeWidth}
-      animatedProps={animatedProps}
-      strokeLinecap="round"
-    />
-  );
-};
-
-const DonutChart: React.FC<{
-  slices: DonutSlice[];
-  size?: number;
-  strokeWidth?: number;
-  centerLabel?: string;
-  centerSublabel?: string;
-  colors: { textPrimary: string; textMuted: string; bgElevated: string };
-  isBalanceHidden: boolean;
-}> = ({
-  slices,
-  size = 200,
-  strokeWidth = 22,
-  centerLabel,
-  centerSublabel,
-  colors,
-  isBalanceHidden,
-}) => {
-  const radius = (size - strokeWidth) / 2;
-  const circumference = 2 * Math.PI * radius;
-  const total = slices.reduce((sum, s) => sum + s.value, 0);
-  let cumulativeOffset = 0;
-
-  return (
-    <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
-      <Svg width={size} height={size} style={{ transform: [{ rotate: '-90deg' }] }}>
-        <Circle
-          cx={size / 2}
-          cy={size / 2}
-          r={radius}
-          fill="none"
-          stroke={colors.bgElevated}
-          strokeWidth={strokeWidth}
-        />
-        {slices.map((slice, index) => {
-          const pct = total > 0 ? slice.value / total : 0;
-          const dashArray = pct * circumference;
-          const dashOffset = -cumulativeOffset * circumference;
-          cumulativeOffset += pct;
-          return (
-            <DonutSliceAnimated
-              key={index}
-              cx={size / 2}
-              cy={size / 2}
-              r={radius}
-              strokeWidth={strokeWidth}
-              color={slice.color}
-              dashArray={dashArray}
-              circumference={circumference}
-              dashOffset={dashOffset}
-            />
-          );
-        })}
-      </Svg>
-      <View style={StyleSheet.absoluteFill as object}>
-        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-          {centerLabel && (
-            <Text style={{ fontSize: 24, fontWeight: '800', color: colors.textPrimary }}>
-              {isBalanceHidden ? '••••' : centerLabel}
-            </Text>
-          )}
-          {centerSublabel && (
-            <Text
-              style={{
-                fontSize: 10,
-                fontWeight: '700',
-                color: colors.textMuted,
-                textTransform: 'uppercase',
-                marginTop: 4,
-              }}
-            >
-              {centerSublabel}
-            </Text>
-          )}
-        </View>
-      </View>
-    </View>
-  );
-};
 
 // ─── Budget Alert Card ────────────────────────────────────────────────────────
 const BudgetAlertCard: React.FC<{
@@ -271,9 +151,11 @@ export default function DashboardScreen() {
   const setCategories = useAppStore((s) => s.setCategories);
 
   const [refreshing, setRefreshing] = useState(false);
-  const [spendingSlices, setSpendingSlices] = useState<DonutSlice[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [categoryBreakdownData, setCategoryBreakdownData] = useState<CategoryBreakdown[]>([]);
   const [totalSpent, setTotalSpent] = useState(0);
   const [isBalanceHidden, setIsBalanceHidden] = useState(false);
+  const [insights, setInsights] = useState<SpendingInsight[]>([]);
 
   const [greetingIndex, setGreetingIndex] = useState(0);
   const [canScrollLeft, setCanScrollLeft] = useState(false);
@@ -355,15 +237,85 @@ export default function DashboardScreen() {
       dateTo,
       'expense',
     );
-    const slices: DonutSlice[] = categoryBreakdown.slice(0, 4).map((entry, i) => ({
-      label: entry.categoryName ?? 'Other',
-      value: entry.total,
-      color: CHART_COLORS[i % CHART_COLORS.length],
-    }));
-    setSpendingSlices(slices);
     setTotalSpent(monthStats.expense);
+
+    // Build CategoryBreakdown data for the new DonutChart
+    const breakdownData: CategoryBreakdown[] = categoryBreakdown.slice(0, 6).map((entry, i) => ({
+      categoryId: entry.categoryId || `cat-${i}`,
+      categoryName: entry.categoryName ?? 'Other',
+      categoryIcon: 'ellipse',
+      categoryColor: CHART_COLORS[i % CHART_COLORS.length],
+      percentage: monthStats.expense > 0 ? (entry.total / monthStats.expense) * 100 : 0,
+      amount: entry.total,
+    }));
+    setCategoryBreakdownData(breakdownData);
+
+    // Generate spending insights
+    const newInsights: SpendingInsight[] = [];
+
+    // Insight: Top spending category
+    if (categoryBreakdown.length > 0) {
+      const top = categoryBreakdown[0];
+      const topPercent =
+        monthStats.expense > 0 ? Math.round((top.total / monthStats.expense) * 100) : 0;
+      if (topPercent > 40) {
+        newInsights.push({
+          id: 'top-category',
+          type: 'warning',
+          icon: 'pie-chart',
+          title: `${top.categoryName} dominates spending`,
+          description: `${top.categoryName} accounts for ${topPercent}% of your expenses this month.`,
+          color: colors.warning,
+        });
+      }
+    }
+
+    // Insight: Savings rate
+    const sRate =
+      monthStats.income > 0
+        ? ((monthStats.income - monthStats.expense) / monthStats.income) * 100
+        : 0;
+    if (sRate > 30) {
+      newInsights.push({
+        id: 'good-savings',
+        type: 'achievement',
+        icon: 'trophy',
+        title: 'Great savings rate!',
+        description: `You're saving ${sRate.toFixed(0)}% of your income. Keep it up!`,
+        color: colors.income,
+      });
+    } else if (sRate < 10 && monthStats.income > 0) {
+      newInsights.push({
+        id: 'low-savings',
+        type: 'tip',
+        icon: 'bulb',
+        title: 'Savings opportunity',
+        description: `You can save ${formatCurrency(Math.max(0, monthStats.income * 0.2 - (monthStats.income - monthStats.expense)))} more by cutting discretionary spending.`,
+        color: colors.primary,
+      });
+    }
+
+    // Insight: Budget alerts count
+    const overBudgets = bdgts.filter((b) => b.limitAmount > 0 && b.spent / b.limitAmount >= 0.9);
+    if (overBudgets.length > 0) {
+      newInsights.push({
+        id: 'budget-alert',
+        type: 'warning',
+        icon: 'alert-circle',
+        title: `${overBudgets.length} budget${overBudgets.length > 1 ? 's' : ''} near limit`,
+        description: 'Review your budgets to avoid overspending this month.',
+        color: colors.expense,
+      });
+    }
+
+    setInsights(newInsights.slice(0, 3));
+    setIsLoading(false);
   }, [
     CHART_COLORS,
+    colors.expense,
+    colors.income,
+    colors.primary,
+    colors.warning,
     setAccounts,
     setCategories,
     setBudgets,
@@ -381,6 +333,7 @@ export default function DashboardScreen() {
     await triggerBackgroundSync('pull-to-refresh');
     await loadData();
     setRefreshing(false);
+    showToast.success('Dashboard refreshed');
   };
 
   const toggleHideBalance = () => {
@@ -580,6 +533,19 @@ export default function DashboardScreen() {
           </TouchableOpacity>
         </Animated.View>
 
+        {/* Actionable Insights */}
+        {insights.length > 0 && (
+          <Animated.View
+            entering={FadeInDown.duration(500).delay(150)}
+            style={{ marginTop: SPACING.md }}
+          >
+            <Text style={styles.sectionTitle}>Insights</Text>
+            {insights.map((insight) => (
+              <InsightCard key={insight.id} insight={insight} />
+            ))}
+          </Animated.View>
+        )}
+
         {/* Quick Actions (Horizontal Scroll) */}
         <Animated.View
           entering={FadeInRight.duration(500).delay(200)}
@@ -699,36 +665,26 @@ export default function DashboardScreen() {
             </TouchableOpacity>
           </View>
           <Card style={styles.donutCard}>
-            <DonutChart
-              slices={
-                spendingSlices.length > 0
-                  ? spendingSlices
-                  : [{ label: 'No data', value: 1, color: colors.bgElevated }]
-              }
-              centerLabel={formatCompact(totalSpent)}
-              centerSublabel="Total Spent"
-              colors={colors}
-              isBalanceHidden={isBalanceHidden}
-            />
-            <View style={styles.legendGrid}>
-              {spendingSlices.map((slice, idx) => (
-                <View key={idx} style={styles.legendItem}>
-                  <View
-                    style={[
-                      styles.legendDot,
+            <DonutChartNew
+              data={
+                categoryBreakdownData.length > 0
+                  ? categoryBreakdownData
+                  : [
                       {
-                        backgroundColor: slice.color,
-                        shadowColor: slice.color,
-                        shadowOffset: { width: 0, height: 2 },
-                        shadowOpacity: 0.5,
-                        shadowRadius: 3,
+                        categoryId: 'none',
+                        categoryName: 'No data',
+                        categoryIcon: 'ellipse',
+                        categoryColor: colors.bgElevated,
+                        percentage: 100,
+                        amount: 0,
                       },
-                    ]}
-                  />
-                  <Text style={styles.legendText}>{slice.label}</Text>
-                </View>
-              ))}
-            </View>
+                    ]
+              }
+              size={200}
+              strokeWidth={22}
+              centerLabel="Total Spent"
+              centerValue={isBalanceHidden ? '••••' : formatCompact(totalSpent)}
+            />
           </Card>
         </Animated.View>
 
@@ -739,7 +695,9 @@ export default function DashboardScreen() {
             action="See All"
             onAction={() => router.push('/transactions')}
           />
-          {recentTransactions.length === 0 ? (
+          {isLoading ? (
+            <SkeletonTransactionList count={3} />
+          ) : recentTransactions.length === 0 ? (
             <EmptyState
               icon="receipt"
               title="No transactions yet"
@@ -795,6 +753,8 @@ const createStyles = (colors: ThemeColors) =>
     headerActions: { flexDirection: 'row', alignItems: 'center', gap: 10 },
     iconBtn: {
       padding: 8,
+      minWidth: 44,
+      minHeight: 44,
       backgroundColor: colors.bgElevated,
       borderRadius: RADIUS.full,
       alignItems: 'center',
@@ -929,7 +889,6 @@ const createStyles = (colors: ThemeColors) =>
 
     // Donut chart card
     donutCard: {
-      alignItems: 'center',
       paddingVertical: SPACING.lg,
       paddingHorizontal: SPACING.md,
       marginBottom: SPACING.md,

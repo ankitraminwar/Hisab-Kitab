@@ -1,5 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { FlashList } from '@shopify/flash-list';
+import type BottomSheetLib from '@gorhom/bottom-sheet';
 import { endOfMonth, format, startOfMonth, subDays, subMonths } from 'date-fns';
 import { useRouter, type Href } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -7,7 +8,9 @@ import { RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } 
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { AmountText, Button, CustomModal, SearchBar } from '../../components/common';
-import TransactionItem from '../../components/TransactionItem';
+import { showToast } from '../../components/common/Toast';
+import { SwipeableTransactionItem } from '../../components/common/SwipeableTransactionItem';
+import { FilterBottomSheet } from '../../components/common/FilterBottomSheet';
 import { useTheme, type ThemeColors } from '../../hooks/useTheme';
 import { AccountService, CategoryService } from '../../services/dataServices';
 import { triggerBackgroundSync } from '../../services/syncService';
@@ -27,21 +30,6 @@ type ListItem =
   | { type: 'transaction'; data: Transaction; key: string };
 
 const PAGE_SIZE = 20;
-
-// ─── Filter Bottom Sheet ──────────────────────────────────────────────────────
-const FilterSheet: React.FC<{
-  visible: boolean;
-  title: string;
-  onClose: () => void;
-  colors: ReturnType<typeof useTheme>['colors'];
-  children: React.ReactNode;
-}> = ({ visible, title, onClose, children }) => (
-  <CustomModal visible={visible} title={title} onClose={onClose}>
-    <ScrollView showsVerticalScrollIndicator={false} style={{ paddingBottom: 32 }}>
-      {children}
-    </ScrollView>
-  </CustomModal>
-);
 
 // ─── Transaction Preview Sheet ────────────────────────────────────────────────
 const TransactionPreviewSheet: React.FC<{
@@ -186,6 +174,7 @@ const TransactionPreviewSheet: React.FC<{
               onPress={() => {
                 void (async () => {
                   await TransactionService.delete(transaction.id);
+                  showToast.success('Transaction deleted');
                   setConfirmDelete(false);
                   onDelete(transaction.id);
                 })();
@@ -255,7 +244,7 @@ export default function TransactionsScreen() {
 
   const [categories, setCategories] = useState<Category[]>([]);
   const [accounts, setAccounts] = useState<Account[]>([]);
-  const [activeFilter, setActiveFilter] = useState<'type' | 'category' | 'account' | null>(null);
+  const filterSheetRef = useRef<BottomSheetLib>(null);
 
   // Quick date filter
   type QuickDateFilter = 'all' | '7d' | 'thisMonth' | 'lastMonth';
@@ -407,55 +396,28 @@ export default function TransactionsScreen() {
         );
       }
       return (
-        <View style={styles.txCardWrapper}>
-          <TransactionItem
-            item={item.data}
-            onPress={() => setPreviewTx(item.data)}
-            onLongPress={() => setPreviewTx(item.data)}
-          />
-        </View>
+        <SwipeableTransactionItem
+          transaction={item.data}
+          onPress={() => setPreviewTx(item.data)}
+          onEdit={() => {
+            router.push(`/transactions/${item.data.id}?edit=1` as Href);
+          }}
+          onDelete={() => {
+            void (async () => {
+              await TransactionService.delete(item.data.id);
+              showToast.success('Transaction deleted');
+              await loadData(0, true);
+            })();
+          }}
+        />
       );
     },
-    [styles, colors],
+    [styles, colors, loadData, router],
   );
 
-  const renderFilterOption = (
-    label: string,
-    isSelected: boolean,
-    onPress: () => void,
-    icon?: string,
-    iconColor?: string,
-    id?: string,
-  ) => (
-    <TouchableOpacity
-      key={id ?? label}
-      style={[styles.filterOption, isSelected && styles.filterOptionActive]}
-      onPress={onPress}
-      activeOpacity={0.7}
-    >
-      <View style={styles.filterOptionLeft}>
-        {icon && (
-          <View
-            style={[
-              styles.filterOptionIcon,
-              { backgroundColor: (iconColor ?? colors.primary) + '15' },
-            ]}
-          >
-            <Ionicons name={icon as never} size={18} color={iconColor ?? colors.primary} />
-          </View>
-        )}
-        <Text
-          style={[
-            styles.filterOptionText,
-            isSelected && { color: colors.primary, fontWeight: '700' },
-          ]}
-        >
-          {label}
-        </Text>
-      </View>
-      {isSelected && <Ionicons name="checkmark-circle" size={20} color={colors.primary} />}
-    </TouchableOpacity>
-  );
+  const openFilterSheet = useCallback(() => {
+    filterSheetRef.current?.snapToIndex(0);
+  }, []);
 
   const unreadNotificationsCount = useAppStore((s) => s.unreadNotificationsCount);
 
@@ -520,7 +482,7 @@ export default function TransactionsScreen() {
           )}
           <TouchableOpacity
             style={[styles.filterChip, filterType && styles.filterChipActive]}
-            onPress={() => setActiveFilter('type')}
+            onPress={openFilterSheet}
           >
             <Ionicons
               name="swap-vertical"
@@ -544,7 +506,7 @@ export default function TransactionsScreen() {
 
           <TouchableOpacity
             style={[styles.filterChip, filterCat && styles.filterChipActive]}
-            onPress={() => setActiveFilter('category')}
+            onPress={openFilterSheet}
           >
             <Ionicons
               name="pricetag"
@@ -570,7 +532,7 @@ export default function TransactionsScreen() {
 
           <TouchableOpacity
             style={[styles.filterChip, filterAcc && styles.filterChipActive]}
-            onPress={() => setActiveFilter('account')}
+            onPress={openFilterSheet}
           >
             <Ionicons
               name="wallet"
@@ -624,132 +586,6 @@ export default function TransactionsScreen() {
           ))}
         </ScrollView>
       </Animated.View>
-
-      {/* Type Filter Sheet */}
-      <FilterSheet
-        visible={activeFilter === 'type'}
-        title="Transaction Type"
-        onClose={() => setActiveFilter(null)}
-        colors={colors}
-      >
-        {renderFilterOption(
-          'All Types',
-          !filterType,
-          () => {
-            setFilterType(undefined);
-            setActiveFilter(null);
-          },
-          'list',
-          colors.textSecondary,
-        )}
-        {renderFilterOption(
-          'Expense',
-          filterType === 'expense',
-          () => {
-            setFilterType('expense');
-            setActiveFilter(null);
-          },
-          'arrow-up-circle',
-          colors.expense,
-        )}
-        {renderFilterOption(
-          'Income',
-          filterType === 'income',
-          () => {
-            setFilterType('income');
-            setActiveFilter(null);
-          },
-          'arrow-down-circle',
-          colors.income,
-        )}
-        {renderFilterOption(
-          'Transfer',
-          filterType === 'transfer',
-          () => {
-            setFilterType('transfer');
-            setActiveFilter(null);
-          },
-          'swap-horizontal-outline',
-          colors.transfer,
-        )}
-      </FilterSheet>
-
-      {/* Category Filter Sheet */}
-      <FilterSheet
-        visible={activeFilter === 'category'}
-        title="Category"
-        onClose={() => setActiveFilter(null)}
-        colors={colors}
-      >
-        {renderFilterOption(
-          'All Categories',
-          !filterCat,
-          () => {
-            setFilterCat(undefined);
-            setActiveFilter(null);
-          },
-          'grid',
-          colors.textSecondary,
-        )}
-        {categories.map((c) =>
-          renderFilterOption(
-            c.name,
-            filterCat === c.id,
-            () => {
-              setFilterCat(c.id);
-              setActiveFilter(null);
-            },
-            c.icon,
-            c.color,
-            c.id,
-          ),
-        )}
-      </FilterSheet>
-
-      {/* Account Filter Sheet */}
-      <FilterSheet
-        visible={activeFilter === 'account'}
-        title="Account"
-        onClose={() => setActiveFilter(null)}
-        colors={colors}
-      >
-        {renderFilterOption(
-          'All Accounts',
-          !filterAcc,
-          () => {
-            setFilterAcc(undefined);
-            setActiveFilter(null);
-          },
-          'wallet',
-          colors.textSecondary,
-        )}
-        {accounts.map((a) =>
-          renderFilterOption(
-            a.name,
-            filterAcc === a.id,
-            () => {
-              setFilterAcc(a.id);
-              setActiveFilter(null);
-            },
-            a.icon,
-            a.color,
-            a.id,
-          ),
-        )}
-      </FilterSheet>
-
-      {/* Transaction Preview Sheet */}
-      <TransactionPreviewSheet
-        transaction={previewTx}
-        visible={previewTx !== null}
-        onClose={() => setPreviewTx(null)}
-        onEdit={(id) => {
-          setPreviewTx(null);
-          router.push(`/transactions/${id}?edit=1` as Href);
-        }}
-        onDelete={() => setPreviewTx(null)}
-        colors={colors}
-      />
 
       {/* Transaction List */}
       <FlashList<ListItem>
@@ -812,6 +648,36 @@ export default function TransactionsScreen() {
           ) : null
         }
       />
+
+      {/* Filter Bottom Sheet */}
+      <FilterBottomSheet
+        ref={filterSheetRef}
+        categories={categories}
+        accounts={accounts}
+        filterType={filterType ?? null}
+        filterCat={filterCat ?? null}
+        filterAcc={filterAcc ?? null}
+        quickDate={quickDate}
+        onFilterType={(t) => setFilterType(t ?? undefined)}
+        onFilterCat={(c) => setFilterCat(c ?? undefined)}
+        onFilterAcc={(a) => setFilterAcc(a ?? undefined)}
+        onQuickDate={(d) => setQuickDate(d as QuickDateFilter)}
+        onClearAll={clearAllFilters}
+        onClose={() => filterSheetRef.current?.close()}
+      />
+
+      {/* Transaction Preview Sheet */}
+      <TransactionPreviewSheet
+        transaction={previewTx}
+        visible={previewTx !== null}
+        onClose={() => setPreviewTx(null)}
+        onEdit={(id) => {
+          setPreviewTx(null);
+          router.push(`/transactions/${id}?edit=1` as Href);
+        }}
+        onDelete={() => setPreviewTx(null)}
+        colors={colors}
+      />
     </SafeAreaView>
   );
 }
@@ -828,11 +694,11 @@ const createStyles = (colors: ThemeColors) =>
       paddingVertical: SPACING.sm,
     },
     menuBtn: {
-      width: 40,
-      height: 40,
+      width: 44,
+      height: 44,
       alignItems: 'center',
       justifyContent: 'center',
-      borderRadius: 20,
+      borderRadius: 22,
     },
     title: { ...TYPOGRAPHY.h2, color: colors.textPrimary, fontWeight: '800' },
     searchWrap: { paddingHorizontal: SPACING.md, marginBottom: SPACING.sm },
@@ -878,34 +744,6 @@ const createStyles = (colors: ThemeColors) =>
       backgroundColor: colors.border,
       marginHorizontal: 2,
     },
-    filterOption: {
-      flexDirection: 'row',
-      justifyContent: 'space-between',
-      alignItems: 'center',
-      paddingVertical: 14,
-      paddingHorizontal: 4,
-      borderBottomWidth: 1,
-      borderBottomColor: colors.border,
-    },
-    filterOptionActive: {
-      backgroundColor: colors.primary + '08',
-      marginHorizontal: -4,
-      paddingHorizontal: 8,
-      borderRadius: RADIUS.sm,
-    },
-    filterOptionLeft: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-    filterOptionIcon: {
-      width: 36,
-      height: 36,
-      borderRadius: 10,
-      alignItems: 'center',
-      justifyContent: 'center',
-    },
-    filterOptionText: {
-      ...TYPOGRAPHY.body,
-      color: colors.textPrimary,
-      fontWeight: '500',
-    },
     monthHeader: {
       flexDirection: 'row',
       justifyContent: 'space-between',
@@ -922,14 +760,6 @@ const createStyles = (colors: ThemeColors) =>
       textTransform: 'uppercase',
     },
     monthTotal: { fontSize: 12, fontWeight: '700' },
-    txCardWrapper: {
-      backgroundColor: colors.bgCard,
-      borderRadius: RADIUS.lg,
-      borderWidth: 1,
-      borderColor: colors.border,
-      marginBottom: SPACING.sm,
-      overflow: 'hidden',
-    },
     emptyState: { alignItems: 'center', paddingVertical: 60, gap: SPACING.sm },
     emptyIcon: {
       width: 72,

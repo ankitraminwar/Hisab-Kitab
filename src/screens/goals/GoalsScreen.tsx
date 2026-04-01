@@ -14,11 +14,19 @@ import {
 } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Button, Card, CustomModal, EmptyState, ProgressBar } from '../../components/common';
+import {
+  Button,
+  Card,
+  CustomModal,
+  AnimatedEmptyState,
+  ProgressBar,
+} from '../../components/common';
+import { showToast } from '../../components/common/Toast';
 import { useTheme, type ThemeColors } from '../../hooks/useTheme';
 import { GoalService } from '../../services/dataService';
 import { useAppStore } from '../../store/appStore';
 import { RADIUS, SPACING, TYPOGRAPHY, formatCurrency } from '../../utils/constants';
+import { goalSchema, fundGoalSchema } from '../../utils/validation';
 import type { Goal } from '../../utils/types';
 
 const GOAL_COLORS = ['#7C3AED', '#06B6D4', '#22C55E', '#F97316', '#F43F5E', '#EAB308', '#EC4899'];
@@ -69,9 +77,15 @@ export default function GoalsScreen() {
   };
 
   const handleFund = async () => {
-    if (!selectedGoal || !fundAmount || Number(fundAmount) <= 0) return;
+    if (!selectedGoal) return;
+    const result = fundGoalSchema.safeParse({ amount: Number(fundAmount) });
+    if (!result.success) {
+      showToast.error(result.error.issues[0]?.message ?? 'Invalid amount');
+      return;
+    }
 
     await GoalService.addFunds(selectedGoal.id, Number(fundAmount));
+    showToast.success('Funds added');
     setFundAmount('');
     setSelectedGoal(null);
     void loadGoals();
@@ -85,7 +99,12 @@ export default function GoalsScreen() {
     <SafeAreaView style={styles.container} edges={['top']}>
       <Animated.View entering={FadeInDown.duration(400)} style={styles.header}>
         <Text style={styles.title}>Savings Goals</Text>
-        <TouchableOpacity onPress={() => setShowAdd(true)} style={styles.addButton}>
+        <TouchableOpacity
+          onPress={() => setShowAdd(true)}
+          style={styles.addButton}
+          accessibilityLabel="Add goal"
+          accessibilityRole="button"
+        >
           <Ionicons name="add" size={24} color={colors.primary} />
         </TouchableOpacity>
       </Animated.View>
@@ -127,11 +146,11 @@ export default function GoalsScreen() {
 
         <Animated.View entering={FadeInDown.duration(400).delay(200)}>
           {goals.length === 0 ? (
-            <EmptyState
+            <AnimatedEmptyState
               icon="flag-outline"
               title="No goals set"
               subtitle="Set a savings goal to start tracking your progress."
-              action="Create Goal"
+              actionLabel="Create Goal"
               onAction={() => setShowAdd(true)}
             />
           ) : (
@@ -172,6 +191,7 @@ export default function GoalsScreen() {
             onPress={() => {
               if (deleteTarget) {
                 void GoalService.delete(deleteTarget.id).then(() => {
+                  showToast.success('Goal deleted');
                   setDeleteTarget(null);
                   void loadGoals();
                 });
@@ -411,7 +431,17 @@ const AddGoalModal = ({
   const [loading, setLoading] = useState(false);
 
   const handleSave = async () => {
-    if (!name || !targetAmount) return;
+    const result = goalSchema.safeParse({
+      name,
+      targetAmount: Number(targetAmount),
+      deadline: deadline.toISOString().slice(0, 10),
+      color,
+      icon,
+    });
+    if (!result.success) {
+      showToast.error(result.error.issues[0]?.message ?? 'Invalid input');
+      return;
+    }
 
     setLoading(true);
     await GoalService.create({
@@ -427,6 +457,7 @@ const AddGoalModal = ({
     setLoading(false);
     setName('');
     setTargetAmount('');
+    showToast.success('Goal created');
     onSave();
   };
 
@@ -564,6 +595,7 @@ const EditGoalModal = ({
         color,
         icon,
       });
+      showToast.success('Goal updated');
       onSave();
     } finally {
       setLoading(false);
@@ -747,9 +779,9 @@ const modalStyles = (colors: ThemeColors) =>
     },
     selector: { flexDirection: 'row', marginBottom: SPACING.md },
     colorOption: {
-      width: 40,
-      height: 40,
-      borderRadius: 20,
+      width: 44,
+      height: 44,
+      borderRadius: 22,
       marginRight: SPACING.md,
     },
     iconOption: {
@@ -785,8 +817,8 @@ const createStyles = (colors: ThemeColors) =>
     },
     title: { ...TYPOGRAPHY.h2, color: colors.textPrimary },
     addButton: {
-      width: 40,
-      height: 40,
+      width: 44,
+      height: 44,
       alignItems: 'center',
       justifyContent: 'center',
       borderRadius: RADIUS.full,

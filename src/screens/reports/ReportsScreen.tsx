@@ -27,12 +27,15 @@ import Animated, {
 } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { EmptyState } from '../../components/common';
+import { AnimatedEmptyState } from '../../components/common';
+import { InteractiveLineChart } from '../../components/charts/InteractiveLineChart';
 import { ScreenHeader } from '../../components/common/ScreenHeader';
 import { useTheme, type ThemeColors } from '../../hooks/useTheme';
 import { TransactionService } from '../../services/transactionService';
 import { useAppStore } from '../../store/appStore';
 import { RADIUS, SPACING, TYPOGRAPHY, formatCompact, formatCurrency } from '../../utils/constants';
+
+import type { ChartDataPoint } from '../../utils/types';
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
 
@@ -255,6 +258,8 @@ const ReportContent: React.FC<{
   const [expenseBreakdown, setExpenseBreakdown] = useState<CategoryDatum[]>([]);
   const [stats, setStats] = useState({ income: 0, expense: 0 });
   const [prevStats, setPrevStats] = useState({ income: 0, expense: 0 });
+  const [expenseChartData, setExpenseChartData] = useState<ChartDataPoint[]>([]);
+  const [incomeChartData, setIncomeChartData] = useState<ChartDataPoint[]>([]);
 
   const range = useMemo(() => getDateRange(period, anchor), [period, anchor]);
   const prevRange = useMemo(() => {
@@ -263,14 +268,29 @@ const ReportContent: React.FC<{
   }, [period, anchor]);
 
   const loadData = useCallback(async () => {
-    const [breakdown, currentStats, previousStats] = await Promise.all([
+    const [breakdown, currentStats, previousStats, dailyTotals] = await Promise.all([
       TransactionService.getCategoryBreakdownByDateRange(range.from, range.to, 'expense'),
       TransactionService.getStatsByDateRange(range.from, range.to),
       TransactionService.getStatsByDateRange(prevRange.from, prevRange.to),
+      TransactionService.getDailyTotals(range.from, range.to),
     ]);
     setExpenseBreakdown(breakdown);
     setStats(currentStats);
     setPrevStats(previousStats);
+
+    // Build chart data points from daily totals
+    setExpenseChartData(
+      dailyTotals.map((d) => ({
+        timestamp: new Date(d.date).getTime(),
+        value: d.expense,
+      })),
+    );
+    setIncomeChartData(
+      dailyTotals.map((d) => ({
+        timestamp: new Date(d.date).getTime(),
+        value: d.income,
+      })),
+    );
   }, [range, prevRange]);
 
   useEffect(() => {
@@ -329,7 +349,7 @@ const ReportContent: React.FC<{
 
       {!hasData ? (
         <View style={{ paddingVertical: SPACING.xxl }}>
-          <EmptyState
+          <AnimatedEmptyState
             icon="bar-chart-outline"
             title="No data for this period"
             subtitle={`No income or expenses recorded for ${range.label}. Try selecting a different time period.`}
@@ -398,6 +418,30 @@ const ReportContent: React.FC<{
             </View>
           </View>
 
+          {/* Expense Trend Chart */}
+          {expenseChartData.length >= 1 && (
+            <View style={{ marginTop: SPACING.md }}>
+              <InteractiveLineChart
+                data={expenseChartData}
+                title="Expense Trend"
+                color={colors.expense}
+                height={180}
+              />
+            </View>
+          )}
+
+          {/* Income Trend Chart */}
+          {incomeChartData.length >= 1 && (
+            <View style={{ marginTop: SPACING.md }}>
+              <InteractiveLineChart
+                data={incomeChartData}
+                title="Income Trend"
+                color={colors.income}
+                height={180}
+              />
+            </View>
+          )}
+
           {/* Spending Categories */}
           {expenseBreakdown.length > 0 && (
             <>
@@ -437,7 +481,12 @@ const ReportContent: React.FC<{
                       <View style={styles.catContent}>
                         <View style={styles.catTopRow}>
                           <Text style={styles.catName}>{item.categoryName}</Text>
-                          <Text style={styles.catAmount}>{formatCurrency(item.total)}</Text>
+                          <View style={{ alignItems: 'flex-end' }}>
+                            <Text style={styles.catAmount}>{formatCurrency(item.total)}</Text>
+                            <Text style={[styles.catPercent, { color: catColor }]}>
+                              {percentage.toFixed(1)}%
+                            </Text>
+                          </View>
                         </View>
                         <View style={styles.catBarBg}>
                           <View
@@ -677,6 +726,11 @@ const createStyles = (colors: ThemeColors) =>
       fontSize: 13,
       fontWeight: '700',
       color: colors.textPrimary,
+    },
+    catPercent: {
+      fontSize: 11,
+      fontWeight: '600',
+      marginTop: 1,
     },
     catBarBg: {
       height: 6,

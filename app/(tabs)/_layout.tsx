@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { Tabs, useRouter } from 'expo-router';
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Platform,
   Pressable,
@@ -19,7 +19,9 @@ import Animated, {
   withSpring,
 } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SpeedDialFAB } from '../../src/components/common';
 import { useTheme, type ThemeColors } from '../../src/hooks/useTheme';
+import type { FABAction } from '../../src/utils/types';
 
 const SPRING_CONFIG = { damping: 12, stiffness: 180 };
 
@@ -42,8 +44,7 @@ const TabIcon: React.FC<{ name: string; color: string; focused: boolean }> = ({
   );
 };
 
-const CenterFAB: React.FC = () => {
-  const router = useRouter();
+const CenterFAB: React.FC<{ onPress: () => void }> = ({ onPress }) => {
   const { colors } = useTheme();
   const scale = useSharedValue(1);
 
@@ -59,8 +60,11 @@ const CenterFAB: React.FC = () => {
       onPressOut={() => {
         scale.value = withSpring(1, { damping: 10, stiffness: 300 });
       }}
-      onPress={() => router.push('/transactions/add')}
-      accessibilityLabel="Add transaction"
+      onPress={() => {
+        void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+        onPress();
+      }}
+      accessibilityLabel="Open quick actions"
       accessibilityRole="button"
     >
       <Animated.View
@@ -79,12 +83,52 @@ const CenterFAB: React.FC = () => {
 export default function TabsLayout() {
   const { colors, isDark } = useTheme();
   const { bottom } = useSafeAreaInsets();
+  const router = useRouter();
   const styles = React.useMemo(
     () => createStyles(colors, bottom, isDark),
     [colors, bottom, isDark],
   );
 
   const [toastMsg, setToastMsg] = useState<string | null>(null);
+  const [fabOpen, setFabOpen] = useState(false);
+
+  const fabActions: FABAction[] = useMemo(
+    () => [
+      {
+        id: 'add-expense',
+        label: 'Add Expense',
+        icon: 'arrow-down-circle',
+        color: colors.expense,
+        onPress: () => router.push('/transactions/add'),
+      },
+      {
+        id: 'split-expense',
+        label: 'Split Expense',
+        icon: 'people',
+        color: colors.primary,
+        onPress: () => router.push('/splits'),
+      },
+      {
+        id: 'add-note',
+        label: 'Add Note',
+        icon: 'document-text',
+        color: '#3B82F6',
+        onPress: () => router.push('/notes'),
+      },
+      {
+        id: 'add-budget',
+        label: 'Add Budget',
+        icon: 'business',
+        color: '#F59E0B',
+        onPress: () => router.push('/budgets'),
+      },
+    ],
+    [colors.expense, colors.primary, router],
+  );
+
+  const toggleFab = useCallback(() => {
+    setFabOpen((prev) => !prev);
+  }, []);
 
   const showToast = (msg: string) => {
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
@@ -159,7 +203,7 @@ export default function TabsLayout() {
           name="add-placeholder"
           options={{
             title: '',
-            tabBarButton: () => <CenterFAB />,
+            tabBarButton: () => <CenterFAB onPress={toggleFab} />,
           }}
           listeners={{
             tabPress: (e) => {
@@ -209,6 +253,9 @@ export default function TabsLayout() {
           }}
         />
       </Tabs>
+
+      {/* Unified Speed Dial FAB */}
+      <SpeedDialFAB actions={fabActions} isOpen={fabOpen} onToggle={toggleFab} hideMainButton />
 
       {/* iOS Custom Toast */}
       {Platform.OS === 'ios' && toastMsg && (

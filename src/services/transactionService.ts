@@ -428,6 +428,27 @@ export const TransactionService = {
     );
   },
 
+  /** Get daily totals for a date range (for line chart) */
+  async getDailyTotals(
+    dateFrom: string,
+    dateTo: string,
+  ): Promise<{ date: string; income: number; expense: number }[]> {
+    return getDatabase().getAllAsync<{
+      date: string;
+      income: number;
+      expense: number;
+    }>(
+      `SELECT date,
+              COALESCE(SUM(CASE WHEN type = 'income' THEN amount ELSE 0 END), 0) as income,
+              COALESCE(SUM(CASE WHEN type = 'expense' THEN amount ELSE 0 END), 0) as expense
+       FROM transactions
+       WHERE deletedAt IS NULL AND date >= ? AND date <= ?
+       GROUP BY date
+       ORDER BY date ASC`,
+      [dateFrom, dateTo],
+    );
+  },
+
   /** Get stats for a date range (dateFrom inclusive, dateTo inclusive) */
   async getStatsByDateRange(
     dateFrom: string,

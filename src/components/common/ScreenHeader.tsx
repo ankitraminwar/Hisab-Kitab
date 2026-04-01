@@ -67,8 +67,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   backButton: {
-    width: 40,
-    height: 40,
+    width: 44,
+    height: 44,
     borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
@@ -78,8 +78,8 @@ const styles = StyleSheet.create({
     ...TYPOGRAPHY.h2,
   },
   rightButton: {
-    width: 40,
-    height: 40,
+    width: 44,
+    height: 44,
     borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
