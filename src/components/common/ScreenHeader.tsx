@@ -11,6 +11,7 @@ interface ScreenHeaderProps {
   rightAction?: {
     icon: keyof typeof Ionicons.glyphMap;
     onPress: () => void;
+    accessibilityLabel?: string;
   };
 }
 
@@ -42,7 +43,7 @@ export const ScreenHeader: React.FC<ScreenHeaderProps> = ({
         <TouchableOpacity
           onPress={rightAction.onPress}
           style={[styles.rightButton, { backgroundColor: colors.bgCard }]}
-          accessibilityLabel="More options"
+          accessibilityLabel={rightAction.accessibilityLabel ?? 'More options'}
           accessibilityRole="button"
         >
           <Ionicons name={rightAction.icon} size={22} color={colors.primary} />

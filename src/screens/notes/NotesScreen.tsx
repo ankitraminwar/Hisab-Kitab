@@ -250,8 +250,11 @@ export default function NotesScreen() {
               refreshing={refreshing}
               onRefresh={async () => {
                 setRefreshing(true);
-                await loadNotes();
-                setRefreshing(false);
+                try {
+                  await loadNotes();
+                } finally {
+                  setRefreshing(false);
+                }
               }}
               tintColor={colors.primary}
             />

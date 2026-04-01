@@ -135,7 +135,7 @@ const BudgetAlertCard: React.FC<{
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 export default function DashboardScreen() {
   const router = useRouter();
-  const { colors, isDark } = useTheme();
+  const { colors } = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const dashboardStats = useAppStore((s) => s.dashboardStats);
   const setDashboardStats = useAppStore((s) => s.setDashboardStats);
@@ -478,9 +478,7 @@ export default function DashboardScreen() {
         <Animated.View entering={FadeInDown.duration(500).delay(100)}>
           <TouchableOpacity activeOpacity={0.9} onPress={() => router.push('/accounts' as Href)}>
             <LinearGradient
-              colors={
-                isDark ? [colors.primaryDark, '#4C1D95'] : [colors.primary, colors.primaryDark]
-              }
+              colors={[colors.primary, colors.primaryDark]}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
               style={styles.heroCard}

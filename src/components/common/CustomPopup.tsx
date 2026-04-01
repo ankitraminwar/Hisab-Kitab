@@ -50,11 +50,7 @@ export const CustomPopup: React.FC<CustomPopupProps> = ({
   return (
     <Modal visible={visible} transparent animationType="fade">
       <View style={styles.popupOverlay}>
-        <View style={StyleSheet.absoluteFill}>
-          <Pressable style={StyleSheet.absoluteFill} onPress={onClose}>
-            <View style={{ flex: 1, backgroundColor: colors.overlay }} />
-          </Pressable>
-        </View>
+        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
 
         <View style={styles.popupCard}>
           <View style={[styles.popupIconBg, { backgroundColor: iconColor + '20' }]}>

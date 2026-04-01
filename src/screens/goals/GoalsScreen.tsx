@@ -117,8 +117,11 @@ export default function GoalsScreen() {
             refreshing={refreshing}
             onRefresh={async () => {
               setRefreshing(true);
-              await loadGoals();
-              setRefreshing(false);
+              try {
+                await loadGoals();
+              } finally {
+                setRefreshing(false);
+              }
             }}
             tintColor={colors.primary}
           />

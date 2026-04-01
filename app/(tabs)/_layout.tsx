@@ -1,3 +1,4 @@
+import { type BottomTabBarButtonProps } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { Tabs, useRouter } from 'expo-router';
@@ -61,7 +62,7 @@ const CenterFAB: React.FC<{ onPress: () => void }> = ({ onPress }) => {
         scale.value = withSpring(1, { damping: 10, stiffness: 300 });
       }}
       onPress={() => {
-        void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+        void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
         onPress();
       }}
       accessibilityLabel="Open quick actions"
@@ -81,13 +82,10 @@ const CenterFAB: React.FC<{ onPress: () => void }> = ({ onPress }) => {
 };
 
 export default function TabsLayout() {
-  const { colors, isDark } = useTheme();
+  const { colors } = useTheme();
   const { bottom } = useSafeAreaInsets();
   const router = useRouter();
-  const styles = React.useMemo(
-    () => createStyles(colors, bottom, isDark),
-    [colors, bottom, isDark],
-  );
+  const styles = React.useMemo(() => createStyles(colors, bottom), [colors, bottom]);
 
   const [toastMsg, setToastMsg] = useState<string | null>(null);
   const [fabOpen, setFabOpen] = useState(false);
@@ -131,7 +129,7 @@ export default function TabsLayout() {
   }, []);
 
   const showToast = (msg: string) => {
-    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy).catch(() => {});
     if (Platform.OS === 'android') {
       ToastAndroid.show(msg, ToastAndroid.SHORT);
     } else {
@@ -147,18 +145,19 @@ export default function TabsLayout() {
   }, [toastMsg]);
 
   // A custom wrapper for the bottom tabs to intercept onLongPress
-  const CustomTabBarButton = (props: Record<string, unknown>, name: string) => {
+  const CustomTabBarButton = (props: BottomTabBarButtonProps, name: string) => {
+    const { onLongPress, style, children, ref: _ref, ...rest } = props;
     return (
       <Pressable
-        {...(props as object)}
-        onLongPress={() => showToast(name)}
-        style={[
-          props.style as ViewStyle,
-          { flex: 1, alignItems: 'center', justifyContent: 'center' },
-        ]}
+        {...rest}
+        onLongPress={(e) => {
+          showToast(name);
+          onLongPress?.(e);
+        }}
+        style={[style as ViewStyle, { flex: 1, alignItems: 'center', justifyContent: 'center' }]}
         android_ripple={{ color: colors.primary + '20', borderless: true, radius: 24 }}
       >
-        {props.children as React.ReactNode}
+        {children as React.ReactNode}
       </Pressable>
     );
   };
@@ -299,7 +298,7 @@ const fabStyles = StyleSheet.create({
   },
 });
 
-const createStyles = (colors: ThemeColors, bottomInset: number, isDark: boolean) =>
+const createStyles = (colors: ThemeColors, bottomInset: number) =>
   StyleSheet.create({
     tabBar: {
       backgroundColor: colors.bgCard,
@@ -317,17 +316,17 @@ const createStyles = (colors: ThemeColors, bottomInset: number, isDark: boolean)
       zIndex: 1000,
     },
     toast: {
-      backgroundColor: isDark ? 'rgba(255,255,255,0.9)' : 'rgba(0,0,0,0.8)',
+      backgroundColor: colors.bgElevated,
       paddingHorizontal: 16,
       paddingVertical: 8,
       borderRadius: 20,
-      shadowColor: '#000',
+      shadowColor: colors.shadow,
       shadowOffset: { width: 0, height: 2 },
       shadowOpacity: 0.2,
       shadowRadius: 4,
     },
     toastText: {
-      color: isDark ? '#000' : '#FFF',
+      color: colors.textPrimary,
       fontSize: 12,
       fontWeight: '600',
     },

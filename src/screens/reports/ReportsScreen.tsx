@@ -106,7 +106,7 @@ export default function ReportsScreen() {
 
   // Swipe tab state
   const tabScrollRef = useRef<Animated.ScrollView>(null);
-  const scrollX = useSharedValue(0);
+  const scrollX = useSharedValue(SCREEN_WIDTH);
 
   const scrollHandler = useAnimatedScrollHandler({
     onScroll: (event) => {
@@ -115,6 +115,7 @@ export default function ReportsScreen() {
     onMomentumEnd: (event) => {
       const idx = Math.round(event.contentOffset.x / SCREEN_WIDTH);
       runOnJS(setPeriod)(PERIOD_TABS[idx] as Period);
+      runOnJS(setAnchor)(new Date());
     },
   });
 
