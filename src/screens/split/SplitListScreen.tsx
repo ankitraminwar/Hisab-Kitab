@@ -266,6 +266,17 @@ export default function SplitListScreen() {
           <View style={{ height: 100 }} />
         </ScrollView>
       </Animated.ScrollView>
+
+      {/* FAB — add new split */}
+      <TouchableOpacity
+        style={styles.fab}
+        onPress={() => router.push('/split-expense/new')}
+        accessibilityLabel="Add new split expense"
+        accessibilityRole="button"
+        activeOpacity={0.85}
+      >
+        <Ionicons name="add" size={28} color="#fff" />
+      </TouchableOpacity>
     </SafeAreaView>
   );
 }
@@ -463,6 +474,22 @@ function createStyles(colors: ThemeColors) {
     },
     backBtn: { padding: 4 },
     title: { ...TYPOGRAPHY.h3, color: colors.textPrimary, fontWeight: '700' },
+    fab: {
+      position: 'absolute',
+      bottom: SPACING.xl,
+      right: SPACING.lg,
+      width: 56,
+      height: 56,
+      borderRadius: 28,
+      backgroundColor: colors.primary,
+      alignItems: 'center',
+      justifyContent: 'center',
+      shadowColor: colors.primary,
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.4,
+      shadowRadius: 8,
+      elevation: 8,
+    },
     scroll: { padding: SPACING.md },
 
     // Summary

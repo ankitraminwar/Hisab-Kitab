@@ -17,6 +17,7 @@ import Animated, { FadeInDown } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { CustomPopup } from '../../components/common';
+import { showToast } from '../../components/common/Toast';
 import { useTheme, type ThemeColors } from '../../hooks/useTheme';
 import { SplitService } from '../../services/splitService';
 import { TransactionService } from '../../services/transactionService';
@@ -249,19 +250,12 @@ export default function SplitExpenseScreen() {
       );
 
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      setPopupConfig({
-        visible: true,
-        title: 'Success',
-        message: 'Expense split successfully!',
-        type: 'success',
-        onClose: () => {
-          if (router.canGoBack()) {
-            router.back();
-          } else {
-            router.replace('/splits' as Href);
-          }
-        },
-      });
+      showToast.success('Expense split successfully!');
+      if (router.canGoBack()) {
+        router.back();
+      } else {
+        router.replace('/splits' as Href);
+      }
     } catch {
       setPopupConfig({
         visible: true,
@@ -307,13 +301,8 @@ export default function SplitExpenseScreen() {
     try {
       await SplitService.deleteSplit(existingSplit.id);
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      setPopupConfig({
-        visible: true,
-        title: 'Deleted',
-        message: 'Split expense removed.',
-        type: 'success',
-        onClose: () => router.back(),
-      });
+      showToast.success('Split expense removed.');
+      router.back();
     } catch {
       setPopupConfig({
         visible: true,

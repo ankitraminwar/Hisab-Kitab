@@ -228,32 +228,23 @@ export default function AddTransactionScreen() {
 
     if (!result.success) {
       const firstError = result.error.issues[0];
-      setPopupConfig({
-        visible: true,
-        title: 'Validation Error',
-        message: firstError?.message ?? 'Please check the form fields.',
-        type: 'error',
-      });
+      showToast.error(firstError?.message ?? 'Please check the form fields.');
       return;
     }
 
     if (type === 'transfer' && !selectedToAccount) {
-      setPopupConfig({
-        visible: true,
-        title: 'Missing destination',
-        message: 'Choose the destination account for this transfer.',
-        type: 'error',
-      });
+      showToast.error('Choose the destination account for this transfer.');
       return;
     }
 
     if (!selectedCategory || !selectedAccount) {
-      setPopupConfig({
-        visible: true,
-        title: 'Missing selection',
-        message: 'Please choose both a category and an account.',
-        type: 'error',
-      });
+      showToast.error('Please choose both a category and an account.');
+      return;
+    }
+
+    // Zero-balance account validation
+    if ((type === 'expense' || type === 'transfer') && selectedAccount.balance <= 0) {
+      showToast.error(`"${selectedAccount.name}" has zero balance and cannot be used.`);
       return;
     }
 
@@ -279,15 +270,7 @@ export default function AddTransactionScreen() {
       }
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       showToast.success(isEditing ? 'Transaction updated' : 'Transaction added');
-      setPopupConfig({
-        visible: true,
-        title: 'Success',
-        message: isEditing
-          ? 'Transaction updated successfully.'
-          : 'Transaction added successfully.',
-        type: 'success',
-        onClose: () => router.back(),
-      });
+      router.back();
     } catch {
       setPopupConfig({
         visible: true,
@@ -311,12 +294,7 @@ export default function AddTransactionScreen() {
       setShowNewPmInput(false);
       setShowPaymentMethodOptions(false);
     } catch {
-      setPopupConfig({
-        visible: true,
-        title: 'Error',
-        message: 'Failed to add payment method.',
-        type: 'error',
-      });
+      showToast.error('Failed to add payment method.');
     } finally {
       setLoading(false);
     }
@@ -654,49 +632,65 @@ export default function AddTransactionScreen() {
               Select Account
             </Text>
             <ScrollView>
-              {accounts.map((acc) => (
-                <TouchableOpacity
-                  key={acc.id}
-                  style={{
-                    padding: SPACING.md,
-                    borderBottomWidth: 1,
-                    borderBottomColor: colors.border,
-                    flexDirection: 'row',
-                    justifyContent: 'space-between',
-                    alignItems: 'center',
-                  }}
-                  onPress={() => {
-                    setSelectedAccount(acc);
-                    setShowAccountPicker(false);
-                  }}
-                >
-                  <View
+              {accounts.map((acc) => {
+                const isZeroBalance = acc.balance <= 0;
+                const isDisabledForType =
+                  isZeroBalance && (type === 'expense' || type === 'transfer');
+                return (
+                  <TouchableOpacity
+                    key={acc.id}
                     style={{
+                      padding: SPACING.md,
+                      borderBottomWidth: 1,
+                      borderBottomColor: colors.border,
                       flexDirection: 'row',
+                      justifyContent: 'space-between',
                       alignItems: 'center',
-                      gap: 12,
+                      opacity: isDisabledForType ? 0.45 : 1,
+                    }}
+                    onPress={() => {
+                      if (isDisabledForType) {
+                        showToast.error(`"${acc.name}" has zero balance.`);
+                        return;
+                      }
+                      setSelectedAccount(acc);
+                      setShowAccountPicker(false);
                     }}
                   >
-                    <Ionicons
-                      name={(acc.icon || 'wallet') as IoniconsName}
-                      size={18}
-                      color={acc.color || colors.textMuted}
-                    />
-                    <Text
+                    <View
                       style={{
-                        fontSize: 15,
-                        fontWeight: selectedAccount?.id === acc.id ? '700' : '400',
-                        color: selectedAccount?.id === acc.id ? colors.primary : colors.textPrimary,
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        gap: 12,
                       }}
                     >
-                      {acc.name}
-                    </Text>
-                  </View>
-                  {selectedAccount?.id === acc.id && (
-                    <Ionicons name="checkmark-circle" size={20} color={colors.primary} />
-                  )}
-                </TouchableOpacity>
-              ))}
+                      <Ionicons
+                        name={(acc.icon || 'wallet') as IoniconsName}
+                        size={18}
+                        color={acc.color || colors.textMuted}
+                      />
+                      <View>
+                        <Text
+                          style={{
+                            fontSize: 15,
+                            fontWeight: selectedAccount?.id === acc.id ? '700' : '400',
+                            color:
+                              selectedAccount?.id === acc.id ? colors.primary : colors.textPrimary,
+                          }}
+                        >
+                          {acc.name}
+                        </Text>
+                        {isZeroBalance && (
+                          <Text style={{ fontSize: 11, color: colors.expense }}>Zero balance</Text>
+                        )}
+                      </View>
+                    </View>
+                    {selectedAccount?.id === acc.id && (
+                      <Ionicons name="checkmark-circle" size={20} color={colors.primary} />
+                    )}
+                  </TouchableOpacity>
+                );
+              })}
             </ScrollView>
           </View>
         </TouchableOpacity>

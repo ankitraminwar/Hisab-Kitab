@@ -7,6 +7,48 @@ import { notify } from './notifications';
 import { logger } from '../utils/logger';
 import { triggerBackgroundSync } from './syncService';
 
+/**
+ * Recomputes the notification badge count from actual budget/goal alerts
+ * and updates the store. Called after writes that could affect budgets.
+ */
+async function refreshNotificationCount(): Promise<void> {
+  try {
+    const db = getDatabase();
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+
+    type BudgetRow = { limitAmount: number; spent: number };
+    const budgets = await db.getAllAsync<BudgetRow>(
+      `SELECT b.limitAmount, COALESCE(SUM(t.amount), 0) as spent
+       FROM budgets b
+       LEFT JOIN transactions t ON t.categoryId = b.categoryId
+         AND t.type = 'expense'
+         AND t.date >= ? AND t.date <= ?
+         AND t.deletedAt IS NULL
+       WHERE b.deletedAt IS NULL AND b.year = ? AND b.month = ?
+       GROUP BY b.id`,
+      [`${year}-${month}-01`, `${year}-${month}-31`, year, month],
+    );
+
+    let count = 0;
+    for (const b of budgets) {
+      if (b.limitAmount > 0 && b.spent / b.limitAmount >= 0.8) {
+        count++;
+      }
+    }
+
+    // Monthly report reminder (1st–3rd of month is an unread notification)
+    if (now.getDate() <= 3) {
+      count++;
+    }
+
+    useAppStore.getState().setUnreadNotificationsCount(count);
+  } catch (e) {
+    logger.warn('TransactionService', 'Failed to refresh notification count', e);
+  }
+}
+
 const bindValue = (value: unknown): SQLiteBindValue => {
   if (
     value === null ||
@@ -240,7 +282,7 @@ export const TransactionService = {
 
     const store = useAppStore.getState();
     store.bumpDataRevision();
-    store.setUnreadNotificationsCount(store.unreadNotificationsCount + 1);
+    void refreshNotificationCount();
 
     if (transaction.type === 'transfer') {
       void notify('Transfer Registered', `Moved ${transaction.amount} between accounts.`);
@@ -326,6 +368,7 @@ export const TransactionService = {
     }
 
     useAppStore.getState().bumpDataRevision();
+    void refreshNotificationCount();
     triggerBackgroundSync('transaction-updated').catch((e) =>
       logger.warn('TransactionService', 'Background sync failed after update', e),
     );
@@ -367,6 +410,7 @@ export const TransactionService = {
     }
 
     useAppStore.getState().bumpDataRevision();
+    void refreshNotificationCount();
     triggerBackgroundSync('transaction-deleted').catch((e) =>
       logger.warn('TransactionService', 'Background sync failed after delete', e),
     );
