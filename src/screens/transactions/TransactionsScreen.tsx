@@ -13,6 +13,7 @@ import { SwipeableTransactionItem } from '../../components/common/SwipeableTrans
 import { FilterBottomSheet, type AppliedFilters } from '../../components/common/FilterBottomSheet';
 import { useTheme, type ThemeColors } from '../../hooks/useTheme';
 import { AccountService, CategoryService } from '../../services/dataServices';
+import { logger } from '../../utils/logger';
 import { triggerBackgroundSync } from '../../services/syncService';
 import { TransactionService } from '../../services/transactionService';
 import { useAppStore } from '../../store/appStore';
@@ -47,7 +48,6 @@ const TransactionPreviewSheet: React.FC<{
   onDelete: (id: string) => void;
   colors: ReturnType<typeof useTheme>['colors'];
 }> = ({ transaction, visible, onClose, onEdit, onDelete, colors }) => {
-  const isSmsImported = transaction?.tags?.some((t) => t.startsWith('sms:')) ?? false;
   const [confirmDelete, setConfirmDelete] = useState(false);
 
   return (
@@ -123,21 +123,6 @@ const TransactionPreviewSheet: React.FC<{
             </Text>
           ) : null}
 
-          {isSmsImported && (
-            <View style={[previewStyles.smsBadge, { backgroundColor: colors.primary + '20' }]}>
-              <Ionicons name="chatbubble-ellipses" size={14} color={colors.primary} />
-              <Text
-                style={{
-                  color: colors.primary,
-                  fontSize: 12,
-                  fontWeight: '600',
-                }}
-              >
-                Imported from SMS
-              </Text>
-            </View>
-          )}
-
           <View style={previewStyles.actions}>
             <Button
               title="Delete"
@@ -145,17 +130,15 @@ const TransactionPreviewSheet: React.FC<{
               onPress={() => setConfirmDelete(true)}
               style={{ flex: 1 }}
             />
-            {!isSmsImported && (
-              <Button
-                title="Edit"
-                variant="primary"
-                onPress={() => {
-                  onEdit(transaction.id);
-                  onClose();
-                }}
-                style={{ flex: 1 }}
-              />
-            )}
+            <Button
+              title="Edit"
+              variant="primary"
+              onPress={() => {
+                onEdit(transaction.id);
+                onClose();
+              }}
+              style={{ flex: 1 }}
+            />
           </View>
         </>
       )}
@@ -180,10 +163,15 @@ const TransactionPreviewSheet: React.FC<{
               title="Delete"
               onPress={() => {
                 void (async () => {
-                  await TransactionService.delete(transaction.id);
-                  showToast.success('Transaction deleted');
-                  setConfirmDelete(false);
-                  onDelete(transaction.id);
+                  try {
+                    await TransactionService.delete(transaction.id);
+                    showToast.success('Transaction deleted');
+                    setConfirmDelete(false);
+                    onDelete(transaction.id);
+                  } catch (err) {
+                    logger.error('TransactionsScreen', 'Delete transaction failed', err);
+                    showToast.error('Could not delete transaction');
+                  }
                 })();
               }}
               style={{ flex: 1, backgroundColor: colors.expense }}
@@ -211,16 +199,6 @@ const previewStyles = StyleSheet.create({
     borderRadius: 20,
   },
   chipText: { fontSize: 13, fontWeight: '600' },
-  smsBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 8,
-    marginTop: 12,
-    alignSelf: 'flex-start',
-  },
   actions: {
     flexDirection: 'row',
     gap: 12,
@@ -424,9 +402,14 @@ export default function TransactionsScreen() {
           }}
           onDelete={() => {
             void (async () => {
-              await TransactionService.delete(item.data.id);
-              showToast.success('Transaction deleted');
-              await loadData(0, true);
+              try {
+                await TransactionService.delete(item.data.id);
+                showToast.success('Transaction deleted');
+                await loadData(0, true);
+              } catch (err) {
+                logger.error('TransactionsScreen', 'Delete transaction failed', err);
+                showToast.error('Could not delete transaction');
+              }
             })();
           }}
         />

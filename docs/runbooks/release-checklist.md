@@ -15,7 +15,6 @@ Use this checklist for every production release.
   - [ ] Fresh install flow (signup → first transaction → budget → goal)
   - [ ] Upgrade flow (install over previous version, verify data preserved)
   - [ ] Offline mode (airplane mode → add/edit/delete transactions → reconnect → verify sync)
-  - [ ] Widget rendering after app update
 - [ ] Supabase migrations applied to production:
   - [ ] Check `supabase/migrations/` for any unapplied migrations
   - [ ] Run against staging first, verify no data loss

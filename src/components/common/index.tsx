@@ -13,6 +13,7 @@ import {
 import Animated, { useAnimatedStyle, withSpring } from 'react-native-reanimated';
 import { useTheme, type ThemeColors } from '../../hooks/useTheme';
 import { RADIUS, SHADOWS, SPACING, TYPOGRAPHY, formatCurrency } from '../../utils/constants';
+import { logger } from '../../utils/logger';
 import type { IoniconsName, TransactionType } from '../../utils/types';
 
 // ─── Card ─────────────────────────────────────────────────────────────────────
@@ -383,7 +384,7 @@ export class ScreenErrorBoundary extends React.Component<ErrorBoundaryProps, Err
   }
 
   componentDidCatch(error: Error, info: React.ErrorInfo) {
-    console.warn('ScreenErrorBoundary caught:', error, info.componentStack);
+    logger.warn('ScreenErrorBoundary', 'Caught error', error, info.componentStack);
   }
 
   render() {

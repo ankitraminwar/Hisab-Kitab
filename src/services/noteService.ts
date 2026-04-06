@@ -2,6 +2,7 @@ import { enqueueSync, getDatabase } from '../database';
 import { useAppStore } from '../store/appStore';
 import { generateId } from '../utils/constants';
 import type { Note } from '../utils/types';
+import { logger } from '../utils/logger';
 import { triggerBackgroundSync } from './syncService';
 
 const createSyncMetadata = () => ({
@@ -19,7 +20,9 @@ const queueEntitySync = async (
 ) => {
   await enqueueSync(table, id, operation, payload);
   useAppStore.getState().bumpDataRevision();
-  triggerBackgroundSync(`${table}-${operation}`).catch(console.warn);
+  triggerBackgroundSync(`${table}-${operation}`).catch((e) =>
+    logger.warn('NoteService', `Background sync failed for ${table}-${operation}`, e),
+  );
 };
 
 export const NoteService = {
@@ -84,7 +87,8 @@ export const NoteService = {
       id,
     ]);
     if (!existing) {
-      throw new Error('Note not found');
+      logger.error('NoteService', 'Note not found');
+      return;
     }
 
     const updatedAt = new Date().toISOString();

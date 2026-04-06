@@ -8,7 +8,6 @@ This guide provides step-by-step instructions for deploying the Hisab Kitab appl
 - [EAS CLI](https://docs.expo.dev/build/setup/) installed: `npm install -g eas-cli`
 - A [Supabase](https://supabase.com/) project.
 - [Supabase CLI](https://supabase.com/docs/guides/cli) installed (optional, for local development).
-- A [Firebase](https://console.firebase.google.com/) project with Analytics enabled. Place `google-services.json` (Android) in the project root.
 
 ## 2. Setting Up Environment Variables (Local)
 
@@ -19,27 +18,40 @@ EXPO_PUBLIC_SUPABASE_URL=your_supabase_project_url
 EXPO_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
 ```
 
+`app.config.js` reads these values and publishes them to the app as
+`Constants.expoConfig.extra.publicEnv`. They are public client config, so never
+store service-role keys in them.
+
 > [!WARNING]
 > Never commit `.env` files or service role keys to Version Control.
 
-## 3. Configuring EAS Secrets (Cloud)
+## 3. Configuring EAS Environment Variables (Cloud)
 
-To build the app for production (Android `aab` or iOS `ipa`), you must store your secrets on Expo's servers.
+To build the app for production (Android `aab` or iOS `ipa`), store the same
+public runtime values in Expo's environment store for each EAS environment you use.
 
 ### Using CLI
 
 Run the following commands:
 
 ```bash
-eas secret:create --name EXPO_PUBLIC_SUPABASE_URL --value your_url --scope project
-eas secret:create --name EXPO_PUBLIC_SUPABASE_ANON_KEY --value your_key --scope project
+eas env:create --environment preview --name EXPO_PUBLIC_SUPABASE_URL --value your_url --visibility plaintext
+eas env:create --environment preview --name EXPO_PUBLIC_SUPABASE_ANON_KEY --value your_key --visibility plaintext
+eas env:create --environment production --name EXPO_PUBLIC_SUPABASE_URL --value your_url --visibility plaintext
+eas env:create --environment production --name EXPO_PUBLIC_SUPABASE_ANON_KEY --value your_key --visibility plaintext
+```
+
+You can verify what Expo will expose at runtime with:
+
+```bash
+npx expo config --type public
 ```
 
 ### Using Expo Dashboard
 
 1. Go to [expo.dev](https://expo.dev).
 2. Select your project.
-3. Go to **Settings** > **Secrets**.
+3. Go to **Settings** > **Environment Variables**.
 4. Add the keys and values.
 
 ## 4. Building the Application

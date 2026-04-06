@@ -20,12 +20,6 @@ import { TransactionService } from '../../services/transactionService';
 import { RADIUS, SPACING, TYPOGRAPHY, formatCurrency } from '../../utils/constants';
 import type { IoniconsName, Transaction } from '../../utils/types';
 
-/** Check if a transaction was imported via SMS */
-const isSmsTransaction = (tx: Transaction): boolean => {
-  if (!Array.isArray(tx.tags)) return false;
-  return tx.tags.some((tag) => tag === 'sms-import' || tag.startsWith('sms:'));
-};
-
 const safeFormatDate = (dateStr: string, fmt: string): string => {
   try {
     const d = new Date(dateStr);
@@ -107,8 +101,6 @@ export default function TransactionDetailScreen() {
     );
   }
 
-  const isSms = isSmsTransaction(tx);
-
   const amountColor =
     tx.type === 'income' ? colors.income : tx.type === 'expense' ? colors.expense : colors.transfer;
 
@@ -118,7 +110,7 @@ export default function TransactionDetailScreen() {
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <ScreenHeader
-        title={isSms ? 'SMS Transaction' : 'Transaction Details'}
+        title="Transaction Details"
         rightAction={{
           icon: 'create-outline' as IoniconsName,
           onPress: () => router.push(`/transactions/${id}?edit=1` as Href),
@@ -242,12 +234,6 @@ export default function TransactionDetailScreen() {
               <Text style={[styles.actionBtnText, { color: colors.expense }]}>Delete</Text>
             </TouchableOpacity>
           </View>
-          {isSms && (
-            <Text style={styles.smsNote}>
-              This transaction was imported from SMS. You can edit it to correct any details while
-              the SMS origin tag is preserved.
-            </Text>
-          )}
         </Animated.View>
 
         <View style={{ height: 80 }} />
@@ -379,11 +365,4 @@ const createStyles = (colors: ThemeColors) =>
       borderWidth: 1,
     },
     actionBtnText: { fontSize: 15, fontWeight: '700' },
-    smsNote: {
-      ...TYPOGRAPHY.caption,
-      color: colors.textMuted,
-      textAlign: 'center',
-      marginTop: SPACING.md,
-      paddingHorizontal: SPACING.lg,
-    },
   });

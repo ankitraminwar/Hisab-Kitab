@@ -60,6 +60,7 @@ const migrations: Migration[] = [
           syncStatus TEXT NOT NULL DEFAULT 'pending' CHECK(syncStatus IN ('pending', 'synced', 'failed')),
           lastSyncedAt TEXT,
           deletedAt TEXT,
+          deviceId TEXT,
           FOREIGN KEY (splitExpenseId) REFERENCES split_expenses(id) ON DELETE CASCADE
         );
 
@@ -99,6 +100,7 @@ const migrations: Migration[] = [
           syncStatus TEXT NOT NULL DEFAULT 'pending' CHECK(syncStatus IN ('pending', 'synced', 'failed')),
           lastSyncedAt TEXT,
           deletedAt TEXT,
+          deviceId TEXT,
           FOREIGN KEY (transactionId) REFERENCES transactions(id) ON DELETE CASCADE
         );
 
@@ -123,6 +125,41 @@ const migrations: Migration[] = [
         DROP TABLE split_expenses_old;
         `);
       });
+    },
+  },
+  {
+    version: 11,
+    name: 'add_device_id_column',
+    run: async (db) => {
+      // Add deviceId TEXT to every syncable table for existing installs.
+      // New installs already have it via baseSyncColumns in database/index.ts.
+      // ALTER TABLE ... ADD COLUMN is a no-op if the column already exists in SQLite,
+      // but we guard with PRAGMA table_info to be safe.
+      const tables = [
+        'accounts',
+        'categories',
+        'transactions',
+        'budgets',
+        'goals',
+        'assets',
+        'liabilities',
+        'net_worth_history',
+        'user_profile',
+        'recurring_templates',
+        'split_expenses',
+        'split_members',
+        'split_friends',
+        'payment_methods',
+        'notes',
+      ];
+
+      for (const table of tables) {
+        const cols = await db.getAllAsync<{ name: string }>(`PRAGMA table_info(${table})`);
+        const hasDeviceId = cols.some((c) => c.name === 'deviceId');
+        if (!hasDeviceId) {
+          await db.execAsync(`ALTER TABLE ${table} ADD COLUMN deviceId TEXT`);
+        }
+      }
     },
   },
 ];

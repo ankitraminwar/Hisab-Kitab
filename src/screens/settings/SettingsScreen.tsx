@@ -23,7 +23,11 @@ import { useTheme, type ThemeColors } from '../../hooks/useTheme';
 import { authService, setBiometricPreference } from '../../services/auth';
 import { sendMonthlyReport } from '../../services/emailReportService';
 import { exportService } from '../../services/exportService';
-import { createCurrentMonthReportInput } from '../../services/reportExportService';
+import {
+  createCurrentMonthReportInput,
+  createCurrentWeekReportInput,
+  createCurrentYearReportInput,
+} from '../../services/reportExportService';
 import { syncService } from '../../services/syncService';
 import { useAppStore } from '../../store/appStore';
 import { RADIUS, SPACING, TYPOGRAPHY } from '../../utils/constants';
@@ -33,19 +37,16 @@ export default function SettingsScreen() {
   const { colors } = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
 
-  const {
-    theme,
-    setTheme,
-    biometricsEnabled,
-    setBiometrics,
-    userProfile,
-    setUserProfile,
-    smsEnabled,
-    setSmsEnabled,
-    lastSyncAt,
-  } = useAppStore();
+  const theme = useAppStore((s) => s.theme);
+  const setTheme = useAppStore((s) => s.setTheme);
+  const biometricsEnabled = useAppStore((s) => s.biometricsEnabled);
+  const setBiometrics = useAppStore((s) => s.setBiometrics);
+  const userProfile = useAppStore((s) => s.userProfile);
+  const setUserProfile = useAppStore((s) => s.setUserProfile);
+  const lastSyncAt = useAppStore((s) => s.lastSyncAt);
 
   const [biometricsAvailable, setBiometricsAvailable] = useState(false);
+  const [showExportPicker, setShowExportPicker] = useState(false);
   const [popupConfig, setPopupConfig] = useState<{
     visible: boolean;
     title: string;
@@ -128,9 +129,19 @@ export default function SettingsScreen() {
   };
 
   const handleExport = () => {
-    const currentMonthReport = createCurrentMonthReportInput();
+    setShowExportPicker(true);
+  };
+
+  const navigateToExport = (period: 'weekly' | 'monthly' | 'yearly') => {
+    setShowExportPicker(false);
+    const input =
+      period === 'weekly'
+        ? createCurrentWeekReportInput()
+        : period === 'yearly'
+          ? createCurrentYearReportInput()
+          : createCurrentMonthReportInput();
     router.push(
-      `/reports/preview?from=${encodeURIComponent(currentMonthReport.from)}&to=${encodeURIComponent(currentMonthReport.to)}&label=${encodeURIComponent(currentMonthReport.label)}&period=${currentMonthReport.period}&focus=pdf` as Href,
+      `/reports/preview?from=${encodeURIComponent(input.from)}&to=${encodeURIComponent(input.to)}&label=${encodeURIComponent(input.label)}&period=${input.period}&focus=pdf` as Href,
     );
   };
 
@@ -306,30 +317,6 @@ export default function SettingsScreen() {
             </View>
           </View>
 
-          {/* SMS Toggle */}
-          <View style={styles.prefRow}>
-            <View style={styles.prefLeft}>
-              <View style={styles.iconBox}>
-                <Ionicons name="chatbubble-ellipses-outline" size={20} color={colors.primary} />
-              </View>
-              <View>
-                <Text style={styles.prefTitle}>SMS Auto-import</Text>
-                <Text style={styles.prefSub}>Sync transactions from SMS</Text>
-              </View>
-            </View>
-            <CustomSwitch value={smsEnabled} onValueChange={setSmsEnabled} />
-          </View>
-          <TouchableOpacity
-            onPress={() => router.push('/sms-import')}
-            style={{ paddingHorizontal: SPACING.lg, paddingBottom: SPACING.lg }}
-            accessibilityLabel="Run manual SMS import check"
-            accessibilityRole="button"
-          >
-            <Text style={{ fontSize: 13, color: colors.primary, fontWeight: '700' }}>
-              Run manual SMS check now
-            </Text>
-          </TouchableOpacity>
-
           {/* Biometrics Toggle */}
           <View style={styles.prefRow}>
             <View style={styles.prefLeft}>
@@ -493,6 +480,20 @@ export default function SettingsScreen() {
         actionLabel="Choose File"
         onAction={() => void confirmImportBackup()}
         onClose={() => setShowImportConfirm(false)}
+      />
+
+      {/* Export Period Picker */}
+      <CustomPopup
+        visible={showExportPicker}
+        title="Export Report"
+        message="Choose the time period for your report"
+        type="info"
+        actions={[
+          { label: 'This Week', onPress: () => navigateToExport('weekly') },
+          { label: 'This Month', onPress: () => navigateToExport('monthly') },
+          { label: 'This Year', onPress: () => navigateToExport('yearly') },
+        ]}
+        onClose={() => setShowExportPicker(false)}
       />
 
       {/* Logout Confirmation */}

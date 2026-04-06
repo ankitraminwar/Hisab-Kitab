@@ -27,9 +27,7 @@ const baseSyncColumns = `
   syncStatus TEXT NOT NULL DEFAULT 'pending' CHECK(syncStatus IN ('synced', 'pending', 'failed')),
   lastSyncedAt TEXT,
   deletedAt TEXT,
-  last_modified INTEGER NOT NULL DEFAULT 0,
-  server_id TEXT,
-  version_hash TEXT
+  deviceId TEXT
 `;
 
 const transactionalTables = [
@@ -786,6 +784,7 @@ export const getSyncState = async (key: string) => {
   return row?.value ?? null;
 };
 
+/** @internal Only pass hardcoded WHERE clauses — never user input. */
 export const fetchTableRows = async <T>(
   table: SyncableTable,
   where = 'deletedAt IS NULL',

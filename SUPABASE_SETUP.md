@@ -11,7 +11,10 @@ EXPO_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
 
 Use `EXPO_PUBLIC_SUPABASE_ANON_KEY` (not `EXPO_PUBLIC_SUPABASE_KEY`).
 
-These are the only secrets needed in the app. Never add service role keys or other secrets.
+Runtime flow: `.env` / EAS env -> `app.config.js` -> `Constants.expoConfig.extra.publicEnv`.
+
+These are the only public Supabase client values needed in the app. Never add
+service-role keys or other secrets.
 
 ## 2. Apply Schema
 
@@ -33,7 +36,7 @@ This single idempotent file creates:
 
 - **No inter-table FK constraints** — e.g. `transactions.category_id → categories.id` is intentionally absent. SQLite enforces FK integrity locally. Removing them from Supabase prevents FK violations when offline-first sync pushes records out of dependency order.
 - **`user_id → auth.users(id)`** FK is retained on all tables.
-- **`payment_method`** column on `transactions` has no CHECK constraint — accepts any string (SMS imports use varied values).
+- **`payment_method`** column on `transactions` has no CHECK constraint — accepts any string to accommodate varied external sources.
 - **`user_profile.avatar`** — `TEXT` column for profile photo URI.
 - **`notes.id`** — `TEXT` primary key (UUID string), not `uuid` type, consistent with all other entity IDs.
 
@@ -101,40 +104,7 @@ The app is fully offline-first:
 - Only tables listed in `SYNCABLE_TABLES` (in `src/utils/constants.ts`) participate in sync
 - Sync triggers: app start, auth change, network reconnect, manual sync button, after each local write
 
-## 6. Android SMS Import
-
-SMS import requires a **native Android build** (not Expo Go):
-
-```bash
-yarn android   # expo run:android
-```
-
-- Uses `react-native-get-sms-android ^2.1.0`
-- Required permissions declared in `app.json` (`READ_SMS`)
-- Parser scans inbox for bank/UPI keywords (`debited`, `credited`, `spent`, `received`, etc.)
-- Extracts INR amounts with regex (`INR 100.00` / `Rs. 100` patterns)
-- Deduplicates imported messages before creating transactions
-- Imported transactions sync to Supabase like any other transaction
-
-## 7. Android Home Screen Widgets
-
-Widgets also require a native Android build:
-
-```bash
-yarn android
-```
-
-Three widgets available:
-
-| Widget          | Description                                    |
-| --------------- | ---------------------------------------------- |
-| Expense Summary | Current month income, expenses, top categories |
-| Budget Health   | Per-budget spend bars, overall percent         |
-| Quick Add       | Tap-to-open shortcut to add a new transaction  |
-
-Widgets are powered by `react-native-android-widget` and read data via `WidgetDataService`.
-
-## 8. After Initial Setup
+## 6. After Initial Setup
 
 Restart the app after applying the schema:
 

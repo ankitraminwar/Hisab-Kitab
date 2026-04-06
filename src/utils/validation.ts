@@ -18,7 +18,7 @@ export type TransactionFormData = z.infer<typeof transactionSchema>;
 export const budgetSchema = z.object({
   categoryId: z.string().min(1, 'Select a category'),
   limitAmount: z.number().positive('Budget amount must be greater than zero'),
-  alertAt: z.number().min(0).max(100).default(80),
+  alertAt: z.number().min(1).max(100).default(80),
 });
 
 export type BudgetFormData = z.infer<typeof budgetSchema>;

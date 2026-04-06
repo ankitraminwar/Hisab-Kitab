@@ -41,7 +41,7 @@ export type TransactionType = 'expense' | 'income' | 'transfer';
 export type SyncStatus = 'pending' | 'synced' | 'failed';
 
 // PaymentMethod is typed as string — NOT a union
-// This is intentional: SMS imports create varied payment method strings
+// This is intentional: varied external sources create diverse payment method strings
 export type PaymentMethod = string; // Do not change to a union
 
 // Split methods

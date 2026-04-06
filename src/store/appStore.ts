@@ -63,7 +63,6 @@ interface DataSlice {
   liabilities: Liability[];
   dashboardStats: DashboardStats;
   dataRevision: number;
-  smsEnabled: boolean;
   setOnline: (online: boolean) => void;
   setSyncState: (state: SyncStateUpdate) => void;
   setAccounts: (accounts: Account[]) => void;
@@ -74,7 +73,6 @@ interface DataSlice {
   setAssets: (assets: Asset[]) => void;
   setLiabilities: (liabilities: Liability[]) => void;
   setDashboardStats: (stats: DashboardStats) => void;
-  setSmsEnabled: (enabled: boolean) => void;
   bumpDataRevision: () => void;
 }
 
@@ -124,7 +122,6 @@ const initialDataState: Pick<
   | 'liabilities'
   | 'dashboardStats'
   | 'dataRevision'
-  | 'smsEnabled'
 > = {
   isOnline: true,
   syncInProgress: false,
@@ -145,7 +142,6 @@ const initialDataState: Pick<
     netWorth: 0,
   },
   dataRevision: 0,
-  smsEnabled: false,
 };
 
 // ─── Slice Creators ──────────────────────────────────────────────────────────
@@ -186,7 +182,6 @@ const createDataSlice: StateCreator<AppState, [], [], DataSlice> = (set) => ({
   setAssets: (assets) => set({ assets }),
   setLiabilities: (liabilities) => set({ liabilities }),
   setDashboardStats: (dashboardStats) => set({ dashboardStats }),
-  setSmsEnabled: (smsEnabled) => set({ smsEnabled }),
   bumpDataRevision: () => {
     clearTimeout(revisionTimer);
     revisionTimer = setTimeout(() => {

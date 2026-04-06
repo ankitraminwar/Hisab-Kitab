@@ -39,7 +39,7 @@ const QUICK_START_STEPS: HelpStep[] = [
     title: '3. Track your monthly progress',
     steps: [
       'Use the Dashboard for balance overview, spending donut chart, savings ring, and quick actions.',
-      'Use Budgets to set monthly spending limits per category and get alerts at 80%.',
+      'Use Budgets to set monthly spending limits per category and get an alert (default 80%) before you overspend.',
       'Use Reports to review income/expense trend charts, category breakdown, and exportable financial reports.',
     ],
   },
@@ -88,6 +88,7 @@ const FLOW_GUIDES: HelpStep[] = [
     steps: [
       'Every change is saved locally first — the app works fully offline.',
       'If you are signed in, background sync quietly pushes updates to the cloud.',
+      'Conflicts are resolved automatically: the most recently updated record wins. Deleted-and-recreated items sync cleanly without errors.',
       'Export Data creates CSV, PDF, or JSON files. Import Backup restores JSON exports.',
     ],
   },
@@ -108,7 +109,7 @@ const FAQ_DATA: FaqItem[] = [
   },
   {
     q: 'How do budgets help me?',
-    a: 'Budgets let you set a monthly category limit. You can see spent vs. remaining amounts and get alerts when you reach 80% or exceed the limit.',
+    a: 'Budgets let you set a monthly category limit. You can see spent vs. remaining amounts and get an alert (default 80%) before you overspend. Each category can only have one active budget per month.',
   },
   {
     q: 'How does split expense work?',
@@ -127,12 +128,24 @@ const FAQ_DATA: FaqItem[] = [
     a: 'Net Worth tracks your total assets minus liabilities over time. Add asset accounts (bank, investment) and liability accounts (credit card, loan) in the Accounts tab. Reports shows a snapshot of your net worth for the selected period.',
   },
   {
-    q: 'How does SMS import work?',
-    a: 'Enable SMS import in Settings or open the SMS Import screen. On Android native builds, the app reads transaction-like bank messages and lets you review them before importing.',
+    q: 'How does offline mode work?',
+    a: 'The app is offline-first — every transaction, budget, and note is saved instantly to a local SQLite database on your device. You can use the app fully without any internet connection. Changes sync automatically in the background when you are signed in and online.',
   },
   {
-    q: 'How do the home screen widgets work?',
-    a: 'On Android, long-press your home screen, select Widgets, and choose from Expense Summary, Budget Health, or Quick Add. Widgets update automatically and Quick Add lets you log a transaction without opening the app.',
+    q: 'How is my data synced?',
+    a: 'Every change is saved to your device immediately. If you are signed in, the app quietly pushes updates to the cloud in the background. On next login, it pulls any remote changes and merges them using last-write-wins conflict resolution. If you delete and recreate the same item, sync handles the conflict automatically.',
+  },
+  {
+    q: 'Is my data secure?',
+    a: 'Yes. Your data is stored locally and encrypted in transit when syncing. In the cloud, row-level security (RLS) ensures only your authenticated account can read, write, or delete your records — no other user can access your data even if they know your record IDs. Enable Biometric Lock in Settings for additional on-device protection.',
+  },
+  {
+    q: 'How do I export my data?',
+    a: 'Go to Settings → Export Reports for PDF/CSV, or Export JSON Backup for a full restorable backup. You can also email a monthly report summary.',
+  },
+  {
+    q: 'How do I delete my account?',
+    a: 'Contact support to request account deletion. All your cloud data will be permanently removed. Local data on your device can be cleared by uninstalling the app.',
   },
   {
     q: 'Will the app work without internet?',

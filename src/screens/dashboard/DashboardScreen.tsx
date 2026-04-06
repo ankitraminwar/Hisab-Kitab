@@ -373,13 +373,6 @@ export default function DashboardScreen() {
     },
     { id: 'splits', title: 'Splits', icon: 'people' as const, color: '#8B5CF6', path: '/splits' },
     {
-      id: 'sms',
-      title: 'SMS Scan',
-      icon: 'chatbubbles' as const,
-      color: '#10B981',
-      path: '/sms-import',
-    },
-    {
       id: 'reports',
       title: 'Reports',
       icon: 'pie-chart' as const,

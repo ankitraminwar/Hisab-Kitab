@@ -26,6 +26,7 @@ import { NoteService } from '../../services/noteService';
 import { useAppStore } from '../../store/appStore';
 import { RADIUS, SPACING, TYPOGRAPHY } from '../../utils/constants';
 import type { Note } from '../../utils/types';
+import { logger } from '../../utils/logger';
 
 const NOTE_COLORS = [
   '#7C3AED',
@@ -484,7 +485,7 @@ const NoteEditorModal = ({
       }
       onSave();
     } catch (e) {
-      console.error(e);
+      logger.error('NotesScreen', 'Failed to save note', e);
     } finally {
       setLoading(false);
     }

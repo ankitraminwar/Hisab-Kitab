@@ -27,13 +27,15 @@ import { useTheme, type ThemeColors } from '../../hooks/useTheme';
 import { UserProfileService } from '../../services/dataServices';
 import { useAppStore } from '../../store/appStore';
 import { RADIUS, SPACING, TYPOGRAPHY } from '../../utils/constants';
+import { logger } from '../../utils/logger';
 
 export default function EditProfileScreen() {
   const router = useRouter();
   const { colors } = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
 
-  const { userProfile, setUserProfile } = useAppStore();
+  const userProfile = useAppStore((s) => s.userProfile);
+  const setUserProfile = useAppStore((s) => s.setUserProfile);
 
   const [name, setName] = useState(userProfile?.name || '');
   const [phone, setPhone] = useState(userProfile?.phone || '');
@@ -87,7 +89,10 @@ export default function EditProfileScreen() {
 
     setIsSaving(true);
     try {
-      if (!userProfile) throw new Error('No profile loaded');
+      if (!userProfile) {
+        logger.error('EditProfile', 'No profile loaded');
+        return;
+      }
       const updatedProfile = await UserProfileService.upsertProfile({
         userId: userProfile.userId,
         name: name.trim(),

@@ -15,7 +15,6 @@ Built with Expo 54, React Native 0.81.5, TypeScript, SQLite, and Supabase. Zero 
 - **Reports** — Spending trend charts, category distribution, net worth tracker (assets vs liabilities)
 - **Net Worth** — Asset and liability management with history snapshots
 - **Notifications** — In-app budget-exceeded and goal-completion alerts
-- **SMS Import** — Auto-import bank/UPI transactions from SMS (Android native builds only)
 - **Accounts** — Manage bank, UPI, wallet, credit card, and investment accounts with a premium auto-scrolling glassmorphic carousel UI.
 - **Cloud Sync** — Bidirectional sync with Supabase (offline-first with sync queue)
 - **Email Reports** — Monthly summary email via Supabase Edge Function + Resend
@@ -23,9 +22,9 @@ Built with Expo 54, React Native 0.81.5, TypeScript, SQLite, and Supabase. Zero 
 - **Biometric Lock** — Fingerprint/face unlock on app resume
 - **Data Export** — CSV transactions, PDF transactions, full JSON backup
 - **Data Import** — Restore from JSON backup
-- **Android Widgets** — Home screen widgets: Expense Summary, Budget Health, Quick Add
-- **Analytics** — Firebase Analytics for screen views, user events, and engagement tracking
-- **Crashlytics** — Firebase Crashlytics for crash reporting and JS error tracking
+- **Offline Banner** — Animated connectivity indicator when offline
+- **Error Boundaries** — AppErrorBoundary + ScreenErrorBoundary catch render crashes
+- **Centralized Logging** — Production-safe logger with in-memory ring buffer
 
 ## Stack
 
@@ -40,9 +39,7 @@ Built with Expo 54, React Native 0.81.5, TypeScript, SQLite, and Supabase. Zero 
 | Animations  | react-native-reanimated ~4.1.1, expo-linear-gradient |
 | Charts      | @shopify/react-native-skia ^2.2.12, react-native-svg |
 | Lists       | @shopify/flash-list 2.0.2                            |
-| Widgets     | react-native-android-widget ^0.20.1                  |
-| SMS parsing | react-native-get-sms-android ^2.1.0                  |
-| Analytics   | @react-native-firebase/analytics ^21.14.0            |
+
 | Linting     | ESLint ^9.0.0 + eslint-config-expo                   |
 | Formatting  | Prettier (pre-commit via husky + lint-staged)        |
 
@@ -55,6 +52,10 @@ EXPO_PUBLIC_SUPABASE_URL=your-project-url
 EXPO_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
 ```
 
+These values are read in `app.config.js` and exposed to the app through
+`Constants.expoConfig.extra.publicEnv`. They are public client config, so do not
+store service-role keys or other secrets there.
+
 2. Install and start:
 
 ```bash
@@ -62,10 +63,10 @@ yarn install
 yarn start
 ```
 
-3. For SMS import or Android widgets, use a native build:
+If you change `.env`, restart Expo so the updated app config is picked up:
 
 ```bash
-yarn android   # expo run:android
+npx expo start -c
 ```
 
 ## Backend Setup

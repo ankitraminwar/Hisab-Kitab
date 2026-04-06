@@ -1,4 +1,5 @@
 import { supabase } from '../lib/supabase';
+import { logger } from '../utils/logger';
 import {
   buildReportDocumentData,
   createCurrentMonthReportInput,
@@ -25,7 +26,7 @@ export async function sendMonthlyReport(): Promise<{
   // Stale or expired tokens cause 401 Unauthorized on the edge function.
   const { error: refreshError } = await supabase.auth.refreshSession();
   if (refreshError) {
-    console.warn('[send-email] Session refresh failed', refreshError.message);
+    logger.warn('EmailReport', 'Session refresh failed', refreshError.message);
   }
 
   const { error } = await supabase.functions.invoke('send-email', {
@@ -80,7 +81,7 @@ export async function sendMonthlyReport(): Promise<{
   });
 
   if (error) {
-    console.error('[send-email] Edge Function error', JSON.stringify(error));
+    logger.error('EmailReport', 'Edge Function error', JSON.stringify(error));
     return { ok: false, error: error.message };
   }
 

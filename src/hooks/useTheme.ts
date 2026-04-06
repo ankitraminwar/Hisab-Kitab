@@ -15,7 +15,7 @@ export const resolveThemeColors = (
 };
 
 export const useTheme = () => {
-  const { theme } = useAppStore();
+  const theme = useAppStore((s) => s.theme);
   const systemTheme = useColorScheme();
 
   const canonicalSystemTheme =

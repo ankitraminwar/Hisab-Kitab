@@ -26,7 +26,7 @@ These rules are absolute. Violating any of them breaks the codebase.
 | Rule                                       | What To Do                                                                                                                                                                                     |
 | ------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Offline-first**                          | Always write to SQLite first. Call `enqueueSync()` after every write. Never await network before local write.                                                                                  |
-| **No secrets in app**                      | Only `EXPO_PUBLIC_SUPABASE_URL` and `EXPO_PUBLIC_SUPABASE_ANON_KEY` in `.env`. No service keys.                                                                                                |
+| **No secrets in app**                      | Only public Supabase client config in `.env` / EAS: `EXPO_PUBLIC_SUPABASE_URL` and `EXPO_PUBLIC_SUPABASE_ANON_KEY`. `app.config.js` exposes them through `expo.extra.publicEnv`. No service keys. |
 | **No `any` types**                         | Every type must be explicit. Use `IoniconsName` for icons, `ThemeColors` for color objects, `DimensionValue` for percentage widths.                                                            |
 | **No `Alert.alert`**                       | Use `CustomPopup` for all user-facing alerts. See §1a for known exceptions.                                                                                                                    |
 | **No hardcoded colors**                    | All colors must come from `useTheme()`. Never import `COLORS` directly in screen files.                                                                                                        |
@@ -34,9 +34,7 @@ These rules are absolute. Violating any of them breaks the codebase.
 | **UUIDs only**                             | All entity IDs are `TEXT` using `generateId()` from `src/utils/constants.ts`.                                                                                                                  |
 | **camelCase locally, snake_case remotely** | SQLite columns = camelCase. **Exception:** `split_expenses` and `split_members` already use snake_case column names in SQLite (`transaction_id`, `paid_by_user_id`, etc.).                     |
 | **FlashList v2**                           | Never pass `estimatedItemSize` prop — it was removed in v2.0.                                                                                                                                  |
-| **SMS / Widgets**                          | Both require native Android builds. Never call SMS APIs on iOS.                                                                                                                                |
-| **Widget deep link URIs**                  | Use `hisabkitab://path` (double slash). Never `hisabkitab:///path` (triple slash). The `(tabs)` segment is not needed in widget URIs.                                                          |
-| **SMS-imported transactions**              | SMS transactions are now editable — users can correct amount/category/merchant while the `sms:` origin tag is preserved for audit trail. Check `isSmsImported` flag (tags with `sms:` prefix). |
+| **Logging**                                | Use `logger.*` from `src/utils/logger.ts`. Never use `console.*` in production code.                                                                                                           |
 | **Unbounded queries**                      | Always pass a `LIMIT` to `TransactionService.getAll()`. Default is 50; for picker lists use 100.                                                                                               |
 
 ### 1a. Known `Alert.alert` Exceptions (Tech Debt)
@@ -197,7 +195,7 @@ export async function createItem(data: CreateItemInput): Promise<Item> {
   useAppStore.getState().bumpDataRevision();
 
   // 3. Trigger background sync (fire and forget)
-  triggerBackgroundSync('your_table-created').catch(console.warn);
+  triggerBackgroundSync('your_table-created').catch((e) => logger.warn('YourService', 'sync failed', e));
 
   return item;
 }
@@ -218,7 +216,7 @@ async function deleteItem(id: string) {
     updatedAt: deletedAt,
   });
   useAppStore.getState().bumpDataRevision();
-  triggerBackgroundSync('your_table-deleted').catch(console.warn);
+  triggerBackgroundSync('your_table-deleted').catch((e) => logger.warn('YourService', 'sync failed', e));
 }
 ```
 
@@ -231,19 +229,6 @@ await enqueueSync('accounts', account.id, 'upsert', {
   ...account,
   isDefault: account.isDefault ? 1 : 0,
 } as Record<string, unknown>);
-```
-
-### Transaction mutations also refresh widgets
-
-`TransactionService.create/update/delete` also calls `refreshAllWidgets()`. This is done via a lazy import to avoid a circular dependency. Follow the same pattern if your new service mutates transaction-adjacent data:
-
-```ts
-const refreshAllWidgets = async () => {
-  const { refreshAllWidgets: refresh } = await import('@/widgets/refreshWidgets');
-  return refresh();
-};
-// After the write:
-refreshAllWidgets().catch(console.warn);
 ```
 
 ---
@@ -342,7 +327,7 @@ const { id, txId } = useLocalSearchParams<{ id: string; txId?: string }>();
 - **Icons** → use `IoniconsName` type (`src/utils/types.ts`). Use `as IoniconsName` or `as never` for icon string literals.
 - **Colors** → use `ThemeColors` (exported from `src/hooks/useTheme.ts`).
 - **Percentage widths** → use `DimensionValue` (from `react-native`).
-- **`PaymentMethod`** is typed as `string` in `types.ts` — not a union — because SMS import creates transactions with varied payment method strings. Do not change it to a union.
+- **`PaymentMethod`** is typed as `string` in `types.ts` — not a union — because varied external sources (migrations, imports) create transactions with varied payment method strings. Do not change it to a union.
 - **New interfaces** → add to `src/utils/types.ts`.
 - **Run before committing:** `yarn typecheck` must be 0 errors.
 
@@ -357,7 +342,6 @@ const { id, txId } = useLocalSearchParams<{ id: string; txId?: string }>();
 | `@/utils/constants`        | `src/utils/constants.ts`          |
 | `@/services/syncService`   | `src/services/syncService.ts`     |
 | `@/components/common`      | `src/components/common/index.tsx` |
-| `@/widgets/refreshWidgets` | `src/widgets/refreshWidgets.ts`   |
 
 Do NOT write `@/src/...` — the `src/` is already included in the alias resolution.
 
@@ -369,7 +353,7 @@ Do NOT write `@/src/...` — the `src/` is already included in the alias resolut
 - Wrap async functions in `useCallback` when used as `useEffect` deps.
 - All `useEffect` dependencies must be exhaustive.
 - No unused variables or imports.
-- `console.log` is not allowed in production code paths. `console.warn` is acceptable inside `catch` blocks in sync/SMS error handlers only.
+- `console.log` is not allowed in production code paths. Use `logger.*` from `src/utils/logger.ts` instead.
 
 ---
 
@@ -381,7 +365,7 @@ Every write to a syncable table follows this exact pattern. Steps 2-4 are all re
 1. Write to SQLite         →  db.runAsync(INSERT/UPDATE/soft-delete)
 2. Queue the sync          →  await enqueueSync(table, recordId, 'upsert'|'delete', payloadObject)
 3. Bump the revision       →  useAppStore.getState().bumpDataRevision()
-4. Trigger background sync →  triggerBackgroundSync(reason).catch(console.warn)
+4. Fire-and-forget background sync →  triggerBackgroundSync(reason).catch((e) => logger.warn('Tag', 'msg', e))
 ```
 
 The `payload` (4th arg to `enqueueSync`) must be the full record as `Record<string, unknown>`. Convert booleans to 0/1 for SQLite boolean fields.
@@ -393,7 +377,7 @@ Tables in `SYNCABLE_TABLES` in `src/utils/constants.ts` participate in sync. Oth
 - **Default data bootstrap**: On the first push per device, `syncService.ensureDefaultsSynced()` automatically enqueues all default (non-custom) categories and payment methods so they reach Supabase before transactions that reference them. This is tracked via a `defaultsSynced` flag in `sync_state`.
 - **`tags` field**: Stored as a JSON string in SQLite (`TEXT DEFAULT '[]'`) but Supabase expects `jsonb`. The sync service auto-parses the string to an array before pushing — do not pre-parse it yourself in the payload.
 - **Supabase FK constraints**: Inter-table FK constraints (e.g. `transactions.category_id → categories.id`) have been intentionally removed from Supabase. SQLite enforces FK integrity locally. Only the `user_id → auth.users(id)` FK remains on all tables.
-- **`payment_method`**: No CHECK constraint on Supabase — accepts any string. This is intentional to allow SMS-imported transactions with varied payment method strings.
+- **`payment_method`**: No CHECK constraint on Supabase — accepts any string. This is intentional to accommodate varied external transaction sources (migrations, imports).
 - **Parallel pulls**: `pullRemoteChanges()` and `initialSync()` use `Promise.allSettled()` to pull independent tables in parallel by dependency tier. Do not add inter-table dependencies that would break this tiered approach.
 - **Sync queue compaction**: `enqueueSync()` merges multiple mutations for the same `entity+recordId` into one queue entry — only the latest payload is pushed.
 - **Materialized view**: `dashboard_monthly_stats` on Supabase pre-aggregates monthly stats. Auto-refreshed via trigger on `transactions`. Accessible via `get_dashboard_stats(month)` RPC.
@@ -477,39 +461,7 @@ colors.card; // → use colors.bgCard
 
 ---
 
-## 14. Adding Android Widget Data
-
-1. Add a typed data fetcher to `src/services/widgetDataService.ts`.
-2. Add the widget component to `src/widgets/`.
-3. Add a case to `src/widgets/widgetTaskHandler.ts`.
-4. Add it to `src/widgets/refreshWidgets.ts` — both in the `requestWidgetUpdate` calls and the data fetch.
-5. Register the widget in `app.json` under `react-native-android-widget.widgets`.
-6. Widgets require a native Android build — they do not run in Expo Go.
-
----
-
-## 15. SMS Import (Android Only)
-
-Two services handle SMS:
-
-| Service                          | Purpose                                                                                         |
-| -------------------------------- | ----------------------------------------------------------------------------------------------- |
-| `src/services/smsReadService.ts` | UI-driven scan — used by `SmsImportScreen`, returns `ParsedSms[]` for user review before import |
-| `src/services/sms.ts`            | Background polling — `smsImportService` runs silently on a 60-second interval                   |
-
-Key rules:
-
-- `SmsMessage` interface: `{ _id: number, address: string, body: string, date: number }`.
-- `ParsedSms` interface: `{ id, sender, body, date, amount, type, merchant, categoryName }`.
-- Keywords detected: `debited`, `credited`, `spent`, `received`, `payment`, `txn`, `transaction`.
-- Amount regex: `INR 100.00` or `Rs. 100` patterns.
-- Deduplicate using `TransactionService.hasImportedSms(messageId)` before creating.
-- Imported transactions get `tags: ['sms-import', 'sms:{messageId}']`.
-- Always guard with `Platform.OS !== 'android'` before calling any SMS API.
-
----
-
-## 16. Email Reports
+## 14. Email Reports
 
 - Trigger via `sendMonthlyReport()` in `src/services/emailReportService.ts`.
 - Calls Supabase Edge Function via `supabase.functions.invoke('send-email', { body: {...} })`.
@@ -534,8 +486,9 @@ Key rules:
 | SQLite schema + db helpers | `src/database/index.ts`                                      |
 | Supabase schema            | `supabase/schema.sql`                                        |
 | Sync column mappings       | `src/services/syncTransform.ts`                              |
-| Widget components          | `src/widgets/`                                               |
-| Widget data service        | `src/services/widgetDataService.ts`                          |
+| Logger                     | `src/utils/logger.ts`                                        |
+| Error boundary             | `src/components/ErrorBoundary.tsx`                            |
+| API client                 | `src/services/apiClient.ts`                                  |
 
 ---
 
@@ -611,5 +564,5 @@ If either of the first two commands fails, the task is **not complete**.
 | Call `enqueueSync` with 3 args           | Always pass the full record as the 4th argument             |
 | Use `getDb()`                            | Use `getDatabase()` — that is the actual export name        |
 | Import `@/src/hooks/useTheme`            | Import `@/hooks/useTheme` — alias maps to `src/` already    |
-| `console.log` in production paths        | `console.warn` inside catch blocks only                     |
+| `console.*` in production paths           | `logger.*` from `src/utils/logger.ts` only                  |
 | New `Alert.alert` calls                  | Use `CustomPopup` — including for destructive confirmations |

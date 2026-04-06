@@ -17,10 +17,12 @@ import {
   type ReportExportInput,
 } from '@/services/reportExportService';
 import type { Transaction } from '@/utils/types';
+import { logger } from '@/utils/logger';
 
 const shareFile = async (filename: string, content: string, mimeType: string) => {
   if (!documentDirectory) {
-    throw new Error('Local file storage is unavailable');
+    logger.error('ExportService', 'Local file storage is unavailable');
+    return;
   }
 
   const fileUri = `${documentDirectory}${filename}`;
@@ -38,21 +40,27 @@ const shareFile = async (filename: string, content: string, mimeType: string) =>
   return fileUri;
 };
 
-const formatDate = (iso: string) =>
-  new Date(iso).toLocaleDateString('en-IN', {
-    day: '2-digit',
-    month: 'short',
-    year: 'numeric',
-  });
+const isValidDate = (d: Date) => !isNaN(d.getTime());
 
-const formatGeneratedAt = (iso: string) =>
-  new Date(iso).toLocaleString('en-IN', {
-    day: '2-digit',
-    month: 'long',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
+const formatDate = (iso: string) => {
+  const d = new Date(iso);
+  return isValidDate(d)
+    ? d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
+    : iso || '—';
+};
+
+const formatGeneratedAt = (iso: string) => {
+  const d = new Date(iso);
+  return isValidDate(d)
+    ? d.toLocaleString('en-IN', {
+        day: '2-digit',
+        month: 'long',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+      })
+    : iso || '—';
+};
 
 const escapeHtml = (value: string) =>
   value

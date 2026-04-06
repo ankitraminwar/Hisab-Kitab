@@ -22,6 +22,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Operational runbooks (`docs/runbooks/`)
 - PR and issue templates (`.github/`)
 - CODEOWNERS file
+- Centralized `logger.ts` — production-safe logging with in-memory ring buffer
+- `AppErrorBoundary` and `ScreenErrorBoundary` for crash recovery
+- `OfflineBanner` animated connectivity indicator
+- `apiClient.ts` centralized Supabase API wrapper with 401 handling
+- `withRetry.ts` exponential backoff retry utility
+- Global unhandled error and promise rejection handlers
 
 ### Fixed
 
@@ -42,6 +48,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Standalone FAB from SplitListScreen (covered by unified tab FAB)
 - CenterFAB direct navigation (now opens SpeedDialFAB)
 - Unused `cancelLabel` from PopupOptions interface
+- SMS import feature and related services (`sms.ts`, `smsReadService.ts`, `SmsImportScreen`)
+- Android home screen widgets (`src/widgets/`, `widgetDataService.ts`)
+- Firebase Analytics dependency (`@react-native-firebase/analytics`, `@react-native-firebase/app`)
+- All `console.*` calls replaced with centralized `logger.*`
+- All `Alert.alert` calls replaced with `CustomPopup`
 
 ## [1.0.0] - 2025-03-01
 

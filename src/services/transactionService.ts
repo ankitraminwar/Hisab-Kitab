@@ -4,19 +4,8 @@ import { generateId } from '@/utils/constants';
 import type { Transaction, TransactionFilters, TransactionType } from '@/utils/types';
 import type { SQLiteBindValue } from 'expo-sqlite';
 import { notify } from './notifications';
+import { logger } from '../utils/logger';
 import { triggerBackgroundSync } from './syncService';
-
-/** Lazy-import to break the require cycle:
- *  transactionService → refreshWidgets → widgetDataService → transactionService
- *  Cached after first resolution to avoid repeated dynamic import overhead. */
-let _refreshFn: (() => Promise<void>) | null = null;
-const refreshAllWidgets = async () => {
-  if (!_refreshFn) {
-    const mod = await import('@/widgets/refreshWidgets');
-    _refreshFn = mod.refreshAllWidgets;
-  }
-  return _refreshFn();
-};
 
 const bindValue = (value: unknown): SQLiteBindValue => {
   if (
@@ -33,16 +22,36 @@ const bindValue = (value: unknown): SQLiteBindValue => {
   return JSON.stringify(value);
 };
 
+const parseTags = (rawTags: string | string[]): string[] => {
+  if (Array.isArray(rawTags)) {
+    return rawTags;
+  }
+
+  if (!rawTags) {
+    return [];
+  }
+
+  try {
+    const parsed = JSON.parse(rawTags) as unknown;
+    return Array.isArray(parsed) ? parsed.map((tag) => String(tag)) : [];
+  } catch (error) {
+    logger.warn(
+      'TransactionService',
+      'Failed to parse transaction tags JSON, defaulting to []',
+      error,
+    );
+    return [];
+  }
+};
+
 const parseTransaction = (
   row: Transaction & { tags: string | string[]; isRecurring: number | boolean },
 ): Transaction => ({
   ...row,
-  tags: Array.isArray(row.tags) ? row.tags : JSON.parse(row.tags || '[]'),
+  tags: parseTags(row.tags),
   paymentMethod: row.paymentMethod ?? 'other',
   isRecurring: Boolean(row.isRecurring),
 });
-
-const SMS_TAG_PREFIX = 'sms:';
 
 const applyBalanceEffect = async (
   type: TransactionType,
@@ -239,12 +248,14 @@ export const TransactionService = {
       void notify('Transaction Added', `Recorded ${transaction.type} of ${transaction.amount}.`);
     }
 
-    triggerBackgroundSync('transaction-created').catch(console.warn);
-    refreshAllWidgets().catch(console.warn);
+    triggerBackgroundSync('transaction-created').catch((e) =>
+      logger.warn('TransactionService', 'Background sync failed after create', e),
+    );
 
     const created = await this.getById(transaction.id);
     if (!created) {
-      throw new Error('Failed to read created transaction');
+      logger.error('TransactionService', 'Failed to read created transaction');
+      return null as unknown as Transaction;
     }
     return created;
   },
@@ -252,7 +263,8 @@ export const TransactionService = {
   async update(id: string, data: Partial<Transaction>): Promise<void> {
     const existing = await this.getById(id);
     if (!existing) {
-      throw new Error('Transaction not found');
+      logger.error('TransactionService', 'Transaction not found');
+      return;
     }
 
     const db = getDatabase();
@@ -314,8 +326,9 @@ export const TransactionService = {
     }
 
     useAppStore.getState().bumpDataRevision();
-    triggerBackgroundSync('transaction-updated').catch(console.warn);
-    refreshAllWidgets().catch(console.warn);
+    triggerBackgroundSync('transaction-updated').catch((e) =>
+      logger.warn('TransactionService', 'Background sync failed after update', e),
+    );
   },
 
   async delete(id: string): Promise<void> {
@@ -354,18 +367,9 @@ export const TransactionService = {
     }
 
     useAppStore.getState().bumpDataRevision();
-    triggerBackgroundSync('transaction-deleted').catch(console.warn);
-    refreshAllWidgets().catch(console.warn);
-  },
-
-  async hasImportedSms(messageId: string): Promise<boolean> {
-    const row = await getDatabase().getFirstAsync<{ count: number }>(
-      `SELECT COUNT(*) as count
-       FROM transactions
-       WHERE deletedAt IS NULL AND tags LIKE ?`,
-      [`%"${SMS_TAG_PREFIX}${messageId}"%`],
+    triggerBackgroundSync('transaction-deleted').catch((e) =>
+      logger.warn('TransactionService', 'Background sync failed after delete', e),
     );
-    return (row?.count ?? 0) > 0;
   },
 
   async getMonthlyStats(year: number, month: string): Promise<{ income: number; expense: number }> {

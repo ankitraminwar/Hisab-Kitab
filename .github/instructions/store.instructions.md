@@ -20,7 +20,7 @@ import { useAppStore } from '@/store/appStore';
 | ----------- | -------------------------------------------------------------------------------------------------------------------------- | --------------------------- |
 | `AuthSlice` | `isLocked`, `biometricsEnabled`, `pinEnabled`, `userProfile`                                                               | Auth & biometric lock state |
 | `UISlice`   | `isLoading`, `theme`, `notificationPreferences`, `selectedMonth`                                                           | UI preferences & loading    |
-| `DataSlice` | `accounts`, `categories`, `budgets`, `goals`, `dashboardStats`, `dataRevision`, `syncInProgress`, `isOnline`, `smsEnabled` | Cached data + sync state    |
+| `DataSlice` | `accounts`, `categories`, `budgets`, `goals`, `dashboardStats`, `dataRevision`, `syncInProgress`, `isOnline` | Cached data + sync state    |
 
 ---
 

@@ -10,7 +10,6 @@ Mobile App (Expo/RN)
   → Sync Service (background push/pull queue)
   → Supabase (PostgreSQL + Auth + RLS)
   → Edge Functions (email reports via Resend)
-  → Android Widget Host (react-native-android-widget)
 ```
 
 ## Data Layer
@@ -113,8 +112,7 @@ Zustand store in `src/store/appStore.ts`, organized into three slices:
 | **AuthSlice** | `isLocked`, `biometricsEnabled`, `biometricsPrompted`, `pinEnabled`, `userProfile`         | Auth & biometric lock state                   |
 | **UISlice**   | `isLoading`, `theme`, `notificationPreferences`, `selectedMonth`                           | UI preferences & loading state                |
 | **DataSlice** | `isOnline`, `syncInProgress`, `lastSyncAt`, `lastSyncError`, accounts, categories,         | All data caches, sync state, revision counter |
-|               | recentTransactions, budgets, goals, assets, liabilities, `dashboardStats`, `dataRevision`, |                                               |
-|               | `smsEnabled`                                                                               |                                               |
+|               | recentTransactions, budgets, goals, assets, liabilities, `dashboardStats`, `dataRevision` |                                               |
 
 ## Type System
 
@@ -149,16 +147,15 @@ All types defined in `src/utils/types.ts`. No `any` in the codebase.
 | `SyncService`          | `syncService.ts`        | Background push/pull sync orchestration                                     |
 | `syncTransform`        | `syncTransform.ts`      | camelCase ↔ snake_case column mapping for all synced tables                 |
 | `authService`          | `auth.ts`               | Sign in/up/out, biometric, session management, profile create               |
-| `SmsReadService`       | `smsReadService.ts`     | Android SMS list + bank message parser (regex-based)                        |
-| `SmsService`           | `sms.ts`                | SMS polling, deduplication, transaction creation from SMS                   |
 | `NotificationService`  | `notifications.ts`      | Expo scheduled notification management                                      |
 | `exportService`        | `exportService.ts`      | CSV export, PDF export, full JSON backup, JSON import                       |
 | `emailReportService`   | `emailReportService.ts` | Monthly summary email via Supabase Edge Function + Resend                   |
-| `WidgetDataService`    | `widgetDataService.ts`  | Data fetchers for Android home screen widgets                               |
 | `NoteService`          | `noteService.ts`        | Notes CRUD                                                                  |
-| `Analytics`            | `analytics.ts`          | Firebase Analytics wrapper (screen views, events, user properties)          |
+| `apiClient`            | `apiClient.ts`          | Centralized Supabase API wrapper with 401 handling                          |
 | `MigrationRunner`      | `MigrationRunner.ts`    | SQLite migration runner + orphaned table cleanup (consolidated base schema) |
 | `permissions`          | `permissions.ts`        | Android runtime permission requests                                         |
+| `logger`               | `logger.ts` (utils)     | Centralized logger — dev: console, prod: ring buffer (warn/error only)     |
+| `withRetry`            | `withRetry.ts` (utils)  | Retry wrapper with exponential backoff for flaky operations                 |
 
 ## Component Library (`src/components/common/`)
 
@@ -234,39 +231,19 @@ File-based routing via expo-router. Route → screen mapping:
 - `app/auth/` — Login, signup, forgot/reset password
 - `app/settings/index.tsx` — Settings
 - `app/accounts/index.tsx` — Accounts management
-- `app/sms-import.tsx` — SMS import modal
 - `app/notifications.tsx` — Notifications screen
 - `app/notes.tsx` — Notes screen
 - `app/profile/edit.tsx` — Edit profile screen
 
 Modal routes: `presentation: 'modal'` with `slide_from_bottom` or `slide_from_right`.
 
-### Lazy Loading
+## Error Handling
 
-Chart-heavy tabs (`reports.tsx`, `budgets.tsx`, `goals.tsx`) use `React.lazy()` + `Suspense` wrappers to defer loading their screen bundles until the user navigates to them.
-
-## Android Widgets
-
-Three home screen widgets via `react-native-android-widget`:
-
-| Widget           | Data Source         | Shows                                           |
-| ---------------- | ------------------- | ----------------------------------------------- |
-| `ExpenseSummary` | `WidgetDataService` | Current month income, expense, top 4 categories |
-| `QuickAdd`       | —                   | Deep-link button to `/transactions/add`         |
-| `BudgetHealth`   | `WidgetDataService` | Budget usage bars, overall spend percent        |
-
-Widget deep links use `hisabkitab://` scheme (double slash, no triple slash). e.g. `hisabkitab://transactions/add`.
-
-Widget task handler: `src/widgets/widgetTaskHandler.ts`
-
-## SMS Import (Android Only)
-
-- Uses `react-native-get-sms-android` (native build only — not Expo Go)
-- `SmsReadService` parses bank/UPI messages with regex: detects `debited/credited/spent/received` keywords, extracts INR/Rs amounts and merchant names
-- `SmsMessage` interface typed: `{ _id, address, body, date }`
-- Imported transactions are deduplicated via SMS-derived tags before creation
-- Background polling runs via `sms.ts`; user can also trigger manually from SMS Import screen
-- Imported transactions sync to Supabase like any other transaction
+- **`AppErrorBoundary`** (`src/components/ErrorBoundary.tsx`) wraps the entire navigator in `_layout.tsx`
+- **`ScreenErrorBoundary`** (`src/components/common/index.tsx`) wraps individual screens
+- **`OfflineBanner`** (`src/components/common/OfflineBanner.tsx`) shows animated connectivity warning
+- **Global handlers**: `ErrorUtils.setGlobalHandler` + `unhandledrejection` listener in root layout
+- All logging routes through `src/utils/logger.ts` — never direct `console.*`
 
 ## Export & Email
 
@@ -279,7 +256,7 @@ Widget task handler: `src/widgets/widgetTaskHandler.ts`
 
 - **TypeScript**: strict mode, `tsc --noEmit` = 0 errors
 - **ESLint**: `eslint . --max-warnings 0` = 0 warnings
-- **No `any`**: all `as any` and `: any` eliminated; replaced with `IoniconsName`, `ThemeColors`, `SmsMessage`, `DimensionValue`, `SyncableTable` proper types
+- **No `any`**: all `as any` and `: any` eliminated; replaced with `IoniconsName`, `ThemeColors`, `DimensionValue`, `SyncableTable` proper types
 - **Formatting**: Prettier enforced via `yarn format`; pre-commit hook via husky + lint-staged
 
 ## Build Optimizations

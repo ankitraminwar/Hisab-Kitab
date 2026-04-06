@@ -13,6 +13,7 @@ import type {
   NetWorthHistory,
   UserProfile,
 } from '../utils/types';
+import { logger } from '../utils/logger';
 import { triggerBackgroundSync } from './syncService';
 
 const bindValue = (value: unknown): SQLiteBindValue => {
@@ -51,7 +52,9 @@ const queueEntitySync = async (
 ) => {
   await enqueueSync(table, id, operation, payload);
   useAppStore.getState().bumpDataRevision();
-  triggerBackgroundSync(`${table}-${operation}`).catch(console.warn);
+  triggerBackgroundSync(`${table}-${operation}`).catch((e) =>
+    logger.warn('DataService', `Background sync failed for ${table}-${operation}`, e),
+  );
 };
 
 export const AccountService = {
@@ -78,7 +81,7 @@ export const AccountService = {
 
       return accounts;
     } catch (e) {
-      console.error('[AccountService] Failed to fetch accounts:', e);
+      logger.error('AccountService', 'Failed to fetch accounts', e);
       return [];
     }
   },
@@ -133,7 +136,8 @@ export const AccountService = {
       [id],
     );
     if (!existing) {
-      throw new Error('Account not found');
+      logger.error('AccountService', 'Account not found');
+      return;
     }
 
     const updatedAt = new Date().toISOString();
@@ -208,7 +212,7 @@ export const CategoryService = {
 
       return categories;
     } catch (e) {
-      console.error('[CategoryService] Failed to fetch categories:', e);
+      logger.error('CategoryService', 'Failed to fetch categories', e);
       return [];
     }
   },
@@ -257,7 +261,8 @@ export const CategoryService = {
       [id],
     );
     if (!existing) {
-      throw new Error('Category not found');
+      logger.error('CategoryService', 'Category not found');
+      return;
     }
 
     const updatedAt = new Date().toISOString();
@@ -365,7 +370,8 @@ export const BudgetService = {
       [id],
     );
     if (!existingRow) {
-      throw new Error('Budget not found');
+      logger.error('BudgetService', 'Budget not found');
+      return;
     }
 
     const existing = parseBudget(existingRow);
@@ -459,7 +465,8 @@ export const GoalService = {
       id,
     ]);
     if (!existing) {
-      throw new Error('Goal not found');
+      logger.error('GoalService', 'Goal not found');
+      return;
     }
 
     const updatedAt = new Date().toISOString();
@@ -489,7 +496,10 @@ export const GoalService = {
     const existing = await getDatabase().getFirstAsync<Goal>('SELECT * FROM goals WHERE id = ?', [
       id,
     ]);
-    if (!existing) throw new Error('Goal not found');
+    if (!existing) {
+      logger.error('GoalService', 'Goal not found');
+      return;
+    }
 
     const updatedAt = new Date().toISOString();
     const goal = { ...existing, ...data, updatedAt, syncStatus: 'pending' as const };
@@ -813,6 +823,10 @@ export const DataService = {
           if (keys.length === 0) continue;
 
           const placeholders = keys.map(() => '?').join(', ');
+          const updateSet = keys
+            .filter((k) => k !== 'id')
+            .map((k) => `${k} = excluded.${k}`)
+            .join(', ');
           const values = keys.map((k) => {
             const v = record[k];
             if (v === null || v === undefined) return null;
@@ -821,7 +835,8 @@ export const DataService = {
           });
 
           await db.runAsync(
-            `INSERT OR REPLACE INTO ${table} (${keys.join(', ')}) VALUES (${placeholders})`,
+            `INSERT INTO ${table} (${keys.join(', ')}) VALUES (${placeholders})
+             ON CONFLICT(id) DO UPDATE SET ${updateSet}`,
             values as (string | number | null)[],
           );
           imported++;
@@ -852,19 +867,24 @@ const parseUserProfile = (
 
 export const UserProfileService = {
   async getProfile(): Promise<UserProfile | null> {
-    const session = await supabase.auth.getSession();
-    const sessionUserId = session.data.session?.user?.id ?? null;
+    try {
+      const session = await supabase.auth.getSession();
+      const sessionUserId = session.data.session?.user?.id ?? null;
 
-    const row = await getDatabase().getFirstAsync<
-      UserProfile & { notificationsEnabled: number; biometricEnabled: number }
-    >(
-      sessionUserId
-        ? 'SELECT * FROM user_profile WHERE userId = ? LIMIT 1'
-        : 'SELECT * FROM user_profile LIMIT 1',
-      sessionUserId ? [sessionUserId] : [],
-    );
+      const row = await getDatabase().getFirstAsync<
+        UserProfile & { notificationsEnabled: number; biometricEnabled: number }
+      >(
+        sessionUserId
+          ? 'SELECT * FROM user_profile WHERE userId = ? LIMIT 1'
+          : 'SELECT * FROM user_profile LIMIT 1',
+        sessionUserId ? [sessionUserId] : [],
+      );
 
-    return row ? parseUserProfile(row) : null;
+      return row ? parseUserProfile(row) : null;
+    } catch (error) {
+      logger.warn('UserProfileService', 'Failed to fetch profile', error);
+      return null;
+    }
   },
 
   async upsertProfile(
@@ -949,35 +969,43 @@ export const UserProfileService = {
 
 export const PaymentMethodService = {
   async getAll(): Promise<{ id: string; name: string; icon: string; isCustom: boolean }[]> {
-    const rows = await getDatabase().getAllAsync<{
-      id: string;
-      name: string;
-      icon: string;
-      isCustom: number;
-    }>('SELECT * FROM payment_methods WHERE deletedAt IS NULL ORDER BY isCustom ASC, name ASC');
+    try {
+      const rows = await getDatabase().getAllAsync<{
+        id: string;
+        name: string;
+        icon: string;
+        isCustom: number;
+      }>('SELECT * FROM payment_methods WHERE deletedAt IS NULL ORDER BY isCustom ASC, name ASC');
 
-    const methods = rows.map((row) => ({ ...row, isCustom: Boolean(row.isCustom) }));
+      const methods = rows.map((row) => ({ ...row, isCustom: Boolean(row.isCustom) }));
 
-    const seen = new Set<string>();
-    return methods.filter((m) => {
-      if (seen.has(m.name)) return false;
-      seen.add(m.name);
-      return true;
-    });
+      const seen = new Set<string>();
+      return methods.filter((method) => {
+        const normalizedName = method.name.trim().toLowerCase();
+        if (seen.has(normalizedName)) return false;
+        seen.add(normalizedName);
+        return true;
+      });
+    } catch (error) {
+      logger.warn('PaymentMethodService', 'Failed to fetch payment methods', error);
+      return [];
+    }
   },
 
   async create(name: string, icon = 'card'): Promise<string> {
     const now = new Date().toISOString();
     const id = generateId();
+    const color = '#8B5CF6';
     await getDatabase().runAsync(
-      `INSERT INTO payment_methods (id, name, icon, isCustom, createdAt, updatedAt, syncStatus)
-       VALUES (?, ?, ?, 1, ?, ?, 'pending')`,
-      [id, name, icon, now, now],
+      `INSERT INTO payment_methods (id, name, icon, color, isCustom, createdAt, updatedAt, userId, syncStatus, lastSyncedAt, deletedAt)
+       VALUES (?, ?, ?, ?, 1, ?, ?, NULL, 'pending', NULL, NULL)`,
+      [id, name, icon, color, now, now],
     );
     await queueEntitySync('payment_methods', id, {
       id,
       name,
       icon,
+      color,
       isCustom: 1,
       createdAt: now,
       updatedAt: now,

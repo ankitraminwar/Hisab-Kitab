@@ -5,6 +5,7 @@ import { triggerBackgroundSync } from '../services/syncService';
 import { useAppStore } from '../store/appStore';
 import { generateId } from '../utils/constants';
 import type { SplitExpense, SplitFriend, SplitMember, SplitStatus } from '../utils/types';
+import { logger } from '../utils/logger';
 
 const bindValue = (value: unknown): SQLiteBindValue => {
   if (
@@ -59,7 +60,9 @@ const queueEntitySync = async (
 ) => {
   await enqueueSync(table, id, operation, payload);
   useAppStore.getState().bumpDataRevision();
-  triggerBackgroundSync(`${table}-${operation}`).catch(console.warn);
+  triggerBackgroundSync(`${table}-${operation}`).catch((e) =>
+    logger.warn('SplitService', `Background sync failed for ${table}-${operation}`, e),
+  );
 };
 
 export const SplitService = {
@@ -73,7 +76,8 @@ export const SplitService = {
   async saveFriend(name: string, existingId?: string): Promise<SplitFriend> {
     const trimmedName = name.trim();
     if (!trimmedName) {
-      throw new Error('Friend name is required');
+      logger.error('SplitService', 'Friend name is required');
+      return null as never;
     }
 
     const now = new Date().toISOString();
@@ -96,7 +100,8 @@ export const SplitService = {
         [existingId],
       );
       if (!existing) {
-        throw new Error('Friend not found');
+        logger.error('SplitService', 'Friend not found');
+        return null as never;
       }
 
       const updated: SplitFriend = {
@@ -318,7 +323,8 @@ export const SplitService = {
       [splitId],
     );
     if (!expenseRow) {
-      throw new Error('Split expense not found');
+      logger.error('SplitService', 'Split expense not found');
+      return;
     }
 
     const existingExpense = parseSplitExpense(expenseRow);
@@ -510,7 +516,10 @@ export const SplitService = {
       'SELECT * FROM split_members WHERE id = ?',
       [memberId],
     );
-    if (!existingRow) throw new Error('Split member not found');
+    if (!existingRow) {
+      logger.error('SplitService', 'Split member not found');
+      return;
+    }
 
     const existing = parseSplitMember(existingRow);
     const updatedAt = new Date().toISOString();
@@ -661,7 +670,10 @@ export const SplitService = {
       'SELECT * FROM split_members WHERE id = ?',
       [memberId],
     );
-    if (!memberRow) throw new Error('Member not found');
+    if (!memberRow) {
+      logger.error('SplitService', 'Member not found');
+      return;
+    }
 
     const member = parseSplitMember(memberRow);
     const remaining = member.shareAmount - amountPaid;

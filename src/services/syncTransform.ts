@@ -1,12 +1,17 @@
 import type { SyncableTable } from '../utils/constants';
 
-/** Columns that exist locally (added by MigrationRunner v1) but not in Supabase. */
+/**
+ * Columns that may appear in local records but have no Supabase counterpart.
+ * - Legacy columns (last_modified, server_id, version_hash) exist on devices
+ *   that ran MigrationRunner v1; new installs no longer create them.
+ * - sync_status is a v1 snake_case duplicate of the canonical camelCase syncStatus.
+ * - JOIN / computed columns come from SQLite SELECT ... JOIN queries.
+ */
 const LOCAL_ONLY_COLUMNS = new Set([
   'last_modified',
   'server_id',
   'version_hash',
-  'sync_status', // migration v1 duplicate — base schema uses camelCase syncStatus
-  // JOIN / computed columns from SQLite queries — not real columns in Supabase
+  'sync_status',
   'accountName',
   'categoryName',
   'categoryIcon',
@@ -23,6 +28,7 @@ const baseLocalToRemote: Record<string, string> = {
   deletedAt: 'deleted_at',
   createdAt: 'created_at',
   updatedAt: 'updated_at',
+  deviceId: 'device_id',
 };
 
 const tableLocalToRemote: Partial<Record<SyncableTable, Record<string, string>>> = {

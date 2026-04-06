@@ -4,7 +4,6 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useLocalSearchParams, useRouter, type Href } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  Alert,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -81,6 +80,7 @@ export default function SplitExpenseScreen() {
   }>({ visible: false, title: '', message: '', type: 'info' });
 
   const [saving, setSaving] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const friendSearchRef = useRef<TextInput>(null);
   const hasLoadedDetailRef = useRef(false);
 
@@ -298,33 +298,30 @@ export default function SplitExpenseScreen() {
   // ── Delete split ─────────────────────────────────────────────────────────
   const handleDelete = () => {
     if (!existingSplit) return;
-    Alert.alert('Delete Split', 'Are you sure you want to delete this split expense?', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Delete',
-        style: 'destructive',
-        onPress: async () => {
-          try {
-            await SplitService.deleteSplit(existingSplit.id);
-            void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-            setPopupConfig({
-              visible: true,
-              title: 'Deleted',
-              message: 'Split expense removed.',
-              type: 'success',
-              onClose: () => router.back(),
-            });
-          } catch {
-            setPopupConfig({
-              visible: true,
-              title: 'Error',
-              message: 'Failed to delete split.',
-              type: 'error',
-            });
-          }
-        },
-      },
-    ]);
+    setConfirmDelete(true);
+  };
+
+  const executeDelete = async () => {
+    if (!existingSplit) return;
+    setConfirmDelete(false);
+    try {
+      await SplitService.deleteSplit(existingSplit.id);
+      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      setPopupConfig({
+        visible: true,
+        title: 'Deleted',
+        message: 'Split expense removed.',
+        type: 'success',
+        onClose: () => router.back(),
+      });
+    } catch {
+      setPopupConfig({
+        visible: true,
+        title: 'Error',
+        message: 'Failed to delete split.',
+        type: 'error',
+      });
+    }
   };
 
   const handleAddNewFriend = async () => {
@@ -567,6 +564,14 @@ export default function SplitExpenseScreen() {
             setPopupConfig((prev) => ({ ...prev, visible: false }));
             if (popupConfig.onClose) setTimeout(popupConfig.onClose, 300);
           }}
+        />
+        <CustomPopup
+          visible={confirmDelete}
+          title="Delete Split"
+          message="Are you sure you want to delete this split expense?"
+          type="error"
+          onClose={() => setConfirmDelete(false)}
+          actions={[{ label: 'Delete', onPress: () => void executeDelete() }]}
         />
       </SafeAreaView>
     );

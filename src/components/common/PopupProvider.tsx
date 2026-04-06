@@ -1,4 +1,5 @@
 import React, { createContext, useCallback, useContext, useState } from 'react';
+import { logger } from '../../utils/logger';
 import { CustomPopup } from './CustomPopup';
 
 interface PopupOptions {
@@ -65,7 +66,8 @@ export const PopupProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 export const usePopup = () => {
   const context = useContext(PopupContext);
   if (!context) {
-    throw new Error('usePopup must be used within a PopupProvider');
+    logger.error('PopupProvider', 'usePopup must be used within a PopupProvider');
+    return {} as PopupContextType;
   }
   return context;
 };

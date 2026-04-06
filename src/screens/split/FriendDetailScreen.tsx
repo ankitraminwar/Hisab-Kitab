@@ -18,6 +18,7 @@ import { SplitService } from '../../services/splitService';
 import { useAppStore } from '../../store/appStore';
 import { RADIUS, SPACING, TYPOGRAPHY, formatCurrency } from '../../utils/constants';
 import type { SplitExpense, SplitMember } from '../../utils/types';
+import { logger } from '../../utils/logger';
 
 interface FriendDetailItem {
   expense: SplitExpense;
@@ -48,7 +49,7 @@ export default function FriendDetailScreen() {
       const data = await SplitService.getFriendDetails(id);
       setDetails(data);
     } catch (error) {
-      console.warn('Failed to load friend details', error);
+      logger.warn('FriendDetail', 'Failed to load friend details', error);
     } finally {
       setLoading(false);
     }

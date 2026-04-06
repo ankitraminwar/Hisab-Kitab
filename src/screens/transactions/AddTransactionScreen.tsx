@@ -247,13 +247,23 @@ export default function AddTransactionScreen() {
       return;
     }
 
+    if (!selectedCategory || !selectedAccount) {
+      setPopupConfig({
+        visible: true,
+        title: 'Missing selection',
+        message: 'Please choose both a category and an account.',
+        type: 'error',
+      });
+      return;
+    }
+
     setLoading(true);
     try {
       const payload = {
         amount: finalAmount,
         type,
-        categoryId: selectedCategory!.id,
-        accountId: selectedAccount!.id,
+        categoryId: selectedCategory.id,
+        accountId: selectedAccount.id,
         toAccountId: type === 'transfer' ? selectedToAccount?.id : undefined,
         notes: notes.trim() || undefined,
         date: toISODate(selectedDate),

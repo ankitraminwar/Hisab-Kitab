@@ -1,12 +1,54 @@
 import * as LocalAuthentication from 'expo-local-authentication';
 import * as SecureStore from 'expo-secure-store';
 
+import { isSupabaseConfigured } from '../lib/env';
 import { supabase } from '../lib/supabase';
 import type { AuthCredentials } from '../utils/types';
 
 const PIN_KEY = 'hisabkitab.pin';
 const BIOMETRIC_KEY = 'hisabkitab.biometrics';
 const BIOMETRIC_PROMPT_KEY = 'hisabkitab.biometrics.prompted';
+const SUPABASE_CONFIG_ERROR_MESSAGE =
+  'Supabase is not configured. Set EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_ANON_KEY, then rebuild or restart the app so app.config.js can expose them.';
+
+type AuthOperationResult = {
+  error: Error | null;
+};
+
+const normalizeAuthError = (error: unknown, fallbackMessage: string): Error => {
+  if (error instanceof Error) {
+    const message = error.message.trim();
+    if (
+      !message ||
+      message.toLowerCase().includes('network request failed') ||
+      message.toLowerCase().includes('failed to fetch') ||
+      message.toLowerCase().includes('fetch')
+    ) {
+      return new Error('Could not reach the server. Check your internet connection and try again.');
+    }
+    return error;
+  }
+
+  return new Error(fallbackMessage);
+};
+
+const runAuthOperation = async (
+  operationName: string,
+  operation: () => Promise<unknown>,
+): Promise<AuthOperationResult> => {
+  if (!isSupabaseConfigured) {
+    return { error: new Error(SUPABASE_CONFIG_ERROR_MESSAGE) };
+  }
+
+  try {
+    await operation();
+    return { error: null };
+  } catch (error) {
+    return {
+      error: normalizeAuthError(error, `${operationName} failed unexpectedly.`),
+    };
+  }
+};
 
 export const setPin = async (pin: string): Promise<void> => {
   await SecureStore.setItemAsync(PIN_KEY, pin, {
@@ -65,36 +107,56 @@ export const authenticateBiometric = async (): Promise<boolean> => {
 };
 
 export const authService = {
-  signUp: async ({ email, password }: AuthCredentials) => supabase.auth.signUp({ email, password }),
+  signUp: async ({ email, password }: AuthCredentials) =>
+    runAuthOperation('Sign up', () => supabase.auth.signUp({ email, password })),
   signIn: async ({ email, password }: AuthCredentials) =>
-    supabase.auth.signInWithPassword({ email, password }),
-  signInWithOtp: async (email: string) => supabase.auth.signInWithOtp({ email }),
+    runAuthOperation('Sign in', () => supabase.auth.signInWithPassword({ email, password })),
+  signInWithOtp: async (email: string) =>
+    runAuthOperation('Sign in with OTP', () => supabase.auth.signInWithOtp({ email })),
   verifyOtp: async (email: string, token: string) =>
-    supabase.auth.verifyOtp({ email, token, type: 'email' }),
+    runAuthOperation('Verify OTP', () => supabase.auth.verifyOtp({ email, token, type: 'email' })),
   requestPasswordReset: async (email: string) =>
-    supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: 'hisabkitab://reset-password',
-    }),
+    runAuthOperation('Request password reset', () =>
+      supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: 'hisabkitab://reset-password',
+      }),
+    ),
   resetPassword: async (password: string) =>
-    supabase.auth.updateUser({
-      password,
-    }),
+    runAuthOperation('Reset password', () =>
+      supabase.auth.updateUser({
+        password,
+      }),
+    ),
   signOut: async () => {
+    const signOutLocally = () => supabase.auth.signOut({ scope: 'local' });
+
     try {
       return await supabase.auth.signOut();
-    } catch (error) {
-      return {
-        error: error instanceof Error ? error : new Error('Sign out failed unexpectedly'),
-      };
+    } catch {
+      try {
+        await signOutLocally();
+        return { error: null };
+      } catch (localError) {
+        return {
+          error: normalizeAuthError(localError, 'Sign out failed unexpectedly'),
+        };
+      }
     }
   },
   getSession: async () => {
+    if (!isSupabaseConfigured) {
+      return {
+        data: { session: null },
+        error: new Error(SUPABASE_CONFIG_ERROR_MESSAGE),
+      };
+    }
+
     try {
       return await supabase.auth.getSession();
     } catch (error) {
       return {
         data: { session: null },
-        error: error instanceof Error ? error : new Error('Failed to retrieve auth session'),
+        error: normalizeAuthError(error, 'Failed to retrieve auth session'),
       };
     }
   },

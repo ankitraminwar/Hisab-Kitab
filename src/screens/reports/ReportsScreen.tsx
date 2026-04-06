@@ -108,6 +108,10 @@ export default function ReportsScreen() {
   const tabScrollRef = useRef<Animated.ScrollView>(null);
   const scrollX = useSharedValue(SCREEN_WIDTH);
 
+  // Create Date on the JS thread — avoids passing a Date object across the worklet boundary
+  // which can produce an Invalid Date in some Reanimated environments.
+  const resetAnchorToNow = useCallback(() => setAnchor(new Date()), []);
+
   const scrollHandler = useAnimatedScrollHandler({
     onScroll: (event) => {
       scrollX.value = event.contentOffset.x;
@@ -115,7 +119,7 @@ export default function ReportsScreen() {
     onMomentumEnd: (event) => {
       const idx = Math.round(event.contentOffset.x / SCREEN_WIDTH);
       runOnJS(setPeriod)(PERIOD_TABS[idx] as Period);
-      runOnJS(setAnchor)(new Date());
+      runOnJS(resetAnchorToNow)();
     },
   });
 

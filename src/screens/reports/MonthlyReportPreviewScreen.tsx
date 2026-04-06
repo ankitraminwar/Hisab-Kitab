@@ -9,6 +9,7 @@ import { Button, CustomPopup, EmptyState, ProgressBar } from '@/components/commo
 import { ScreenHeader } from '@/components/common/ScreenHeader';
 import { useTheme, type ThemeColors } from '@/hooks/useTheme';
 import { exportService } from '@/services/exportService';
+import { logger } from '@/utils/logger';
 import {
   buildReportDocumentData,
   formatReportAmount,
@@ -49,11 +50,12 @@ const parseInput = (params: {
   };
 };
 
-const monthDay = (iso: string) =>
-  new Date(iso).toLocaleDateString('en-IN', {
-    month: 'short',
-    day: '2-digit',
-  });
+const monthDay = (iso: string) => {
+  const d = new Date(iso);
+  return isNaN(d.getTime())
+    ? iso || '—'
+    : d.toLocaleDateString('en-IN', { month: 'short', day: '2-digit' });
+};
 
 export default function MonthlyReportPreviewScreen() {
   const router = useRouter();
@@ -117,7 +119,7 @@ export default function MonthlyReportPreviewScreen() {
       const nextReport = await buildReportDocumentData(reportInput);
       setReport(nextReport);
     } catch (error) {
-      console.warn('Failed to load report preview', error);
+      logger.warn('ReportPreview', 'Failed to load report preview', error);
       setPopupConfig({
         visible: true,
         title: 'Preview Failed',
@@ -161,7 +163,7 @@ export default function MonthlyReportPreviewScreen() {
         type: 'success',
       });
     } catch (error) {
-      console.warn(`Failed to export ${kind} report`, error);
+      logger.warn('ReportPreview', `Failed to export ${kind} report`, error);
       setPopupConfig({
         visible: true,
         title: 'Export Failed',

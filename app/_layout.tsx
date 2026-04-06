@@ -1,29 +1,31 @@
 import { Ionicons } from '@expo/vector-icons';
+import NetInfo from '@react-native-community/netinfo';
 import type { Session } from '@supabase/supabase-js';
 import { QueryClientProvider } from '@tanstack/react-query';
-import * as Linking from 'expo-linking';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import * as SecureStore from 'expo-secure-store';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  AppState,
   BackHandler,
   LogBox,
-  Platform,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
 } from 'react-native';
-import { registerWidgetTaskHandler } from 'react-native-android-widget';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { BottomSheetModalProvider } from '@gorhom/bottom-sheet';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
-import { AppToast } from '@/components/common/Toast';
+import { AppErrorBoundary } from '../src/components/ErrorBoundary';
+import { OfflineBanner } from '../src/components/common/OfflineBanner';
+import { PopupProvider } from '../src/components/common/PopupProvider';
+import { ScreenErrorBoundary } from '../src/components/common/ScreenErrorBoundary';
+import { AppToast } from '../src/components/common/Toast';
 
-import { PopupProvider, ScreenErrorBoundary } from '@/components/common';
 import {
   clearLocalData,
   getLastSyncTimestamp,
@@ -32,7 +34,7 @@ import {
 } from '@/database';
 import { useTheme, type ThemeColors } from '@/hooks/useTheme';
 import { queryClient } from '@/lib/queryClient';
-import { Crashlytics } from '@/services/analytics';
+import { setSupabaseAutoRefreshEnabled } from '@/lib/supabase';
 import {
   authService,
   authenticateBiometric,
@@ -41,11 +43,10 @@ import {
 } from '@/services/auth';
 import { UserProfileService } from '@/services/dataServices';
 import { applyNotificationPreferences } from '@/services/notifications';
-import { smsImportService } from '@/services/sms';
 import { syncService } from '@/services/syncService';
 import { useAppStore } from '@/store/appStore';
 import { SPACING, TYPOGRAPHY } from '@/utils/constants';
-import { widgetTaskHandler } from '@/widgets/widgetTaskHandler';
+import { logger } from '@/utils/logger';
 
 // Suppress the expo-keep-awake warning that fires in dev mode
 LogBox.ignoreLogs(['Unable to activate keep awake']);
@@ -60,60 +61,56 @@ const errorUtils = (globalThis as typeof globalThis & { ErrorUtils?: ErrorUtilsS
 const previousGlobalHandler = errorUtils?.getGlobalHandler?.();
 
 errorUtils?.setGlobalHandler?.((error, isFatal) => {
-  if (error.message.includes('Unable to activate keep awake')) {
-    return;
-  }
+  const errorMessage = String(error?.message ?? error ?? '');
+  const normalizedError =
+    error instanceof Error ? error : new Error(errorMessage || 'Unknown JS error');
 
-  if (isFatal) {
-    Crashlytics.recordError(error, 'fatal_js_error');
-  }
+  try {
+    if (errorMessage.includes('Unable to activate keep awake')) {
+      return;
+    }
 
-  previousGlobalHandler?.(error, isFatal);
+    logger.error('GlobalError', `${isFatal ? 'FATAL: ' : ''}${normalizedError.message}`);
+
+    previousGlobalHandler?.(normalizedError, isFatal);
+  } catch (handlerError) {
+    logger.warn('RootLayout', 'Global error handler failed', handlerError);
+    previousGlobalHandler?.(normalizedError, isFatal);
+  }
 });
 
-// Register Android widget task handler at module level
-if (Platform.OS === 'android') {
-  try {
-    registerWidgetTaskHandler(widgetTaskHandler);
-  } catch (error) {
-    console.warn('Failed to register widget task handler', error);
-  }
+// Catch unhandled promise rejections so they don't disappear silently
+if (typeof globalThis.addEventListener === 'function') {
+  globalThis.addEventListener('unhandledrejection', (event: PromiseRejectionEvent) => {
+    const reason = event?.reason;
+    const message =
+      reason instanceof Error ? reason.message : String(reason ?? 'Unknown rejection');
+    logger.error('UnhandledRejection', message);
+  });
 }
-
-const ALLOWED_DEEP_LINK_PATHS: Record<string, string> = {
-  '/transactions': '/(tabs)/transactions',
-  '/budgets': '/(tabs)/budgets',
-  '/reports': '/(tabs)/reports',
-};
 
 export default function RootLayout() {
   const router = useRouter();
   const segments = useSegments();
   const previousSessionRef = useRef<Session | null>(null);
-  const {
-    isLocked,
-    setLocked,
-    biometricsEnabled,
-    setBiometrics,
-    setBiometricsPrompted: setBiometricsPromptedState,
-    theme,
-    setTheme,
-    setUserProfile,
-    setNotificationPreferences,
-    resetAppState,
-  } = useAppStore();
+  const isLocked = useAppStore((s) => s.isLocked);
+  const setLocked = useAppStore((s) => s.setLocked);
+  const biometricsEnabled = useAppStore((s) => s.biometricsEnabled);
+  const setBiometrics = useAppStore((s) => s.setBiometrics);
+  const setBiometricsPromptedState = useAppStore((s) => s.setBiometricsPrompted);
+  const theme = useAppStore((s) => s.theme);
+  const setTheme = useAppStore((s) => s.setTheme);
+  const setUserProfile = useAppStore((s) => s.setUserProfile);
+  const setNotificationPreferences = useAppStore((s) => s.setNotificationPreferences);
+  const resetAppState = useAppStore((s) => s.resetAppState);
   const [initializing, setInitializing] = useState(true);
   const [slowLoad, setSlowLoad] = useState(false);
   const [session, setSession] = useState<Session | null>(null);
+  const [startupError, setStartupError] = useState<string | null>(null);
+  const [bootstrapNonce, setBootstrapNonce] = useState(0);
 
   const { colors } = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
-
-  // Max-wait safeguard: if initializing is still true after 8s, force it off
-  useEffect(() => {
-    const maxWait = setTimeout(() => setInitializing(false), 8000);
-    return () => clearTimeout(maxWait);
-  }, []);
 
   // Show slow-load message after 3s
   useEffect(() => {
@@ -125,6 +122,8 @@ export default function RootLayout() {
   useEffect(() => {
     const withTimeout = <T,>(promise: Promise<T>, ms: number, fallback: T): Promise<T> =>
       Promise.race([promise, new Promise<T>((resolve) => setTimeout(() => resolve(fallback), ms))]);
+    let cancelled = false;
+    let syncStartTimer: ReturnType<typeof setTimeout> | undefined;
 
     const hydrateAuthenticatedSession = async (nextSession: Session, reason: string) => {
       try {
@@ -142,14 +141,23 @@ export default function RootLayout() {
           setUserProfile(syncedProfile);
         }
       } catch (error) {
-        console.warn('Session hydration failed', error);
+        logger.warn('RootLayout', 'Session hydration failed', error);
       }
     };
 
     const bootstrap = async () => {
       try {
+        if (!cancelled) {
+          setStartupError(null);
+          setSlowLoad(false);
+        }
+
         // Finding 14: Rapid theme hydration to prevent bootstrap flash
-        const persistedTheme = await SecureStore.getItemAsync('theme_pref');
+        const persistedTheme = await withTimeout(
+          SecureStore.getItemAsync('theme_pref'),
+          5000,
+          null,
+        );
         if (
           persistedTheme &&
           (persistedTheme === 'dark' || persistedTheme === 'light' || persistedTheme === 'system')
@@ -157,7 +165,7 @@ export default function RootLayout() {
           setTheme(persistedTheme);
         }
 
-        await withTimeout(initializeDatabase(), 5000, undefined);
+        await initializeDatabase();
         const currentSession = await withTimeout(authService.getSession(), 5000, {
           data: { session: null },
           error: null,
@@ -181,12 +189,20 @@ export default function RootLayout() {
             budgetAlerts: true,
             monthlyReportReminder: true,
           });
-          await applyNotificationPreferences({
-            enabled: profile.notificationsEnabled,
-            dailyReminder: profile.notificationsEnabled,
-            budgetAlerts: true,
-            monthlyReportReminder: true,
-          });
+          try {
+            await applyNotificationPreferences({
+              enabled: profile.notificationsEnabled,
+              dailyReminder: profile.notificationsEnabled,
+              budgetAlerts: true,
+              monthlyReportReminder: true,
+            });
+          } catch (notificationError) {
+            logger.warn(
+              'RootLayout',
+              'Failed to apply notification preferences during bootstrap',
+              notificationError,
+            );
+          }
         } else {
           setUserProfile(null);
           setTheme('system');
@@ -195,19 +211,29 @@ export default function RootLayout() {
         setBiometrics(biometricPreference);
         setBiometricsPromptedState(prompted);
         setLocked(Boolean(nextSession) && biometricPreference);
-        syncService.start();
-        smsImportService.start();
+        syncStartTimer = setTimeout(() => {
+          syncService.start();
+        }, 1000);
 
         if (nextSession) {
-          Crashlytics.setUserId(nextSession.user.id).catch(console.warn);
-          hydrateAuthenticatedSession(nextSession, 'app-start').catch(console.warn);
-          smsImportService.run().catch(console.warn);
+          hydrateAuthenticatedSession(nextSession, 'app-start').catch((e) =>
+            logger.warn('RootLayout', 'Hydration failed on app-start', e),
+          );
         }
       } catch (error) {
-        console.warn('Bootstrap failed, continuing in offline mode', error);
-        setLocked(false);
+        logger.warn('RootLayout', 'Bootstrap failed, staying on the startup screen', error);
+        if (!cancelled) {
+          setLocked(false);
+          setStartupError(
+            error instanceof Error && error.message
+              ? error.message
+              : 'The app could not finish starting.',
+          );
+        }
       } finally {
-        setInitializing(false);
+        if (!cancelled) {
+          setInitializing(false);
+        }
       }
     };
 
@@ -219,10 +245,12 @@ export default function RootLayout() {
       setSession(nextSession);
 
       if (!nextSession && previousSession) {
-        Crashlytics.setUserId(null).catch(console.warn);
         syncService.stop();
-        smsImportService.stop();
-        await clearLocalData();
+        try {
+          await clearLocalData();
+        } catch (err) {
+          logger.error('RootLayout', 'clearLocalData failed on logout, continuing', err);
+        }
         queryClient.clear();
         resetAppState();
         setLocked(false);
@@ -232,21 +260,23 @@ export default function RootLayout() {
 
       if (nextSession) {
         setLocked(useAppStore.getState().biometricsEnabled);
-        smsImportService.start();
-        smsImportService.run().catch(console.warn);
         hydrateAuthenticatedSession(
           nextSession,
           previousSession ? 'auth-state-change' : 'login-hydration',
-        ).catch(console.warn);
+        ).catch((e) => logger.warn('RootLayout', 'Hydration failed on auth-state-change', e));
       }
     });
 
     return () => {
+      cancelled = true;
+      if (syncStartTimer) {
+        clearTimeout(syncStartTimer);
+      }
       subscription.data.subscription.unsubscribe();
       syncService.stop();
-      smsImportService.stop();
     };
   }, [
+    bootstrapNonce,
     resetAppState,
     router,
     setBiometrics,
@@ -258,12 +288,40 @@ export default function RootLayout() {
   ]);
 
   useEffect(() => {
-    if (initializing) {
+    let appState = AppState.currentState;
+    let networkReachable = false;
+
+    const syncAutoRefreshState = async () => {
+      const shouldRefresh = Boolean(session) && appState === 'active' && networkReachable;
+      await setSupabaseAutoRefreshEnabled(shouldRefresh);
+    };
+
+    const appStateSubscription = AppState.addEventListener('change', (nextState) => {
+      appState = nextState;
+      void syncAutoRefreshState();
+    });
+
+    const networkUnsubscribe = NetInfo.addEventListener((state) => {
+      networkReachable = Boolean(state.isConnected && state.isInternetReachable);
+      void syncAutoRefreshState();
+    });
+
+    void syncAutoRefreshState();
+
+    return () => {
+      appStateSubscription.remove();
+      networkUnsubscribe();
+      void setSupabaseAutoRefreshEnabled(false);
+    };
+  }, [session]);
+
+  useEffect(() => {
+    if (initializing || startupError) {
       return;
     }
 
     const inAuthFlow = segments[0] === 'auth' || segments[0] === 'login';
-    if (!session && !inAuthFlow) {
+    if (!session && !inAuthFlow && segments.length > 0) {
       router.replace('/login');
       return;
     }
@@ -271,7 +329,7 @@ export default function RootLayout() {
     if (session && inAuthFlow) {
       router.replace('/');
     }
-  }, [initializing, router, segments, session]);
+  }, [initializing, router, segments, session, startupError]);
 
   // Block hardware back button while biometric lock screen is shown
   useEffect(() => {
@@ -279,19 +337,6 @@ export default function RootLayout() {
     const sub = BackHandler.addEventListener('hardwareBackPress', () => true);
     return () => sub.remove();
   }, [session, isLocked, biometricsEnabled]);
-
-  // Handle widget deep links that need tab route resolution
-  useEffect(() => {
-    const sub = Linking.addEventListener('url', ({ url }) => {
-      if (!url.startsWith('hisabkitab://')) return;
-      const path = `/${url.replace(/^hisabkitab:\/\//, '').split('?')[0]}`;
-      const target = ALLOWED_DEEP_LINK_PATHS[path];
-      if (target) {
-        router.replace(target as Parameters<typeof router.replace>[0]);
-      }
-    });
-    return () => sub.remove();
-  }, [router]);
 
   const handleAuthenticate = async () => {
     try {
@@ -302,6 +347,14 @@ export default function RootLayout() {
     } catch {
       setLocked(false);
     }
+  };
+
+  const handleRetryBootstrap = () => {
+    setSession(null);
+    setStartupError(null);
+    setSlowLoad(false);
+    setInitializing(true);
+    setBootstrapNonce((current) => current + 1);
   };
 
   if (initializing) {
@@ -315,6 +368,23 @@ export default function RootLayout() {
         {slowLoad && (
           <Text style={styles.loadingSubtext}>Taking longer than usual. Please wait...</Text>
         )}
+      </View>
+    );
+  }
+
+  if (startupError) {
+    return (
+      <View style={styles.lockContainer}>
+        <View style={styles.iconContainer}>
+          <Ionicons name="warning-outline" size={40} color={colors.warning} />
+        </View>
+        <Text style={styles.title}>Startup Issue</Text>
+        <Text style={styles.subtitle}>The app could not finish starting safely.</Text>
+        <Text style={styles.loadingSubtext}>{startupError}</Text>
+        <TouchableOpacity style={styles.unlockButton} onPress={handleRetryBootstrap}>
+          <Ionicons name="refresh" size={24} color="#ffffff" />
+          <Text style={styles.unlockText}>Try Again</Text>
+        </TouchableOpacity>
       </View>
     );
   }
@@ -336,71 +406,73 @@ export default function RootLayout() {
   }
 
   return (
-    <ScreenErrorBoundary>
-      <SafeAreaProvider>
-        <GestureHandlerRootView style={{ flex: 1 }}>
-          <BottomSheetModalProvider>
-            <QueryClientProvider client={queryClient}>
-              <PopupProvider>
-                <StatusBar
-                  style={theme === 'dark' ? 'light' : 'dark'}
-                  backgroundColor={colors.bg}
-                />
-                <Stack
-                  screenOptions={{
-                    headerShown: false,
-                    animation: 'slide_from_right',
-                  }}
-                >
-                  <Stack.Screen name="login" options={{ headerShown: false }} />
-                  <Stack.Screen name="auth" options={{ headerShown: false }} />
-                  <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-                  <Stack.Screen
-                    name="transactions/add"
-                    options={{
-                      presentation: 'modal',
-                      animation: 'slide_from_bottom',
-                    }}
+    <AppErrorBoundary>
+      <ScreenErrorBoundary>
+        <SafeAreaProvider>
+          <GestureHandlerRootView style={{ flex: 1 }}>
+            <BottomSheetModalProvider>
+              <QueryClientProvider client={queryClient}>
+                <PopupProvider>
+                  <StatusBar
+                    style={theme === 'dark' ? 'light' : 'dark'}
+                    backgroundColor={colors.bg}
                   />
-                  <Stack.Screen
-                    name="transactions/[id]"
-                    options={{
-                      presentation: 'modal',
-                      animation: 'slide_from_bottom',
+                  <OfflineBanner />
+                  <Stack
+                    screenOptions={{
+                      headerShown: false,
+                      animation: 'slide_from_right',
                     }}
-                  />
-                  <Stack.Screen name="accounts/index" options={{ animation: 'slide_from_right' }} />
-                  <Stack.Screen
-                    name="reports/preview"
-                    options={{
-                      presentation: 'modal',
-                      animation: 'slide_from_bottom',
-                    }}
-                  />
-                  <Stack.Screen name="settings/index" options={{ animation: 'slide_from_right' }} />
-                  <Stack.Screen
-                    name="sms-import"
-                    options={{
-                      presentation: 'modal',
-                      animation: 'slide_from_bottom',
-                    }}
-                  />
-                  <Stack.Screen name="splits/index" options={{ animation: 'slide_from_right' }} />
-                  <Stack.Screen
-                    name="split-expense/[id]"
-                    options={{
-                      presentation: 'modal',
-                      animation: 'slide_from_bottom',
-                    }}
-                  />
-                </Stack>
-              </PopupProvider>
-            </QueryClientProvider>
-            <AppToast />
-          </BottomSheetModalProvider>
-        </GestureHandlerRootView>
-      </SafeAreaProvider>
-    </ScreenErrorBoundary>
+                  >
+                    <Stack.Screen name="login" options={{ headerShown: false }} />
+                    <Stack.Screen name="auth" options={{ headerShown: false }} />
+                    <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+                    <Stack.Screen
+                      name="transactions/add"
+                      options={{
+                        presentation: 'modal',
+                        animation: 'slide_from_bottom',
+                      }}
+                    />
+                    <Stack.Screen
+                      name="transactions/[id]"
+                      options={{
+                        presentation: 'modal',
+                        animation: 'slide_from_bottom',
+                      }}
+                    />
+                    <Stack.Screen
+                      name="accounts/index"
+                      options={{ animation: 'slide_from_right' }}
+                    />
+                    <Stack.Screen
+                      name="reports/preview"
+                      options={{
+                        presentation: 'modal',
+                        animation: 'slide_from_bottom',
+                      }}
+                    />
+                    <Stack.Screen
+                      name="settings/index"
+                      options={{ animation: 'slide_from_right' }}
+                    />
+                    <Stack.Screen name="splits/index" options={{ animation: 'slide_from_right' }} />
+                    <Stack.Screen
+                      name="split-expense/[id]"
+                      options={{
+                        presentation: 'modal',
+                        animation: 'slide_from_bottom',
+                      }}
+                    />
+                  </Stack>
+                </PopupProvider>
+              </QueryClientProvider>
+              <AppToast />
+            </BottomSheetModalProvider>
+          </GestureHandlerRootView>
+        </SafeAreaProvider>
+      </ScreenErrorBoundary>
+    </AppErrorBoundary>
   );
 }
 
@@ -460,3 +532,29 @@ const createStyles = (colors: ThemeColors) =>
       color: '#ffffff',
     },
   });
+
+// ─── Expo Router Global ErrorBoundary ─────────────────────────────────────────
+// Exported so expo-router can use it as a fallback when any route component fails.
+export function ErrorBoundary({ error, retry }: { error: Error; retry: () => void }) {
+  return (
+    <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+      <Text style={{ fontSize: 20, fontWeight: '700', color: '#EF4444', marginBottom: 8 }}>
+        Something went wrong
+      </Text>
+      <Text style={{ fontSize: 14, color: '#64748B', textAlign: 'center', marginBottom: 24 }}>
+        {error?.message || 'An unexpected error occurred.'}
+      </Text>
+      <TouchableOpacity
+        onPress={retry}
+        style={{
+          backgroundColor: '#6366F1',
+          paddingHorizontal: 24,
+          paddingVertical: 12,
+          borderRadius: 8,
+        }}
+      >
+        <Text style={{ color: '#ffffff', fontWeight: '600' }}>Try Again</Text>
+      </TouchableOpacity>
+    </View>
+  );
+}

@@ -64,8 +64,9 @@ export type ReportDocumentData = {
 
 const LARGE_EXPORT_LIMIT = 10000;
 
-const getPreviousRange = (input: ReportExportInput): { from: string; to: string } => {
+const getPreviousRange = (input: ReportExportInput): { from: string; to: string } | null => {
   const anchor = new Date(`${input.from}T00:00:00`);
+  if (isNaN(anchor.getTime())) return null;
 
   switch (input.period) {
     case 'weekly': {
@@ -148,6 +149,28 @@ export const createCurrentMonthReportInput = (): ReportExportInput => {
   };
 };
 
+export const createCurrentWeekReportInput = (): ReportExportInput => {
+  const now = new Date();
+  const start = startOfWeek(now, { weekStartsOn: 1 });
+  const end = endOfWeek(now, { weekStartsOn: 1 });
+  return {
+    from: format(start, 'yyyy-MM-dd'),
+    to: format(end, 'yyyy-MM-dd'),
+    label: `${format(start, 'dd MMM')} – ${format(end, 'dd MMM yyyy')}`,
+    period: 'weekly',
+  };
+};
+
+export const createCurrentYearReportInput = (): ReportExportInput => {
+  const now = new Date();
+  return {
+    from: format(startOfYear(now), 'yyyy-MM-dd'),
+    to: format(endOfYear(now), 'yyyy-MM-dd'),
+    label: format(now, 'yyyy'),
+    period: 'yearly',
+  };
+};
+
 export const buildReportDocumentData = async (
   input: ReportExportInput,
 ): Promise<ReportDocumentData> => {
@@ -164,7 +187,9 @@ export const buildReportDocumentData = async (
         0,
       ),
       TransactionService.getStatsByDateRange(input.from, input.to),
-      TransactionService.getStatsByDateRange(previousRange.from, previousRange.to),
+      previousRange
+        ? TransactionService.getStatsByDateRange(previousRange.from, previousRange.to)
+        : Promise.resolve({ income: 0, expense: 0 }),
       TransactionService.getCategoryBreakdownByDateRange(input.from, input.to, 'expense'),
       AccountService.getTotalBalance(),
       input.period === 'monthly'

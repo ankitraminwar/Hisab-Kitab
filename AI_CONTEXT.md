@@ -22,24 +22,21 @@ Offline-first personal finance manager for Android/iOS. Expo + React Native + Ty
 | Animations  | react-native-reanimated ~4.1.1, expo-linear-gradient                            |
 | Charts      | react-native-wagmi-charts ^2.9.1, react-native-svg, @shopify/react-native-skia ^2.2.12 |
 | Lists       | @shopify/flash-list 2.0.2 (v2 — no `estimatedItemSize` prop)                    |
-| Widgets     | react-native-android-widget ^0.20.1                                             |
-| SMS parsing | react-native-get-sms-android ^2.1.0                                             |
-| Analytics   | @react-native-firebase/analytics ^21.14.0 (via @react-native-firebase/app)      |
 | Linting     | ESLint 9 (`eslint . --max-warnings 0` = 0 warnings)                             |
 | Formatting  | Prettier (pre-commit via husky + lint-staged)                                   |
 
 ## Hard Rules
 
 1. **Offline-first**: Write to SQLite first, queue for sync. Never block on network.
-2. **No secrets in app code**: Only `EXPO_PUBLIC_SUPABASE_URL` and `EXPO_PUBLIC_SUPABASE_ANON_KEY` in `.env`.
+2. **No secrets in app code**: Only public Supabase client config (`EXPO_PUBLIC_SUPABASE_URL` and `EXPO_PUBLIC_SUPABASE_ANON_KEY`) in `.env` / EAS. `app.config.js` exposes them through `expo.extra.publicEnv`.
 3. **Column naming**: Local SQLite = camelCase, Supabase = snake_case. Mapping in `src/services/syncTransform.ts`.
 4. **Auth gating**: Unauthenticated users → `/login`. Every authenticated user must have a `user_profile` row.
 5. **Theme**: All screens must use `useTheme()` colors, never hardcoded `COLORS`. Styles via `createStyles(colors: ThemeColors)` pattern.
 6. **Popups**: Use `CustomPopup` for success/error/info feedback. Use `CustomModal` for destructive confirmation dialogs (delete, discard). Never use `Alert.alert`.
 7. **IDs**: All entity IDs are `TEXT` (UUID strings from `generateId()`).
-8. **Native features**: SMS import and Android widgets require native builds (not Expo Go). iOS cannot read SMS inbox.
-9. **No `any`**: Every type must be explicit. Use `IoniconsName` for Ionicons icon names, `ThemeColors` for color objects, `DimensionValue` for percentage widths, proper interfaces for external data.
-10. **FlashList v2**: Do NOT pass `estimatedItemSize` — that prop was removed in v2.0.
+8. **No `any`**: Every type must be explicit. Use `IoniconsName` for Ionicons icon names, `ThemeColors` for color objects, `DimensionValue` for percentage widths, proper interfaces for external data.
+9. **FlashList v2**: Do NOT pass `estimatedItemSize` — that prop was removed in v2.0.
+10. **Logging**: Use `logger.*` from `src/utils/logger.ts` — never `console.*`. Production silences log/info; warn/error go to in-memory ring buffer.
 
 ## Project Structure
 
@@ -65,7 +62,6 @@ app/                             # Expo Router file-based routes
   splits/index.tsx               # Split list screen
   accounts/index.tsx             # Bank accounts screen
   settings/index.tsx             # App settings screen
-  sms-import.tsx                 # SMS import modal
   notifications.tsx              # Notifications screen
   profile/edit.tsx               # Edit profile screen
 
@@ -86,7 +82,7 @@ src/
   hooks/
     useTheme.ts                  # resolveThemeColors(), useTheme() hook, ThemeColors type
   lib/
-    env.ts                       # Environment variable helpers
+    env.ts                       # Expo runtime config helpers
     queryClient.ts               # React Query client config
     supabase.ts                  # Supabase client init
   screens/                       # Screen implementations (domain-grouped)
@@ -105,7 +101,6 @@ src/
       NetWorthScreen.tsx
     settings/SettingsScreen.tsx
     auth/AuthScreen.tsx           # login / signup / forgot-password / reset-password modes
-    sms/SmsImportScreen.tsx
     accounts/AccountsScreen.tsx
     notifications/NotificationsScreen.tsx
     profile/EditProfileScreen.tsx
@@ -117,16 +112,13 @@ src/
     syncService.ts               # Push/pull sync with Supabase
     syncTransform.ts             # camelCase ↔ snake_case column maps
     auth.ts                      # Supabase auth + biometric helpers
-    sms.ts                       # Android SMS polling & deduplication
-    smsReadService.ts            # SMS list + bank message regex parser (SmsMessage interface)
     dataService.ts               # Account, Category, Budget, Goal, Asset, Liability, NetWorth, UserProfile, PaymentMethod services
     dataServices.ts              # Re-exports dataService.ts + aggregate DataService helper
     notifications.ts             # Expo notification scheduling
     exportService.ts             # CSV, PDF, JSON backup export + JSON import
     emailReportService.ts        # Monthly email via Supabase Edge Function + Resend
-    widgetDataService.ts         # Data fetchers for Android home screen widgets
     noteService.ts               # Notes CRUD
-    analytics.ts                 # Firebase Analytics wrapper (screen views, events, user properties)
+    apiClient.ts                 # Centralized Supabase API wrapper with 401 handling
     MigrationRunner.ts           # SQLite migration runner + orphaned table cleanup (consolidated base schema)
     permissions.ts               # Android permission requests
   store/
@@ -135,12 +127,8 @@ src/
     constants.ts                 # SPACING, RADIUS, TYPOGRAPHY, COLORS, formatCurrency,
                                  # formatCompact, generateId, SYNCABLE_TABLES
     types.ts                     # All TypeScript types and interfaces (IoniconsName lives here)
-  widgets/
-    BudgetHealthWidget.tsx       # Android widget: budget usage bars
-    ExpenseSummaryWidget.tsx     # Android widget: monthly income/expense
-    QuickAddWidget.tsx           # Android widget: deep-link to add transaction
-    refreshWidgets.ts            # Trigger widget re-render
-    widgetTaskHandler.ts         # Widget event router
+    logger.ts                    # Centralized logger — dev: console output, prod: ring buffer (warn/error only)
+    withRetry.ts                 # Retry wrapper with exponential backoff
 
 supabase/
   schema.sql                     # Complete idempotent schema (tables, RLS, triggers, seeds)
@@ -174,17 +162,16 @@ stitch_designs/                  # Reference UI mockups (PNG) — light + dark p
 - **Modals**: Transaction add/edit and split screens use `presentation: 'modal'` in `_layout.tsx`.
 - **Animations**: `Animated.View` with `FadeInDown` from reanimated for staggered section entry.
 - **useCallback for async effects**: Any `async` function used inside a `useEffect` dependency array must be wrapped in `useCallback` to satisfy the eslint `exhaustive-deps` rule.
-- **Fire-and-forget promises**: Use `.catch(console.warn)` instead of `void`. Example: `triggerBackgroundSync('reason').catch(console.warn)`.
+- **Fire-and-forget promises**: Use `.catch((e) => logger.warn('Tag', 'msg', e))` instead of `void`. Example: `triggerBackgroundSync('reason').catch((e) => logger.warn('Sync', 'bg sync failed', e))`.
 - **formatCurrency**: Uses a module-level cached `Intl.NumberFormat` instance for performance. Cannot be used in Reanimated worklets — use `formatCurrencyWorklet` (pure string math) instead.
 - **Unified FAB**: Tab layout renders a `SpeedDialFAB` (with `hideMainButton`) triggered by the center tab button. 4 actions: Add Expense, Split Expense, Add Note, Add Budget. Individual screens no longer have standalone FABs.
 - **Toast**: Compact pill-style (icon + single-line text, max 80% width, rounded). Configured in `src/components/common/Toast.tsx`.
-- **Error boundaries**: `ScreenErrorBoundary` wraps the root layout to catch render crashes with a user-friendly retry UI.
+- **Error boundaries**: `AppErrorBoundary` wraps the root layout; `ScreenErrorBoundary` wraps individual screens to catch render crashes with a user-friendly retry UI.
+- **Offline banner**: `OfflineBanner` shows an animated connectivity warning when the device is offline.
 - **Deep links**: Root layout handles `hisabkitab://transactions` and `hisabkitab://budgets` deep links, mapping them to the correct tab routes.
 - **CustomPopup auto-dismiss**: Success-type popups automatically close after 3 seconds.
-- **SMS editability**: SMS-imported transactions can be edited; the `sms:` origin tag is preserved.
 - **CSV export**: Uses chunked 1000-row streaming to avoid loading the entire dataset into memory.
-- **Delete confirmations**: All destructive actions (delete transaction, budget, goal, account, note, split) show a confirmation dialog before proceeding. Uses `CustomModal` inline confirmation states or `Alert.alert`.
-- **SMS polling backoff**: Exponential backoff (up to 10 min) when no new messages are detected; resets on app foreground.
+- **Delete confirmations**: All destructive actions (delete transaction, budget, goal, account, note, split) show a confirmation dialog before proceeding. Uses `CustomPopup` confirmation states.
 - **Budget query**: Uses a single `LEFT JOIN` on transactions instead of a correlated subquery (N+1 → 1).
 
 ## Navigation Map
@@ -208,7 +195,6 @@ stitch_designs/                  # Reference UI mockups (PNG) — light + dark p
 | `/splits`                   | SplitListScreen                | Screen     |
 | `/accounts`                 | AccountsScreen                 | Screen     |
 | `/settings`                 | SettingsScreen                 | Screen     |
-| `/sms-import`               | SmsImportScreen                | Modal      |
 | `/login`                    | AuthScreen (login)             | Screen     |
 | `/auth/signup`              | AuthScreen (signup)            | Screen     |
 | `/auth/forgot-password`     | AuthScreen (forgot)            | Screen     |
@@ -250,7 +236,7 @@ Run `supabase/schema.sql` in the Supabase SQL editor. Single file — all tables
 - **`user_id → auth.users(id)`** FK is retained on all tables for RLS and cascade delete.
 - **`user_profile.avatar`** — `TEXT` column for avatar URI.
 - **`notes.id`** — `TEXT` primary key (UUID string, same as all other entity IDs). Not `uuid` type.
-- **`payment_method`** — no CHECK constraint; accepts any string to support SMS-imported transactions with varied payment method strings.
+- **`payment_method`** — no CHECK constraint; accepts any string to accommodate varied external transaction sources (migrations, imports).
 - **`dashboard_monthly_stats`** — Materialized view pre-aggregating monthly income/expenses/net per user. Refreshed explicitly by the client (no auto-refresh trigger — removed to avoid write-path overhead). Access via `get_dashboard_stats(month)` RPC (`security invoker`).
 - **`categories` RLS** — Read policy allows access to rows where `user_id = auth.uid() OR user_id IS NULL` (for default categories). Write/update/delete policies require `user_id = auth.uid()` strictly.
 - **GIN index on `tags`** — `idx_transactions_tags_gin` enables fast tag-based analytics on Supabase.
@@ -261,15 +247,11 @@ Run `supabase/schema.sql` in the Supabase SQL editor. Single file — all tables
 ## Caveats & Known State
 
 - Supabase schema not applied → sync returns `PGRST205`. App continues locally — this is expected.
-- SMS import only works on native Android builds, not Expo Go or iOS.
-- Android widgets only work on native Android builds.
 - `NotificationsScreen` has no persistent bell icon in the tab bar — entry is from dashboard header only.
 - `NetWorthScreen` is reached from within `ReportsScreen`, not from a direct route shown in tab bar.
 - `/(tabs)/goals` and `/(tabs)/reports` are valid navigable routes but excluded from the tab bar (`href: null`).
 - **Default categories** use fixed IDs (prefix `cat_`) shared across all installs. They are pushed to Supabase on first sync via `ensureDefaultsSynced()`. If two devices sync the same default category, the RLS `user_id` check may reject the second push as a non-critical failure — this is silently handled.
-- **Widget deep links** use `hisabkitab://` scheme (double slash, NOT triple). e.g. `hisabkitab://transactions/add`.
 - **R8/ProGuard** enabled for production builds — `minifyEnabled` and `shrinkResources` in `android/gradle.properties`.
-- **Lazy loading** — Reports, Budgets, and Goals tabs use `React.lazy()` + `Suspense` to defer heavy chart bundle loading.
 - **Biometric lock** — hardware back button is blocked via `BackHandler` when lock screen is active.
 - **Dashboard donut chart** — Uses SQL-backed `getCategoryBreakdownByDateRange()` for full-month category data, not limited to recent transactions. Legend shows category name, compact amount, and tinted % badge.
 - **InteractiveLineChart** — wagmi-charts wrapper with worklet-safe currency formatter, period change badge, and Low/Avg/High stats row.

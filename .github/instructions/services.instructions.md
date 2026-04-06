@@ -49,7 +49,7 @@ export async function createItem(data: CreateItemInput): Promise<Item> {
   useAppStore.getState().bumpDataRevision();
 
   // 4. Fire-and-forget background sync
-  triggerBackgroundSync('your_table-created').catch(console.warn);
+  triggerBackgroundSync('your_table-created').catch((e) => logger.warn('YourService', 'sync failed', e));
 
   return item;
 }
@@ -74,7 +74,7 @@ export async function updateItem(id: string, changes: Partial<Item>): Promise<vo
   } as unknown as Record<string, unknown>);
 
   useAppStore.getState().bumpDataRevision();
-  triggerBackgroundSync('your_table-updated').catch(console.warn);
+  triggerBackgroundSync('your_table-updated').catch((e) => logger.warn('YourService', 'sync failed', e));
 }
 ```
 
@@ -93,7 +93,7 @@ export async function deleteItem(id: string): Promise<void> {
   await enqueueSync('your_table', id, 'delete', { id, deletedAt, updatedAt: deletedAt });
 
   useAppStore.getState().bumpDataRevision();
-  triggerBackgroundSync('your_table-deleted').catch(console.warn);
+  triggerBackgroundSync('your_table-deleted').catch((e) => logger.warn('YourService', 'sync failed', e));
 }
 ```
 
@@ -112,23 +112,6 @@ await enqueueSync('accounts', account.id, 'upsert', {
 
 Fields affected: `isDefault`, `isRecurring`, `isCompleted`, `isCustom`,
 `notificationsEnabled`, `biometricEnabled`.
-
----
-
-## Widget Refresh for Transaction Mutations
-
-`TransactionService.create/update/delete` also refreshes Android widgets.
-If your new service mutates transaction-adjacent data, follow this pattern:
-
-```ts
-// Lazy import to avoid circular dependency
-const refreshWidgets = async () => {
-  const { refreshAllWidgets } = await import('@/widgets/refreshWidgets');
-  return refreshAllWidgets();
-};
-// After the write:
-refreshWidgets().catch(console.warn);
-```
 
 ---
 
@@ -177,20 +160,4 @@ await db.getAllAsync('SELECT * FROM transactions', []); // ❌ no LIMIT
 
 ---
 
-## SMS Import — Android Only
 
-```ts
-// Always guard SMS APIs
-import { Platform } from 'react-native';
-if (Platform.OS !== 'android') return;
-
-// Deduplicate before creating
-const alreadyImported = await TransactionService.hasImportedSms(messageId);
-if (alreadyImported) return;
-
-// Tags for SMS-imported transactions
-tags: ['sms-import', `sms:${messageId}`];
-
-// SMS-imported transactions are editable — preserve the sms: origin tag
-// Check isSmsImported flag: tags.some(tag => tag.startsWith('sms:'))
-```

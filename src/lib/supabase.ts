@@ -1,10 +1,18 @@
 import { createClient } from '@supabase/supabase-js';
 import * as SecureStore from 'expo-secure-store';
 import 'react-native-url-polyfill/auto';
-import { env } from './env';
+import { env, isSupabaseConfigured } from './env';
+import { logger } from '../utils/logger';
 
 const CHUNK_SIZE = 2000;
 const CHUNK_COUNT_SUFFIX = '__chunk_count';
+
+if (!isSupabaseConfigured) {
+  logger.warn(
+    'Supabase',
+    'Runtime config is missing or invalid. Using safe fallback config. Network auth/sync calls will fail until EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_ANON_KEY are set.',
+  );
+}
 
 /**
  * Chunked SecureStore adapter — splits values > 2 KB across multiple keys
@@ -65,9 +73,28 @@ const secureStoreAdapter = {
 
 export const supabase = createClient(env.supabaseUrl, env.supabaseAnonKey, {
   auth: {
-    autoRefreshToken: true,
+    // React Native apps should manage refresh explicitly based on app focus.
+    autoRefreshToken: false,
     persistSession: true,
     detectSessionInUrl: false,
     storage: secureStoreAdapter,
   },
 });
+
+export const setSupabaseAutoRefreshEnabled = async (enabled: boolean) => {
+  try {
+    if (!isSupabaseConfigured) {
+      await supabase.auth.stopAutoRefresh();
+      return;
+    }
+
+    if (enabled) {
+      await supabase.auth.startAutoRefresh();
+      return;
+    }
+
+    await supabase.auth.stopAutoRefresh();
+  } catch (error) {
+    logger.warn('Supabase', 'Failed to update auto-refresh state', error);
+  }
+};

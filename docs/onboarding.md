@@ -35,6 +35,9 @@ EXPO_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
 EXPO_PUBLIC_SUPABASE_ANON_KEY=your_anon_key
 ```
 
+`app.config.js` reads these values and exposes them to the app through
+`Constants.expoConfig.extra.publicEnv`.
+
 ## Step 3: Run the App (5 min)
 
 ```bash

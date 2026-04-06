@@ -2,7 +2,7 @@
 
 ## Product Overview
 
-Hisab Kitab is an offline-first personal finance app designed to help users track money with less friction and more clarity. It combines fast day-to-day expense logging with budgeting, savings goals, split expenses, reports, backup, sync, and helpful automation like SMS-based transaction import on Android.
+Hisab Kitab is an offline-first personal finance app designed to help users track money with less friction and more clarity. It combines fast day-to-day expense logging with budgeting, savings goals, split expenses, reports, backup, and sync.
 
 From a product perspective, the app is built for people who want a practical finance companion that works even with weak internet, supports Indian-style payment habits, and makes it easy to understand where money is going.
 
@@ -14,7 +14,7 @@ From a product perspective, the app is built for people who want a practical fin
 - Help users control spending through budgets and alerts
 - Support savings habits through goals and progress tracking
 - Make reporting, exporting, backup, and restore easy
-- Reduce manual entry effort with SMS import on Android
+- Reduce manual entry effort with streamlined input flows
 - Support shared spending with split-expense workflows
 
 ## Target User Value
@@ -102,7 +102,7 @@ The transaction history experience includes:
 - Refresh support
 - Edit and delete actions
 - Detailed transaction view
-- Special identification of SMS-imported transactions
+- Filter, search, and export transactions
 
 ## 4. Accounts Management
 
@@ -242,25 +242,7 @@ Split-related product benefits:
 - Helps the app support group spending scenarios
 - Lets users track whether other participants have paid their share
 
-## 11. SMS Import on Android
-
-SMS import is one of the most practical convenience features in the product.
-
-On supported Android native builds, the app can:
-
-- Read bank and transaction-like SMS messages
-- Parse likely debit and credit messages
-- Extract amount and merchant-like information
-- Let users import detected transactions
-- Preserve SMS origin metadata
-
-Product advantage:
-
-- Reduces manual entry effort
-- Makes adoption easier for busy users
-- Fits real-world banking behavior in India and similar markets
-
-## 12. Notifications and Alerts
+## 11. Notifications and Alerts
 
 The app includes an internal notifications experience focused on financial awareness.
 
@@ -342,7 +324,7 @@ Users can manage:
 - Profile details
 - Profile photo/avatar
 - Biometric preference
-- SMS-related preference settings
+- Notification preferences
 
 This makes the product feel more user-centered and polished.
 
@@ -361,27 +343,17 @@ It currently helps users understand:
 
 From a product perspective, this reduces onboarding friction and improves confidence for first-time users.
 
-## 18. Android Home Screen Widgets
+## 18. Error Handling & Reliability
 
-The product includes Android widgets for glanceable finance awareness and faster action.
+The app includes comprehensive error handling:
 
-Available widget experiences include:
+- `AppErrorBoundary` catches fatal render crashes with a branded recovery screen
+- `ScreenErrorBoundary` catches per-screen errors without crashing the entire app
+- `OfflineBanner` shows an animated connectivity warning when the device goes offline
+- Centralized `logger.ts` silences verbose logs in production while capturing warn/error to an in-memory ring buffer
+- Global unhandled error and promise rejection handlers prevent silent failures
 
-- Expense summary
-- Budget health
-- Quick add
-- Savings goal and net worth related widget data support
 
-These widgets help the app remain useful even outside direct in-app sessions.
-
-## 19. Analytics
-
-The app uses Firebase Analytics to track screen views and key user events (transaction created, goal completed, budget exceeded, etc.) for product improvement insights.
-
-- Analytics is instrumented via `src/services/analytics.ts`
-- Only non-PII events are tracked — no amounts, account names, or personal notes
-- User ID is set on sign-in for cross-device attribution
-- Screen view tracking helps identify feature adoption and drop-off points
 
 ## End-to-End User Flows
 
@@ -423,14 +395,14 @@ The app uses Firebase Analytics to track screen views and key user events (trans
 
 - Offline-first by default
 - Broad feature set without being enterprise-heavy
-- Strong support for Indian transaction habits and SMS-based workflows
+- Strong support for Indian transaction habits and streamlined workflows
 - Covers both tracking and planning
 - Includes collaboration via split expenses
-- Offers backup, restore, export, email, and widgets
+- Offers backup, restore, export, and email reports
 - Practical for daily use, not just occasional reporting
 
 ## Product Positioning Summary
 
-Hisab Kitab is best described as an offline-first personal finance manager that combines fast transaction tracking, budgeting, savings goals, split expenses, reports, SMS-assisted entry, and reliable backup/sync into one mobile experience.
+Hisab Kitab is best described as an offline-first personal finance manager that combines fast transaction tracking, budgeting, savings goals, split expenses, reports, and reliable backup/sync into one mobile experience.
 
 It is more than an expense tracker because it also supports planning, analysis, collaboration, portability, and long-term financial visibility.

@@ -29,6 +29,7 @@ export interface SyncMetadata {
   syncStatus: SyncStatus;
   lastSyncedAt?: string | null;
   deletedAt?: string | null;
+  deviceId?: string | null;
 }
 
 export interface Account extends SyncMetadata {

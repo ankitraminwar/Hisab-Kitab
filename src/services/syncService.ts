@@ -19,10 +19,12 @@ import {
   softDeleteLocalRecord,
   upsertLocalRecord,
 } from '../database';
+import { isSupabaseConfigured } from '../lib/env';
 import { supabase } from '../lib/supabase';
 import { useAppStore } from '../store/appStore';
 import type { SyncableTable } from '../utils/constants';
 import type { SyncQueueItem, UserProfile } from '../utils/types';
+import { logger } from '../utils/logger';
 import { mapLocalToRemoteRecord, mapRemoteToLocalRecord } from './syncTransform';
 
 /** Extract a readable message from any thrown value (including Supabase PostgrestError). */
@@ -92,6 +94,14 @@ class SyncService {
       return { success: false, error: 'Sync already in progress' };
     }
 
+    if (!isSupabaseConfigured) {
+      return {
+        success: false,
+        error:
+          'Supabase is not configured. Set EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_ANON_KEY so app.config.js can expose them at runtime.',
+      };
+    }
+
     const state = await NetInfo.fetch();
     const isOnline = Boolean(state.isConnected && state.isInternetReachable !== false);
     if (!isOnline) {
@@ -141,7 +151,7 @@ class SyncService {
         this.remoteSchemaAvailable = false;
         const message =
           'Supabase schema is not deployed yet. Apply supabase/schema.sql and restart sync.';
-        console.error('Sync failed: Supabase schema mismatch', error);
+        logger.error('SyncService', 'Sync failed: Supabase schema mismatch', error);
         useAppStore.getState().setSyncState({
           syncInProgress: false,
           lastSyncError: message,
@@ -150,7 +160,7 @@ class SyncService {
       }
 
       const message = errorMessage(error) || 'Sync failed';
-      console.error('Sync failed with error:', message, error);
+      logger.error('SyncService', `Sync failed with error: ${message}`, error);
       useAppStore.getState().setSyncState({
         syncInProgress: false,
         lastSyncError: message,
@@ -164,7 +174,7 @@ class SyncService {
   async requestSync(reason = 'manual') {
     // Sync watchdog: if syncing stuck for >60s, force reset
     if (this.syncing && this.syncStartedAt && Date.now() - this.syncStartedAt > 60000) {
-      console.warn('Sync watchdog: forcing reset after 60s');
+      logger.warn('SyncService', 'Sync watchdog: forcing reset after 60s');
       this.syncing = false;
     }
 
@@ -180,7 +190,7 @@ class SyncService {
       try {
         await this.sync(reason);
       } catch (error) {
-        console.warn('Background sync failed', error);
+        logger.warn('SyncService', 'Background sync failed', error);
       }
       // If another sync was requested while this one ran, run it now
       if (this.syncRequested) {
@@ -337,7 +347,11 @@ class SyncService {
         const reason = errorMessage(error);
         failures.push({ item, reason });
         if (!this.isExpectedDefaultRecordRlsFailure(item, reason)) {
-          console.warn(`Sync push failed for ${item.entity}/${item.recordId}:`, reason);
+          logger.warn(
+            'SyncService',
+            `Sync push failed for ${item.entity}/${item.recordId}`,
+            reason,
+          );
         }
 
         if (item.retryCount >= 2) {
@@ -361,16 +375,19 @@ class SyncService {
         const isFkConstraint = f.reason.toLowerCase().includes('foreign key');
         if ((isDefault || isDefaultPm || isDefaultCash) && (isRls || isFkConstraint)) {
           markRecordSyncStatus(f.item.entity as SyncableTable, f.item.recordId, 'synced').catch(
-            console.warn,
+            (e) => logger.warn('SyncService', 'Failed to mark record synced', e),
           );
-          removeFromSyncQueue(f.item.id).catch(console.warn);
+          removeFromSyncQueue(f.item.id).catch((e) =>
+            logger.warn('SyncService', 'Failed to remove from sync queue', e),
+          );
           return false;
         }
         return true;
       });
 
       if (critical.length > 0) {
-        throw new Error(
+        logger.error(
+          'SyncService',
           `Failed to sync ${critical.length} record(s): ${critical
             .slice(0, 3)
             .map((failure) => `${failure.item.entity}/${failure.item.recordId}`)
@@ -416,7 +433,7 @@ class SyncService {
         try {
           remoteData.tags = JSON.parse(remoteData.tags as string);
         } catch (error) {
-          console.debug('Failed to parse tags JSON, defaulting to empty array', error);
+          logger.log('SyncService', 'Failed to parse tags JSON, defaulting to empty array', error);
           remoteData.tags = [];
         }
       }
@@ -638,7 +655,7 @@ class SyncService {
             if (this.isRemoteSchemaMissing(error)) {
               throw error;
             }
-            console.warn(`Pull failed for table ${table}:`, error.message);
+            logger.warn('SyncService', `Pull failed for table ${table}`, error.message);
             return false;
           }
 
@@ -721,7 +738,7 @@ class SyncService {
               .order('updated_at', { ascending: true });
 
             if (error) {
-              console.warn(`Initial pull failed for ${table}:`, error.message);
+              logger.warn('SyncService', `Initial pull failed for ${table}`, error.message);
               return 0;
             }
 
